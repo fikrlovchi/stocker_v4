@@ -4,7 +4,11 @@
     "orders": "uzum_order",
     "details": "uzum_order_detail",
     "shops": "uzum_shop",
-    "products": "mc_product"
+    "products": "mc_product",
+    "linkProducts": "link_product"
+  },
+  "telegram": {
+    "importDisabledTopicId": 213
   },
   "columns": {
     "orders": {
@@ -24,6 +28,7 @@
       "arrivedAt": "W"
     },
     "details": {
+      "skuTitle": "C",
       "price": "E",
       "amount": "F",
       "orderId": "H",
@@ -39,6 +44,10 @@
     "products": {
       "ref": "B",
       "name": "E"
+    },
+    "linkProducts": {
+      "sku": "B",
+      "orderImport": "O"
     }
   },
   "moysklad": {

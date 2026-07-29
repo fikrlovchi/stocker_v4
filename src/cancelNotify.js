@@ -93,7 +93,7 @@ function buildItemLines(details, orderId, prodMap) {
     const row = details[j];
     if (String(row[DET.orderId] ?? "").trim() !== target) continue;
     const ref = String(row[DET.product] ?? "").trim();
-    const name = prodMap.get(ref) || ref || "(nomsiz)";
+    const name = prodMap.get(ref) || String(row[DET.skuTitle] ?? "").trim() || ref || "(nomsiz)";
     const qty = row[DET.quantity];
     lines.push(` • ${escapeHtml(name)}${qty !== undefined && qty !== "" ? ` × ${escapeHtml(qty)}` : ""}`);
   }
@@ -102,12 +102,14 @@ function buildItemLines(details, orderId, prodMap) {
 
 // header — xabar sarlavhasi (masalan "❌ Buyurtma bekor qilindi" yoki
 // "⚠️ Buyurtma tasdiqlashdan oldin bekor bo'ldi"). details — uzum_order_detail
-// qatorlari (index.js batchGet'dan). Muvaffaqiyatni (true/false) qaytaradi.
-async function notifyCancellation({ orderId, shopId, details, header }) {
+// qatorlari (index.js batchGet'dan). tag=false bo'lsa foydalanuvchilar
+// belgilanmaydi. topicId berilsa — o'sha topic'ka yuboriladi (bo'lmasa .env
+// dagi standart topic). Muvaffaqiyatni (true/false) qaytaradi.
+async function notifyCancellation({ orderId, shopId, details, header, tag = true, topicId }) {
   const [shopMap, prodMap] = [await loadShopNames(), await loadProductNames()];
   const shopName = shopMap.get(String(shopId ?? "")) || String(shopId ?? "");
   const items = buildItemLines(details || [], orderId, prodMap);
-  const tags = buildTags();
+  const tags = tag ? buildTags() : "";
 
   const text =
     `${header}\n` +
@@ -116,7 +118,7 @@ async function notifyCancellation({ orderId, shopId, details, header }) {
     (items.length ? `📦 Tarkibi:\n${items.join("\n")}\n` : "") +
     (tags ? `\n${tags}` : "");
 
-  return sendTelegramMessage({ text, parseMode: "HTML" });
+  return sendTelegramMessage({ text, parseMode: "HTML", topicId });
 }
 
 module.exports = { notifyCancellation };

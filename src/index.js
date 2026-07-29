@@ -145,6 +145,51 @@ function deriveStatus(successCount, errorCount) {
   return "partial";
 }
 
+// link_product!B (SKU) -> !O ("Order import" TRUE/FALSE) xaritasi. Faqat
+// yangi buyurtma yaratish kerak bo'lganda bir marta o'qiladi (process keshi).
+let linkImportMap = null;
+async function loadLinkImportMap(sheets) {
+  if (linkImportMap) return linkImportMap;
+  linkImportMap = new Map();
+  try {
+    const { data } = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.spreadsheetId,
+      range: config.sheets.linkProducts,
+      valueRenderOption: "UNFORMATTED_VALUE",
+    });
+    const rows = data.values || [];
+    const keyIdx = colLetterToIndex(config.columns.linkProducts.sku);
+    const flagIdx = colLetterToIndex(config.columns.linkProducts.orderImport);
+    for (let r = 1; r < rows.length; r++) {
+      const k = rows[r][keyIdx];
+      if (k !== undefined && k !== null && k !== "") linkImportMap.set(String(k).trim(), rows[r][flagIdx]);
+    }
+  } catch (e) {
+    logger.error(`link_product o'qishda xato (import filtri o'tkazib yuborildi): ${e.message}`);
+  }
+  return linkImportMap;
+}
+
+// "Order import" = FALSE bo'lgan (import o'chirilgan) SKU'ni o'z ichiga olgan
+// buyurtma ID'lari to'plamini bir marta (detail bo'ylab bitta o'tishda) hisoblaydi.
+// Bunday buyurtmalar MoySklad'da YARATILMAYDI — lekin Uzum'da tasdiqlanadi
+// (orderStatusSync.handleNoImportOrders), tasdiqlangach topic'ga xabar beriladi.
+async function computeBlockedOrderIds(sheets, details) {
+  const importMap = await loadLinkImportMap(sheets);
+  const blocked = new Set();
+  for (let j = 1; j < details.length; j++) {
+    const row = details[j];
+    const sku = cell(row[DET.skuTitle]).toString().trim();
+    if (!sku) continue;
+    const flag = importMap.get(sku);
+    if (flag === false || String(flag).toUpperCase() === "FALSE") {
+      const oid = cell(row[DET.orderId]).toString().trim();
+      if (oid) blocked.add(oid);
+    }
+  }
+  return blocked;
+}
+
 async function createMoySkladOrders() {
   const startedAt = new Date().toISOString();
   let successCount = 0;
@@ -177,13 +222,22 @@ async function createMoySkladOrders() {
   const orders = data.valueRanges[0].values || [];
   const details = data.valueRanges[1].values || [];
 
+  // Import o'chirilgan (link_product!O=FALSE) buyurtmalar — MoySklad'da
+  // YARATILMAYDI, lekin Uzum'da tasdiqlanadi (handleNoImportOrders), tasdiqlangach
+  // topic'ga xabar beriladi. Shu yerda faqat yaratishdan chetlab o'tamiz.
+  const blockedOrderIds = await computeBlockedOrderIds(sheets, details);
+
   for (let i = 1; i < orders.length; i++) {
     const order = orders[i];
     const orderId = order[ORD.orderId];
     const status = order[ORD.status];
+    const cancelHandled = order[ORD.cancelHandled];
     const trackingNumber = cell(order[ORD.trackingNumber]).toString();
 
-    if (status == 1 || !orderId) continue;
+    if (status == 1 || !orderId || cancelHandled == 1) continue;
+    // Import o'chirilgan buyurtmani MoySklad'da yaratmaymiz (Uzum confirm +
+    // topic xabari handleNoImportOrders'da amalga oshadi).
+    if (blockedOrderIds.has(String(orderId))) continue;
 
     let positions;
     try {
@@ -263,6 +317,11 @@ async function createMoySkladOrders() {
 
   const confirmResult = await orderStatusSync.confirmAndSetInitialState({ sheets, orders, details, moyskladToken: token });
   errorCount += confirmResult.errorCount;
+
+  // Import o'chirilgan buyurtmalar: MoySklad'siz, Uzum'da tasdiqlash (oyna
+  // timing bilan) + tasdiqlangach topic'ga xabar.
+  const noImportResult = await orderStatusSync.handleNoImportOrders({ sheets, orders, details, blockedOrderIds });
+  errorCount += noImportResult.errorCount;
 
   return { startedAt, successCount, errorCount };
 }

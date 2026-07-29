@@ -102,7 +102,7 @@ async function handleConfirmFailure({ orders, rowIndex, orderId, shopTokens, moy
     rowUpdates.push(cellUpdate(ordersSheetName, "cancelHandled", rowIndex, 1));
     row[ORD.mcState] = "done";
     row[ORD.cancelHandled] = 1;
-    await notifyCancellation({ orderId, shopId, details, header: "⚠️ Buyurtma tasdiqlashdan oldin bekor bo'ldi" });
+    await notifyCancellation({ orderId, shopId, details, header: "⚠️ Buyurtma tasdiqlashdan oldin bekor bo'ldi", tag: false });
     logger.info(`Order ${orderId} tasdiqlashdan oldin bekor bo'lgan — MoySklad "canceled" qilindi, xabar berildi.`);
     return true;
   } catch (e) {
@@ -317,4 +317,95 @@ async function promoteHeldOrders({ sheets, orders, details, moyskladToken }) {
   return { errorCount };
 }
 
-module.exports = { confirmAndSetInitialState, promoteHeldOrders };
+// Import o'chirilgan (link_product!O=FALSE) buyurtmalar uchun (index.js
+// blockedOrderIds to'plamini beradi). Bu buyurtmalar MoySklad'da YARATILMAGAN,
+// lekin baribir Uzum'da tasdiqlanishi kerak (normal buyurtmalar kabi oyna
+// timing bilan). Faqat TASDIQLANGANDAN so'ng import-o'chirilgan topic'iga
+// xabar beriladi va V=1 qilinadi. Tasdiqlanmasdan bekor bo'lsa — xabar
+// yuborilmaydi, faqat V=1.
+async function handleNoImportOrders({ sheets, orders, details, blockedOrderIds }) {
+  if (!blockedOrderIds || blockedOrderIds.size === 0) return { errorCount: 0 };
+
+  const { startMin, endMin } = windowBounds();
+  // Oyna ichida — hali tasdiqlamaymiz (normal buyurtmalar kabi 11:01 kutiladi).
+  if (isInHoldWindow(tashkentMinutesNow(), startMin, endMin)) return { errorCount: 0 };
+
+  const ordersSheetName = config.sheets.orders;
+  const shopTokens = loadShopTokens();
+  const importTopic = config.telegram?.importDisabledTopicId;
+  const rowUpdates = [];
+  let errorCount = 0;
+
+  const runDeadline = Date.now() + (config.cancelSync?.run?.maxDurationMs || 60000);
+
+  for (let i = 1; i < orders.length; i++) {
+    if (Date.now() > runDeadline) {
+      logger.info("Import-o'chirilgan buyurtmalar uchun vaqt byudjeti tugadi — qolgani keyingi tsiklda.");
+      break;
+    }
+
+    const row = orders[i];
+    const orderId = row[ORD.orderId];
+    if (!orderId || row[ORD.cancelHandled] == 1) continue;   // allaqachon hal qilingan
+    if (row[ORD.status] == 1) continue;                       // MoySklad'da yaratilgan (bloklanmagan)
+    if (!blockedOrderIds.has(String(orderId))) continue;      // import-o'chirilgan emas
+
+    // Uzum'da tasdiqlash (agar hali qilinmagan bo'lsa).
+    if (row[ORD.uzumConfirmed] != 1) {
+      const confirmed = await confirmOnUzum({ orders, rowIndex: i, orderId, shopTokens, rowUpdates, ordersSheetName });
+      if (!confirmed) {
+        // Tasdiqlanmadi — bekor bo'lgan bo'lishi mumkin. Statusni tekshiramiz.
+        const shopId = String(cell(row[ORD.shopId]));
+        const shopToken = shopTokens.get(shopId);
+        let uzumOrder = null;
+        if (shopToken) {
+          try {
+            uzumOrder = await getOrderStatus({ shopToken, orderId });
+          } catch (e) {
+            logger.error(`Order ${orderId} (import off) Uzum holatini so'rashda xato: ${e.message}`);
+          } finally {
+            await sleep(REQUEST_DELAY_MS);
+          }
+        }
+        if (uzumOrder && uzumOrder.status === "CANCELED") {
+          // Tasdiqlanmasdan bekor bo'ldi — topic xabari YUBORILMAYDI, faqat V=1.
+          rowUpdates.push(cellUpdate(ordersSheetName, "cancelHandled", i, 1));
+          row[ORD.cancelHandled] = 1;
+          logger.info(`Order ${orderId} import o'chirilgan va tasdiqlanmasdan bekor bo'ldi — xabar yuborilmadi, V=1.`);
+        } else {
+          errorCount++; // boshqa xato — keyingi tsiklda qayta uriniladi
+        }
+        continue;
+      }
+    }
+
+    if (isDryRun()) {
+      logger.info(`[DRY_RUN] Order ${orderId} import o'chirilgan — Uzum tasdiqlanardi, topic ${importTopic}'ga xabar va V=1 qilinardi.`);
+      continue;
+    }
+
+    // Tasdiqlandi — topic'ga xabar + V=1.
+    await notifyCancellation({
+      orderId,
+      shopId: row[ORD.shopId],
+      details,
+      header: "🚫 Import o'chirilgan mahsulot — buyurtma yaratilmadi",
+      tag: false,
+      topicId: importTopic,
+    });
+    rowUpdates.push(cellUpdate(ordersSheetName, "cancelHandled", i, 1));
+    row[ORD.cancelHandled] = 1;
+    logger.info(`Order ${orderId} import o'chirilgan — Uzum'da tasdiqlandi, topic ${importTopic}'ga xabar berildi, V=1.`);
+  }
+
+  if (rowUpdates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: config.spreadsheetId,
+      requestBody: { valueInputOption: "RAW", data: rowUpdates },
+    });
+  }
+
+  return { errorCount };
+}
+
+module.exports = { confirmAndSetInitialState, promoteHeldOrders, handleNoImportOrders };
