@@ -2,7 +2,8 @@
 // chiqarib maketni ko'z bilan baholash uchun. Google Sheets kerak emas.
 //
 //   node scripts/shkSample.js
-//   node scripts/shkSample.js --title=both --qr=18
+//   node scripts/shkSample.js --qr=16 --lines=3     QR kattaroq, nom 3 qator
+//   node scripts/shkSample.js --sku=0               SKU'siz (nomga ko'proq joy)
 //
 // Natija: uploads/shk_sample.pdf
 import fs from "fs";
@@ -23,16 +24,23 @@ const samples = [
   { label: "uzun SKU", title: "MT2-ELEGANT-SS-XXL-2026-EDITION-01,Ко'ylak Elegant SS", barcode: "1000057600931,119706915" },
   { label: "qisqa SKU", title: "AB1,Стакан", barcode: "697JLYF006648,120103126" },
   { label: "kirillcha nom", title: "KRUZH-450,Кружка керамическая белая 450 мл", barcode: "1000114076242,120185532" },
+  {
+    label: "juda uzun nom",
+    title: "DISP-500A,Диспенсер для жидкого мыла автоматический сенсорный настенный 500 мл",
+    barcode: "1000076067791,119706915",
+  },
+  { label: "nomsiz (#N/A)", title: "LYDISP1-697JLYF006648-1,", barcode: "697JLYF006648,120103126" },
 ];
 
 const overrides = {};
-if (args.title) overrides.titlePart = String(args.title);
 if (args.qr) overrides.qrMm = Number(args.qr);
-if (args.lines) overrides.titleMaxLines = Number(args.lines);
+if (args.lines) overrides.nameMaxLines = Number(args.lines);
+if (args.sku === "0") overrides.showSku = false;
+if (args.barcode === "0") overrides.showBarcode = false;
 
 const merged = await PDFDocument.create();
-console.log("namuna         buyurtma  shtrix  sarlavha  qatorlar  kesildimi");
-console.log("─".repeat(66));
+console.log("namuna          nom   qator  kesildi  buyurtma   SKU   shtrix");
+console.log("─".repeat(64));
 
 for (const s of samples) {
   let m = {};
@@ -42,12 +50,13 @@ for (const s of samples) {
   pages.forEach((p) => merged.addPage(p));
 
   console.log(
-    `${s.label.padEnd(14)} ` +
-      `${String(m.orderSize ?? "-").padEnd(9)} ` +
-      `${String(m.barcodeSize ?? "-").padEnd(7)} ` +
-      `${String(m.titleSize ?? "-").padEnd(9)} ` +
-      `${String(m.titleLines).padEnd(9)} ` +
-      `${m.titleTruncated ? "HA" : "yo'q"}`
+    `${s.label.padEnd(15)} ` +
+      `${String(m.nameSize ?? "-").padEnd(5)} ` +
+      `${String(m.nameLines).padEnd(6)} ` +
+      `${(m.nameTruncated ? "HA" : "yo'q").padEnd(8)} ` +
+      `${String(m.orderSize ?? "-").padEnd(10)} ` +
+      `${String(m.skuSize ?? "-").padEnd(5)} ` +
+      `${String(m.barcodeSize ?? "-")}`
   );
 }
 
