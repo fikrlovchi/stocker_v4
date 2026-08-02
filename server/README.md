@@ -176,7 +176,7 @@ node src/index.js
 
 ## Tekshirish
 
-**Google/MoySklad'siz — mantiq testi** (91 ta tekshiruv, vaqtinchalik bazada):
+**Google/MoySklad'siz — mantiq testi** (100 ta tekshiruv, vaqtinchalik bazada):
 
 ```bash
 node src/scripts/selfTest.js

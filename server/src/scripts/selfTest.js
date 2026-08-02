@@ -13,9 +13,8 @@ process.env.DB_FILE = TMP_DB;
 process.env.SERVICE_TOKEN = "selftest";
 
 const { applyRefresh, extractProductRefs } = await import("../cache/refresh.js");
-const { getStats, getOrder, getProduct, findByBarcode, findAmbiguousBarcodes } = await import(
-  "../cache/queries.js"
-);
+const { getStats, getOrder, getProduct, listOrders, sampleBarcodes, findByBarcode, findAmbiguousBarcodes } =
+  await import("../cache/queries.js");
 const { normalizeBarcode, extractProductRef, parseSheetTimeToEpochMs } = await import(
   "../util/sheetValues.js"
 );
@@ -443,6 +442,22 @@ check("station: printerlar saqlandi", [getStation("Ombor-1").shkPrinter, getStat
 ]);
 upsertStation({ id: "Ombor-1", shkPrinter: "Yangi ShK printer" });
 check("station: qisman yangilash boshqasini o'chirmaydi", getStation("Ombor-1").bigPrinter, "Gainsha GS-2408");
+
+/* ---------------- 9. Ro'yxat so'rovlari (filtrsiz yo'llar) ---------------- */
+// better-sqlite3 SQL'da mavjud bo'lmagan nomlangan parametrni qabul qilmaydi.
+// Filtrsiz chaqiruvlar aynan shu sababdan ishlamay qolgan edi — endi qoplangan.
+
+check("listOrders(): filtrsiz ishlaydi", listOrders().length, 4);
+check("listOrders(): eligible=false hammasi", listOrders({ eligible: false, limit: 100 }).length, 14);
+check("listOrders(): minUnits=3", listOrders({ minUnits: 3 }).map((o) => o.orderId), ["OK1"]);
+check("listOrders(): limit hurmat qilinadi", listOrders({ limit: 2 }).length, 2);
+check("sampleBarcodes(): ishlaydi", sampleBarcodes(3).length, 3);
+
+const { listJobs } = await import("../print/jobs.js");
+check("listJobs(): filtrsiz ishlaydi", listJobs().length >= 1, true);
+check("listJobs(): status bo'yicha", listJobs({ status: "error" }).length, 1);
+check("listJobs(): station bo'yicha", listJobs({ stationId: "Ombor-2" }).length, 1);
+check("listJobs(): mos kelmaydigan filtr", listJobs({ stationId: "yo'q" }).length, 0);
 
 db.exec("DELETE FROM print_jobs; DELETE FROM stations");
 resetSessions();

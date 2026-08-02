@@ -64,9 +64,15 @@ export function getProduct(uuid) {
 // Keshdagi buyurtmalar ro'yxati — sinov uchun haqiqiy orderId/barcode topishga
 // va "navbatda nima bor?" savoliga javob berishga xizmat qiladi.
 export function listOrders({ eligible = true, limit = 20, minUnits = 0 } = {}) {
+  // DIQQAT: better-sqlite3 SQL'da mavjud bo'lmagan nomlangan parametrni qabul
+  // qilmaydi, shuning uchun params WHERE bilan birga quriladi.
   const where = [];
+  const params = { limit };
   if (eligible) where.push("o.eligible = 1");
-  if (minUnits > 0) where.push("o.unit_count >= @minUnits");
+  if (minUnits > 0) {
+    where.push("o.unit_count >= @minUnits");
+    params.minUnits = minUnits;
+  }
 
   const rows = db
     .prepare(
@@ -78,7 +84,7 @@ export function listOrders({ eligible = true, limit = 20, minUnits = 0 } = {}) {
        ORDER BY o.unit_count DESC, o.item_count ASC, o.arrived_at_ms ASC
        LIMIT @limit`
     )
-    .all({ limit, minUnits });
+    .all(params);
 
   return rows.map((r) => ({
     orderId: r.order_id,

@@ -152,17 +152,30 @@ export function pruneOldJobs() {
     .run(cutoff).changes;
 }
 
+// DIQQAT: better-sqlite3 SQL'da mavjud bo'lmagan nomlangan parametrni qabul
+// qilmaydi ("Too many parameter values"). Shuning uchun params obyekti
+// WHERE bilan birga quriladi, undefined qiymatlar uzatilmaydi.
 export function listJobs({ stationId, sessionId, status, limit = 50 } = {}) {
   const where = [];
-  if (stationId) where.push("station_id = @stationId");
-  if (sessionId) where.push("session_id = @sessionId");
-  if (status) where.push("status = @status");
+  const params = { limit };
+  if (stationId) {
+    where.push("station_id = @stationId");
+    params.stationId = stationId;
+  }
+  if (sessionId) {
+    where.push("session_id = @sessionId");
+    params.sessionId = sessionId;
+  }
+  if (status) {
+    where.push("status = @status");
+    params.status = status;
+  }
   return db
     .prepare(
       `SELECT * FROM print_jobs ${where.length ? "WHERE " + where.join(" AND ") : ""}
        ORDER BY created_at DESC LIMIT @limit`
     )
-    .all({ stationId, sessionId, status, limit })
+    .all(params)
     .map(shape);
 }
 
