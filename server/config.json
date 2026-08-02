@@ -56,7 +56,7 @@
   },
   "server": {
     "host": "127.0.0.1",
-    "port": 4043
+    "port": 4044
   },
   "panel": {
     "heartbeatIntervalMs": 300000

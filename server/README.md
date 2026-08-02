@@ -130,15 +130,15 @@ node src/scripts/syncBarcodes.js
 Misollar:
 
 ```bash
-curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4043/debug/stats
+curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4044/debug/stats
 ```
 
 ```bash
-curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4043/debug/order/117360845
+curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4044/debug/order/117360845
 ```
 
 ```bash
-curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4043/debug/barcode/1000111953348
+curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4044/debug/barcode/1000111953348
 ```
 
 Javobdagi `source` maydoni barcode qaysi manbadan kelganini ko'rsatadi
@@ -190,8 +190,23 @@ src/
 ├─ panel/reporter.js      fikrlovchi-panel'ga hisobot (har 5 daqiqa)
 └─ scripts/
    ├─ selfTest.js         fixture bilan mantiq testi
-   └─ refreshOnce.js      bir marta yangilash
+   ├─ refreshOnce.js      bir marta yangilash
+   └─ syncBarcodes.js     to'liq assortimentni majburiy o'qish
 ```
+
+### Serverdagi portlar
+
+Stocker **4044** da tinglaydi. Band portlar (yangi servis qo'shishda tekshiring
+— `ss -ltnp`):
+
+| Port | Servis |
+|---|---|
+| 3000 | fikrlovchi-panel |
+| 4040 | uzumPDFs |
+| 4041 | receiveMCPost |
+| 4042 | mcCancelServer (uzumOrderToMC) |
+| 4043 | moneyReport dashboard (analytics.fikrlovchi.uz) |
+| **4044** | **stocker-server** |
 
 ### Diqqat: qaysi jadvallar qayta quriladi
 

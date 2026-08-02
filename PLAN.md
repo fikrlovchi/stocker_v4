@@ -370,7 +370,7 @@ server {
     }
 
     location /pack/ {                             # stocker API + WebSocket
-        proxy_pass http://127.0.0.1:4043/;
+        proxy_pass http://127.0.0.1:4044/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
@@ -395,8 +395,8 @@ Certbot konfiguratsiyani o'zi HTTPS'ga o'tkazadi va yangilash timer'ini qo'yadi.
 **5. Keyin**:
 - `uzumPDFs/.env`: `PUBLIC_BASE_URL=https://uzum.fikrlovchi.uz`
 - `uzumPDFs/main.js:466` — `app.listen(4040)` → `app.listen(4040, "127.0.0.1")`,
-  stocker ham `127.0.0.1:4043`. Tashqaridan faqat nginx orqali kirilsin
-  (`ufw deny 4040,4043`).
+  stocker ham `127.0.0.1:4044`. Tashqaridan faqat nginx orqali kirilsin
+  (`ufw deny 4040,4044`).
 - Cookie `Secure` bayrog'i avtomatik yoqiladi — `main.js:56` `x-forwarded-proto`ni
   tekshiradi, nginx uni yuboradi. ✅
 
@@ -442,7 +442,7 @@ uchala servisda bir xil bo'lishi shart.
 
 ```
 stocker_v4/
-├─ server/                  Node ESM, 127.0.0.1:4043
+├─ server/                  Node ESM, 127.0.0.1:4044
 │  ├─ src/
 │  │  ├─ index.js           Express + WS
 │  │  ├─ cache/             sheets o'qish, order/item kesh, MoySklad cancel ro'yxati
