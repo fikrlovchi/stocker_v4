@@ -54,17 +54,31 @@
 
         <h3>Printerlar</h3>
         <div class="grid">
-          <label>ShK printeri <span class="muted">(40×30 mm, masshtabsiz)</span>
+          <label>ShK printeri <span class="muted">(40×30 mm)</span>
             <div class="row">
               <select id="shkPrinter"></select>
               <button id="test-shk" class="ghost">Sinov</button>
             </div>
           </label>
-          <label>BIG printeri <span class="muted">(101.6×101.6 mm, sig'diriladi)</span>
+          <label>BIG printeri <span class="muted">(101.6×101.6 mm)</span>
             <div class="row">
               <select id="bigPrinter"></select>
               <button id="test-big" class="ghost">Sinov</button>
             </div>
+          </label>
+          <label>ShK masshtabi
+            <select id="shkScale">
+              <option value="noscale">noscale — aynan o'lchamda (tavsiya)</option>
+              <option value="shrink">shrink — kattasini kichraytiradi</option>
+              <option value="fit">fit — betga sig'diradi</option>
+            </select>
+          </label>
+          <label>BIG masshtabi <span class="muted">drayver xato bersa almashtiring</span>
+            <select id="bigScale">
+              <option value="shrink">shrink — kichraytiradi (tavsiya)</option>
+              <option value="fit">fit — betga sig'diradi</option>
+              <option value="noscale">noscale — aynan o'lchamda</option>
+            </select>
           </label>
         </div>
 

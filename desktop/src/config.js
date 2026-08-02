@@ -20,9 +20,12 @@ const DEFAULTS = {
   shkPrinter: "",
   bigPrinter: "",
   // ShK aniq o'lchamda (40×30 mm) yasaladi -> masshtablanmasin.
-  // BIG esa Uzum'ning katta labeli -> 4×4" qog'ozga sig'diriladi.
+  // BIG esa Uzum'ning katta labeli -> qog'ozga kichraytirib sig'diriladi.
+  // "shrink" (kattasini kichraytiradi, kichigini kattalashtirmaydi) ba'zi
+  // termo printer drayverlarida "fit" dan ko'ra ishonchliroq — SumatraPDF
+  // "fit" bilan xato qaytarishi mumkin. UI'dan almashtirsa bo'ladi.
   shkScale: "noscale",
-  bigScale: "fit",
+  bigScale: "shrink",
   autoStart: true,
 };
 

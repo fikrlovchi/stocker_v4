@@ -68,6 +68,8 @@ const FIELDS = ["serverUrl", "token", "stationId", "stationName"];
 async function loadConfig() {
   const cfg = await window.stocker.getConfig();
   FIELDS.forEach((k) => ($(k).value = cfg[k] || ""));
+  $("shkScale").value = cfg.shkScale || "noscale";
+  $("bigScale").value = cfg.bigScale || "shrink";
   $("autoStart").checked = Boolean(cfg.autoStart);
   $("station-label").textContent = cfg.stationId ? `${cfg.stationId}${cfg.stationName ? ` · ${cfg.stationName}` : ""}` : "ish joyi tanlanmagan";
   await loadPrinters(cfg);
@@ -96,6 +98,8 @@ $("save").addEventListener("click", async () => {
   const patch = Object.fromEntries(FIELDS.map((k) => [k, $(k).value.trim()]));
   patch.shkPrinter = $("shkPrinter").value;
   patch.bigPrinter = $("bigPrinter").value;
+  patch.shkScale = $("shkScale").value;
+  patch.bigScale = $("bigScale").value;
   patch.autoStart = $("autoStart").checked;
   await window.stocker.saveConfig(patch);
   $("save-note").textContent = "Saqlandi";

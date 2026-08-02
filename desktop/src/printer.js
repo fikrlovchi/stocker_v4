@@ -33,6 +33,16 @@ async function printPdf(buffer, { printer, scale = "noscale", copies = 1, label 
   fs.writeFileSync(file, buffer);
   try {
     await print(file, { printer, scale, copies: Math.max(1, copies) });
+  } catch (e) {
+    // SumatraPDF'ning "Command failed" xabari sababni ko'rsatmaydi. Eng
+    // ko'p uchraydigan sabablar: printer qog'ozi PDF betidan kichik,
+    // drayver masshtab rejimini qo'llamaydi, yoki printer oflayn.
+    throw new Error(
+      `Chop etib bo'lmadi (${printer}, masshtab: ${scale}).\n` +
+        `Sabablari: qog'oz o'lchami betdan kichik, drayver bu masshtab rejimini ` +
+        `qo'llamaydi, yoki printer tayyor emas.\n` +
+        `Sozlamalarda masshtab rejimini almashtirib ko'ring.\n\n${e.message}`
+    );
   } finally {
     // Diagnostika kerak bo'lsa fayl qoladigan qilish uchun STOCKER_KEEP_PDF=1
     if (!process.env.STOCKER_KEEP_PDF) {
