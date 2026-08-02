@@ -60,7 +60,41 @@ Sozlamalar `%APPDATA%\stocker-print-client\config.json` da saqlanadi
 npm run build
 ```
 
-`dist/` papkasida NSIS o'rnatgich paydo bo'ladi.
+`dist/` papkasida NSIS o'rnatgich paydo bo'ladi. O'rnatilgandan keyin
+PowerShell umuman kerak emas — ilova Start menyusidan ochiladi va Windows
+bilan birga tray'da ishga tushadi.
+
+### ⚠️ "Cannot create symbolic link: A required privilege is not held"
+
+`electron-builder` `winCodeSign` arxivini ochayotganda symlink yarata olmasa
+shu xato chiqadi (arxiv ichida macOS uchun symlink'lar bor, ular bizga kerak
+emas, lekin 7-zip baribir yiqiladi).
+
+**Yechim: Developer Mode'ni yoqing** — shundan keyin barcha build'lar
+administratorsiz ishlaydi:
+
+```
+Sozlamalar → Maxfiylik va xavfsizlik → Ishlab chiquvchilar uchun
+→ "Ishlab chiquvchi rejimi" (Developer Mode) → Yoqilgan
+```
+
+Yoki bir martalik: terminalni **"Administrator sifatida ishga tushirish"**
+bilan ochib, `npm run build` ni qayta bajaring.
+
+Ikkalasi ham iloji bo'lmasa, keshni tozalab ko'ring:
+
+```powershell
+Remove-Item "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign" -Recurse -Force
+```
+
+### Ikonkalar
+
+```powershell
+npm run icons
+```
+
+`src/assets/tray.png` (32×32) va `src/assets/icon.ico` (256×256) kodda
+yasaladi — tashqi rasm yuklab olinmaydi.
 
 ## Tuzilishi
 

@@ -4,8 +4,10 @@
   "description": "Stocker yig'ish tizimi uchun Windows print client (ShK + BIG)",
   "main": "src/main.js",
   "type": "commonjs",
+  "author": "fikrlovchi",
   "scripts": {
     "start": "electron .",
+    "icons": "node scripts/makeIcon.js",
     "build": "electron-builder --win --x64"
   },
   "license": "ISC",
@@ -22,7 +24,9 @@
     "appId": "uz.fikrlovchi.stocker.print",
     "productName": "Stocker Print",
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "src/assets/icon.ico",
+      "signAndEditExecutable": true
     },
     "nsis": {
       "oneClick": false,
