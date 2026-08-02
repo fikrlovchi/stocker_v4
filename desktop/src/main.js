@@ -107,6 +107,22 @@ function resolveUrl(url) {
   return `${String(getConfig().serverUrl).replace(/\/$/, "")}${url}`;
 }
 
+// Node'ning "fetch failed" xabari sababni ko'rsatmaydi — serverga umuman
+// yetib bo'lmagani, TLS muammosi yoki DNS bo'lishi mumkin. Foydalanuvchiga
+// nima tekshirishni aytamiz.
+function describeFetchError(err, url) {
+  if (err?.message !== "fetch failed") return err.message;
+  const cause = err.cause?.code || err.cause?.message || "";
+  const hints = {
+    ECONNREFUSED: "server javob bermayapti (port yopiq yoki servis to'xtagan)",
+    ENOTFOUND: "manzil topilmadi (DNS yoki domen xato)",
+    ETIMEDOUT: "vaqt tugadi (tarmoq yoki firewall)",
+    ECONNRESET: "ulanish uzildi",
+  };
+  const reason = hints[cause] || cause || "tarmoq xatosi";
+  return `Serverga ulanib bo'lmadi — ${reason}.\n${url}\n\nTekshiring: server manzili to'g'rimi, SSH tunnel ochiqmi, servis ishlayaptimi.`;
+}
+
 function printerFor(target) {
   const cfg = getConfig();
   return target === "big"
@@ -138,8 +154,14 @@ async function handleJob(job) {
     return;
   }
 
+  const url = resolveUrl(job.url);
   try {
-    const resp = await fetch(resolveUrl(job.url));
+    let resp;
+    try {
+      resp = await fetch(url);
+    } catch (netErr) {
+      throw new Error(describeFetchError(netErr, url));
+    }
     if (!resp.ok) throw new Error(`PDF olinmadi: HTTP ${resp.status}`);
     const buffer = Buffer.from(await resp.arrayBuffer());
 
@@ -187,12 +209,22 @@ ipcMain.handle("printers:list", () => listPrinters());
 ipcMain.handle("printers:test", async (e, target) => {
   const { printer, scale } = printerFor(target);
   if (!printer) return { ok: false, error: "Printer tanlanmagan" };
+
+  // Sinov sahifasi serverdan olinadi — shunda bitta bosishda butun zanjir
+  // tekshiriladi: ulanish, token, PDF yasash va chop etish.
+  const cfg = getConfig();
+  const url = `${String(cfg.serverUrl).replace(/\/$/, "")}/print/test-page?target=${target}`;
   try {
-    // Sinov sahifasi serverdan olinadi — shunda butun zanjir tekshiriladi.
-    const cfg = getConfig();
-    const url = `${String(cfg.serverUrl).replace(/\/$/, "")}/print/test-page?target=${target}`;
-    const resp = await fetch(url, { headers: { "X-Service-Token": cfg.token } });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    let resp;
+    try {
+      resp = await fetch(url, { headers: { "X-Service-Token": cfg.token } });
+    } catch (netErr) {
+      throw new Error(describeFetchError(netErr, url));
+    }
+    if (resp.status === 401) throw new Error("Kalit (token) noto'g'ri — Sozlamalarni tekshiring");
+    if (resp.status === 502) throw new Error("Server uzumPDFs'dan PDF ola olmadi (uzumpdfs ishlayaptimi?)");
+    if (!resp.ok) throw new Error(`Server HTTP ${resp.status}`);
+
     const buffer = Buffer.from(await resp.arrayBuffer());
     await printPdf(buffer, { printer, scale, copies: 1, label: `test_${target}` });
     pushLog(`Sinov sahifasi yuborildi: ${target.toUpperCase()} → ${printer}`);
