@@ -1,0 +1,60 @@
+{
+  "spreadsheetId": "18j8NDVJl9ZD-wuwlP3T1A1-sVoJlW_doFrwQrf-AvsE",
+  "sheets": {
+    "orders": "uzum_order",
+    "details": "uzum_order_detail",
+    "packing": "uzum_packing"
+  },
+  "columns": {
+    "orders": {
+      "orderId": "A",
+      "dateCreated": "C",
+      "shopId": "G",
+      "status": "Q",
+      "moySkladId": "S",
+      "uzumConfirmed": "T",
+      "mcState": "U",
+      "cancelHandled": "V",
+      "arrivedAt": "W"
+    },
+    "details": {
+      "itemId": "A",
+      "barcode": "B",
+      "skuTitle": "C",
+      "orderId": "H",
+      "product": "I",
+      "entityType": "J",
+      "quantity": "K"
+    },
+    "packing": {
+      "packingId": "A",
+      "orderId": "B",
+      "operator": "C",
+      "station": "D",
+      "startedAt": "E",
+      "finishedAt": "F",
+      "itemCount": "G",
+      "scanCount": "H",
+      "status": "I"
+    }
+  },
+  "cache": {
+    "retentionDays": 3,
+    "refreshIntervalMs": 60000
+  },
+  "moysklad": {
+    "baseUrl": "https://api.moysklad.ru/api/remap/1.2",
+    "canceledLookbackDays": 5,
+    "states": {
+      "canceledHref": "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/states/a47989ee-97e3-11ed-0a80-0ca1009761c9",
+      "assembledHref": "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/states/e3f3673f-8cc0-11f0-0a80-17c2003635fe"
+    }
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 4043
+  },
+  "panel": {
+    "heartbeatIntervalMs": 300000
+  }
+}

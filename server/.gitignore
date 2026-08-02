@@ -1,0 +1,5 @@
+node_modules/
+.env
+oauth.json
+data/
+logs/

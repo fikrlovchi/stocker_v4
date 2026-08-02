@@ -1,0 +1,17 @@
+[Unit]
+Description=Stocker — Uzum buyurtmalarini yig'ish serveri
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/stocker/server
+ExecStart=/usr/bin/node /root/stocker/server/src/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
