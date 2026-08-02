@@ -47,8 +47,7 @@
     "canceledLookbackDays": 5,
     "barcodeTtlDays": 7,
     "missingRetryHours": 24,
-    "syncBudgetPerCycle": 600,
-    "idChunkSize": 25,
+    "syncBudgetPerCycle": 100,
     "fullSyncHourTashkent": 3,
     "states": {
       "canceledHref": "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/states/a47989ee-97e3-11ed-0a80-0ca1009761c9",

@@ -37,7 +37,7 @@ export function getStats() {
     mcProducts: db.prepare("SELECT COUNT(*) AS n FROM mc_products WHERE missing = 0").get().n,
     mcProductsMissing: db.prepare("SELECT COUNT(*) AS n FROM mc_products WHERE missing = 1").get().n,
     mcBarcodes: db.prepare("SELECT COUNT(*) AS n FROM mc_barcodes").get().n,
-    lastFullSyncDate: getMeta("last_full_sync_date"),
+    lastFullSyncAt: getMeta("last_full_sync_at"),
     canceledKnown: db.prepare("SELECT COUNT(*) AS n FROM canceled_orders").get().n,
     packedKnown: db.prepare("SELECT COUNT(*) AS n FROM packed_orders").get().n,
     byReason: Object.fromEntries(byReason.map((r) => [r.reason, r.n])),

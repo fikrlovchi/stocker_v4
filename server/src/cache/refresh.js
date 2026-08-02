@@ -302,15 +302,17 @@ export function applyRefresh({ orderRows, detailRows, packingRows, canceled, now
 // tushishi uchun — Toshkent vaqti bilan belgilangan soatda, kuniga bir marta.
 async function maybeFullAssortmentSync() {
   const tashkentNow = new Date(Date.now() + TASHKENT_OFFSET_MS).toISOString();
-  const hour = Number(tashkentNow.slice(11, 13));
-  const today = tashkentNow.slice(0, 10);
+  if (Number(tashkentNow.slice(11, 13)) !== config.moysklad.fullSyncHourTashkent) return false;
 
-  if (hour !== config.moysklad.fullSyncHourTashkent) return false;
-  if (getMeta("last_full_sync_date") === today) return false;
+  // Bugun allaqachon bajarilganmi? (fullAssortmentSync o'zi last_full_sync_at yozadi)
+  const lastFull = getMeta("last_full_sync_at");
+  if (lastFull) {
+    const lastDate = new Date(Date.parse(lastFull) + TASHKENT_OFFSET_MS).toISOString().slice(0, 10);
+    if (lastDate === tashkentNow.slice(0, 10)) return false;
+  }
 
   try {
     await fullAssortmentSync();
-    setMeta("last_full_sync_date", today);
     return true;
   } catch (e) {
     logger.error(`To'liq assortiment sinxronizatsiyasi xato: ${e.message}`);

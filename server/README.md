@@ -45,12 +45,21 @@ skanerlay oladi:
 | `moysklad` | `uzum_order_detail!I` (href) → `GET assortment` → `barcodes[]` | **7 kun** (`mc_products` / `mc_barcodes`) |
 
 Tovar barcode'i kamdan-kam o'zgaradi, shuning uchun bir marta olingan UUID
-qayta so'ralmaydi. Har tsiklda faqat **yangi yoki eskirgan** UUID'lar olinadi,
-bitta so'rovda 25 tagacha (`assortment?filter=id=<href>;id=<href>...`) — 300 ta
-yangi tovar 300 emas, 12 ta so'rov. Tsikl byudjeti `syncBudgetPerCycle` bilan
-cheklangan, ya'ni birinchi ishga tushirish yangilanish tsiklini bloklab qo'ymaydi.
+qayta so'ralmaydi. Yangilash **ikki bosqichli**:
 
-Kechasi soat 3:00 (Toshkent) da butun assortiment sahifalab qayta o'qiladi —
+1. **To'liq assortiment** — `GET /entity/assortment?limit=1000&offset=N`,
+   sahifalab, filtrsiz. Kesh sovuq yoki 7 kundan eski bo'lsa ishga tushadi.
+   570 ta tovar uchun 570 ta so'rov emas, bir necha sahifa.
+2. **Qoldiqlar** — katalogda topilmaganlar (masalan hozirgina yaratilgan yoki
+   arxivlangan tovar) bittalab `GET /entity/<type>/<uuid>` orqali olinadi.
+   `syncBudgetPerCycle` bilan cheklangan, ya'ni yangilanish tsiklini bloklamaydi.
+
+> **Nega bulk `filter=id=` emas:** `assortment` endpointining `id` filtri href
+> qabul qilmaydi — MoySklad **1014** xatosi bilan rad etadi. Sahifalab o'qish
+> esa ishonchli: aynan shu usul `addBarcodeToMC/fetch_barcodes.py` da ishlab
+> turibdi.
+
+Kechasi soat 3:00 (Toshkent) da to'liq assortiment majburiy qayta o'qiladi —
 MoySklad'da barcode qo'shilgan/o'chirilgan bo'lsa 7 kunlik TTL kutilmaydi.
 
 `uzum_order_detail!I` da to'liq href ham, yalang'och UUID ham bo'lishi mumkin —
