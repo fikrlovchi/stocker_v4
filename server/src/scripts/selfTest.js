@@ -281,6 +281,98 @@ const ambiguousRows = [
 applyRefresh({ orderRows, detailRows: ambiguousRows, packingRows, canceled, nowMs: NOW });
 check("noaniq barcode aniqlandi", findAmbiguousBarcodes(10).map((a) => a.barcode), ["5555555555555"]);
 
+/* ---------------- 7. Skan mantiqi (sessiya, lock, avtomatik tanlash) ---------------- */
+
+const { config } = await import("../config.js");
+// Testda MoySklad'ga chiqmaymiz (token yo'q) — yakuniy holat tekshiruvini o'chiramiz.
+config.packing.maxMoyskladChecks = 0;
+
+const { scan, getActiveSession, cancelSession, expireStaleSessions, pendingPrintIntents } =
+  await import("../scan/sessions.js");
+
+// Asosiy fixture'larni tiklaymiz (6-bo'lim keshni o'zgartirgan edi).
+applyRefresh({ orderRows, detailRows, packingRows, canceled, nowMs: NOW });
+
+const resetSessions = () =>
+  db.exec(
+    "DELETE FROM sessions; DELETE FROM session_items; DELETE FROM session_barcodes; DELETE FROM scans; DELETE FROM print_intents"
+  );
+
+// --- Buyurtma ochish va progress ---
+resetSessions();
+let r = await scan({ barcode: "1000111953348", operator: "aziz", stationId: "Ombor-1" });
+check("skan: buyurtma ochildi", [r.result, r.session.orderId], ["order_opened", "OK1"]);
+check("skan: progress 1/3", [r.session.progress.scanned, r.session.progress.total], [1, 3]);
+check("skan: ShK niyati 2 nusxa", [r.print[0].target, r.print[0].copies], ["shk", 2]);
+
+// --- Boshqa buyurtmaning tovari ---
+r = await scan({ barcode: "1000333953348", operator: "aziz" });
+check("skan: boshqa buyurtma tovari rad etildi", r.result, "wrong_item");
+check("skan: progress o'zgarmadi", r.session.progress.scanned, 1);
+
+// --- Miqdori 2 bo'lgan tovar: ikki marta skan ---
+r = await scan({ barcode: "1000222953348", operator: "aziz" });
+check("skan: 2/3", [r.result, r.session.progress.scanned], ["ok", 2]);
+r = await scan({ barcode: "1000222953348", operator: "aziz" });
+check("skan: oxirgi birlik -> buyurtma yig'ildi", r.result, "order_complete");
+check("skan: progress 3/3", r.session.progress.remaining, 0);
+check(
+  "skan: yakunda BIG niyati",
+  r.print.map((p) => p.target),
+  ["shk", "big"]
+);
+
+const intents = pendingPrintIntents(r.session.id);
+check("niyatlar: 3 ta ShK + 1 ta BIG", intents.filter((i) => i.target === "shk").length, 3);
+check("niyatlar: BIG bitta", intents.filter((i) => i.target === "big").length, 1);
+check("niyatlar: har ShK 2 nusxa", [...new Set(intents.filter((i) => i.target === "shk").map((i) => i.copies))], [2]);
+
+// --- Yig'ilgan buyurtma qayta ochilmaydi ---
+r = await scan({ barcode: "1000111953348", operator: "aziz" });
+check("skan: yig'ilgan buyurtma qayta ochilmaydi", r.result, "no_available_order");
+
+// --- Miqdor to'lganda ---
+resetSessions();
+await scan({ barcode: "1000222953348", operator: "aziz" });
+await scan({ barcode: "1000222953348", operator: "aziz" });
+r = await scan({ barcode: "1000222953348", operator: "aziz" });
+check("skan: miqdor to'lgan", r.result, "already_complete");
+
+// --- LOCK: ikkinchi operator o'sha buyurtmani ololmaydi ---
+resetSessions();
+await scan({ barcode: "1000111953348", operator: "aziz" });
+r = await scan({ barcode: "1000111953348", operator: "bek" });
+check("lock: buyurtma band, boshqa operator ololmadi", r.result, "no_available_order");
+check("lock: aziz sessiyasi ochiq", getActiveSession("aziz").orderId, "OK1");
+check("lock: bekda sessiya yo'q", getActiveSession("bek"), null);
+
+// --- Bekor qilish lock'ni bo'shatadi ---
+cancelSession("aziz", "test");
+check("bekor: aziz sessiyasi yopildi", getActiveSession("aziz"), null);
+r = await scan({ barcode: "1000111953348", operator: "bek" });
+check("bekor: endi bek ocha oldi", [r.result, r.session.orderId], ["order_opened", "OK1"]);
+
+// --- Muddat o'tishi lock'ni bo'shatadi ---
+db.prepare("UPDATE sessions SET expires_at = ? WHERE status = 'active'").run("2020-01-01T00:00:00.000Z");
+check("muddat: 1 ta sessiya yopildi", expireStaleSessions(), 1);
+r = await scan({ barcode: "1000111953348", operator: "aziz" });
+check("muddat: buyurtma yana bo'sh", [r.result, r.session.orderId], ["order_opened", "OK1"]);
+
+// --- Avtomatik tanlash: eng kam tovarli buyurtma ---
+// 4600000000011 ikkita buyurtmada: OK1 (2 tovar) va NOBC (1 tovar) -> NOBC
+resetSessions();
+r = await scan({ barcode: "4600000000011", operator: "aziz" });
+check("avto-tanlash: eng kam tovarli buyurtma olindi", r.session.orderId, "NOBC");
+check("avto-tanlash: 1 birlik -> darhol yig'ildi", r.result, "order_complete");
+
+// --- Noma'lum barcode ---
+resetSessions();
+r = await scan({ barcode: "9999999999999", operator: "aziz" });
+check("skan: noma'lum barcode", r.result, "unknown_barcode");
+check("skan: noma'lum barcode sessiya ochmaydi", getActiveSession("aziz"), null);
+
+resetSessions();
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

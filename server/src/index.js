@@ -16,6 +16,8 @@ import {
 } from "./cache/queries.js";
 import { fullAssortmentSync } from "./moysklad/productBarcodes.js";
 import { startHeartbeat, countError, countSuccess } from "./panel/reporter.js";
+import { scanRouter } from "./scan/routes.js";
+import { expireStaleSessions } from "./scan/sessions.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -30,6 +32,8 @@ async function runRefresh(trigger) {
   }
   refreshing = true;
   try {
+    // Tashlab ketilgan sessiyalarning lock'ini bo'shatamiz (TTL).
+    expireStaleSessions();
     const summary = await refreshCache();
     lastRefresh = { at: new Date().toISOString(), ok: true, error: null, summary };
     countSuccess();
@@ -124,6 +128,9 @@ debug.post("/sync-barcodes", async (req, res) => {
 });
 
 app.use("/debug", debug);
+
+// Yig'ish API. 8-fazagacha service token bilan yopiq (keyin operator JWT).
+app.use("/api", requireServiceToken, scanRouter());
 
 app.use((req, res) => res.status(404).json({ error: "Topilmadi" }));
 

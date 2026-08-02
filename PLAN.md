@@ -472,8 +472,8 @@ kutubxona. Jadvallar: `orders`, `items`, `barcodes`, `mc_barcodes`, `sessions`,
 |---|---|---|
 | ~~**1**~~ | ~~Server yadrosi: Sheets o'qish, filtr (3.1), MoySklad cancel ro'yxati, SQLite, tozalash~~ **✅ BAJARILDI** — `server/`, [README](server/README.md), 39 ta test o'tdi | 2 |
 | ~~**2**~~ | ~~MoySklad barcode olish + indeks + qidiruv testi~~ **✅ BAJARILDI** — 7 kunlik kesh, bulk so'rov, tungi to'liq sinxronizatsiya, 48 ta test | 1.5 |
-| **3** | uzumPDFs: `createShkSmall()` 40×30 + `buildProductForItem` + internal endpointlar ✅ **kod tayyor** (`uzumpdfs@e1e0234`) — ⏳ **fizik sinov chop etish kutilmoqda** | 1.5 |
-| **4** | Skan mantiqi: sessiya, lock, avto-tanlash, progress API | 2 |
+| ~~**3**~~ | ~~uzumPDFs: `createShkSmall()` 40×30 + internal endpointlar~~ **✅ BAJARILDI** (`uzumpdfs@f48859d`), maket tasdiqlandi | 1.5 |
+| ~~**4**~~ | ~~Skan mantiqi: sessiya, lock, avto-tanlash, progress API~~ **✅ BAJARILDI** — 73 ta test | 2 |
 | **5** | Print quvuri: WS hub, navbat, idempotentlik, retry | 1.5 |
 | **6** | Electron client: WS, printer tanlash, SumatraPDF, QR, tray, autostart | 2.5 |
 | **7** | Expo mobil: login, QR juftlash, skan, progress, xatolar, reprint | 3 |

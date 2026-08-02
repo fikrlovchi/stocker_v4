@@ -2,9 +2,10 @@
 
 Uzum buyurtmalarini omborda skanerlab yig'ish serveri. To'liq reja: [../PLAN.md](../PLAN.md).
 
-**Hozirgi holat: 1–2 fazalar bajarildi** — buyurtma keshi va barcode indeksi
-(Uzum + MoySklad). Skan/sessiya (4-faza), print quvuri (5-faza),
-autentifikatsiya (8-faza) hali yo'q.
+**Hozirgi holat: 1, 2, 4-fazalar bajarildi** — buyurtma keshi, barcode
+indeksi (Uzum + MoySklad) va skan mantiqi (sessiya, lock, avtomatik
+buyurtma tanlash). Print quvuri (5-faza) va autentifikatsiya (8-faza) hali
+yo'q — chop etish hozircha faqat "niyat" sifatida qayd etiladi.
 
 ## Nima qiladi
 
@@ -71,6 +72,58 @@ qayta so'ralmaydi va loglanadi.
 > `skuTitle , mc_product!E` (PLAN.md, 2-qaror). MoySklad'dan olingan nom faqat
 > diagnostika va mobil ilova ekranida ko'rsatish uchun saqlanadi.
 
+## Skan mantiqi
+
+`POST /api/scan { barcode, operator, stationId }`
+
+**Operatorda ochiq sessiya yo'q** → barcode bo'yicha buyurtma qidiriladi,
+**avtomatik tanlanadi** (eng kam tovarli, teng bo'lsa eng eski) va LOCK
+qilinadi. **Ochiq sessiya bor** → barcode faqat shu buyurtmaga tegishli
+bo'lishi kerak.
+
+| `result` | Ma'nosi |
+|---|---|
+| `order_opened` | Buyurtma topildi va ochildi (birinchi skan hisobga olindi) |
+| `ok` | Navbatdagi birlik yopildi |
+| `order_complete` | Oxirgi birlik — buyurtma yig'ildi, BIG chop etishga |
+| `wrong_item` | Bu tovar joriy buyurtmaga tegishli emas |
+| `already_complete` | Bu tovar to'liq skanerlangan |
+| `unknown_barcode` | Barcode hech qayerda topilmadi |
+| `no_available_order` | Tovar bor, lekin buyurtma band / bekor / yig'ilgan |
+
+Xato natijalar ham **HTTP 200** bilan qaytadi — ilova `result` maydoniga
+qarab ovoz/vibratsiya beradi.
+
+### LOCK qanday ishlaydi
+
+`sessions` jadvalidagi **qisman UNIQUE indeks** (`status='active'` bo'yicha):
+
+```sql
+CREATE UNIQUE INDEX idx_sessions_active_order ON sessions(order_id) WHERE status = 'active';
+```
+
+Ikki operator bir vaqtda bir buyurtmani ochmoqchi bo'lsa, ikkinchisining
+`INSERT`i UNIQUE xatosi bilan tushadi va kod keyingi nomzodga o'tadi.
+Alohida qulflash mexanizmi kerak emas — poyga (race) baza darajasida hal
+bo'ladi. Ikkinchi indeks bitta operatorda bitta ochiq sessiyani kafolatlaydi.
+
+Lock uchta yo'l bilan bo'shaydi: buyurtma yig'ilganda, operator bekor
+qilganda, yoki **15 daqiqa** harakatsizlikdan keyin (`sessionTtlMinutes`,
+har skanda uzayadi).
+
+### Sessiya keshdan mustaqil
+
+`orders`/`items`/`item_barcodes` har 60 soniyada `DELETE`+`INSERT` qilinadi.
+Shuning uchun sessiya ochilganda tovarlar va **barcode'lar nusxalanadi**
+(`session_items`, `session_barcodes`) — yangilanish tsikli ochiq sessiyani
+buzmaydi.
+
+### Chop etish
+
+Har muvaffaqiyatli skan → **ShK, 2 nusxa**. Buyurtma yig'ilganda → **BIG, 1 ta**.
+5-fazagacha bular `print_intents` jadvaliga yoziladi va
+`GET /api/print-intents` orqali ko'rinadi; WebSocket quvuri 5-fazada qo'shiladi.
+
 ## Mahalliy ishga tushirish (Windows)
 
 ```powershell
@@ -93,7 +146,7 @@ node src/index.js
 
 ## Tekshirish
 
-**Google/MoySklad'siz — mantiq testi** (48 ta tekshiruv, vaqtinchalik bazada):
+**Google/MoySklad'siz — mantiq testi** (73 ta tekshiruv, vaqtinchalik bazada):
 
 ```bash
 node src/scripts/selfTest.js
@@ -114,10 +167,16 @@ node src/scripts/syncBarcodes.js
 
 ## Endpointlar
 
-`/health` ochiq, qolgani `X-Service-Token` talab qiladi.
+`/health` ochiq, qolgani `X-Service-Token` talab qiladi. (`/api/*` uchun
+8-fazada operator JWT'si qo'shiladi.)
 
 | Endpoint | Vazifa |
 |---|---|
+| `POST /api/scan` | `{barcode, operator, stationId}` → skan natijasi + sessiya |
+| `GET /api/session` | `?operator=` yoki `?id=` — joriy sessiya (telefon qayta ulanganda) |
+| `POST /api/session/cancel` | `{operator, reason}` — sessiyani bekor qilish, lock bo'shaydi |
+| `GET /api/sessions` | Hozir kim nimani yig'yapti |
+| `GET /api/print-intents` | Chop etish niyatlari (`?sessionId=`) |
 | `GET /health` | Oxirgi yangilanish holati (nginx/monitoring uchun) |
 | `GET /debug/stats` | Kesh statistikasi + sabablar bo'yicha taqsimot |
 | `GET /debug/orders` | Navbatdagi buyurtmalar ro'yxati. `?all=1` — nomoslar ham |
@@ -187,6 +246,9 @@ src/
 │  ├─ client.js           msFetch (429 retry), holat o'qish
 │  ├─ canceledOrders.js   bekor qilinganlar ro'yxati (1 so'rov)
 │  └─ productBarcodes.js  tovar barcode'lari (7 kunlik kesh, bulk + tungi to'liq)
+├─ scan/
+│  ├─ sessions.js         sessiya, lock, avtomatik tanlash, holat mashinasi
+│  └─ routes.js           /api/* (mobil ilova uchun)
 ├─ google/sheetsClient.js OAuth2 (uzbuyo@gmail.com)
 ├─ db/                    SQLite + migratsiyalar
 ├─ panel/reporter.js      fikrlovchi-panel'ga hisobot (har 5 daqiqa)
