@@ -1,3 +1,9 @@
+// .env ni o'qiydi. Ilgari bu yo'q edi — barcha process.env qiymatlari
+// (SERVICE_TOKEN, DASHBOARD_PASSWORD, PUBLIC_BASE_URL, LABEL_CACHE_DIR)
+// faqat servisni ishga tushiruvchi muhitdan kelardi va `.env` fayli
+// e'tiborsiz qolardi. dotenv mavjud process.env qiymatlarini BOSMAYDI,
+// shuning uchun hozirgi ishga tushirish usuli buzilmaydi.
+import "dotenv/config";
 import express from "express";
 import { PDFDocument, } from "pdf-lib";
 import fs from "fs";
