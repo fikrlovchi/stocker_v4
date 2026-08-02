@@ -60,6 +60,13 @@
     "maxMoyskladChecks": 3,
     "blockOnMoyskladError": false
   },
+  "print": {
+    "ackTimeoutMs": 30000,
+    "maxAttempts": 3,
+    "alertAfterMs": 120000,
+    "jobRetentionDays": 7,
+    "uzumPdfsBaseUrl": "http://127.0.0.1:4040"
+  },
   "server": {
     "host": "127.0.0.1",
     "port": 4044

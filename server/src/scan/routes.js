@@ -11,7 +11,7 @@ import {
   getSession,
   listActiveSessions,
   cancelSession,
-  pendingPrintIntents,
+  sessionJobs,
   RESULT,
 } from "./sessions.js";
 
@@ -57,9 +57,10 @@ export function scanRouter() {
   // Nazorat: hozir kim nimani yig'yapti.
   router.get("/sessions", (req, res) => res.json({ sessions: listActiveSessions() }));
 
-  // 5-fazagacha: chop etish niyatlari shu yerda ko'rinadi.
-  router.get("/print-intents", (req, res) => {
-    res.json({ intents: pendingPrintIntents(req.query.sessionId ? String(req.query.sessionId) : null) });
+  // Sessiyaning chop etish joblari (holati, urinishlari bilan).
+  router.get("/jobs", (req, res) => {
+    if (!req.query.sessionId) return res.status(400).json({ error: "sessionId kerak" });
+    res.json({ jobs: sessionJobs(String(req.query.sessionId)) });
   });
 
   router.get("/result-codes", (req, res) => res.json(RESULT));

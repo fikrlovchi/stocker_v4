@@ -18,6 +18,8 @@ import { db } from "../db/index.js";
 import logger from "../logger.js";
 import { normalizeBarcode } from "../util/sheetValues.js";
 import { getOrderStateHref } from "../moysklad/client.js";
+import { createJob, listJobs } from "../print/jobs.js";
+import { dispatchTo } from "../print/hub.js";
 
 const PK = config.packing;
 const TTL_MS = PK.sessionTtlMinutes * 60 * 1000;
@@ -93,30 +95,16 @@ function logScan({ sessionId, operator, itemId, barcode, source, result }) {
   ).run(sessionId ?? null, operator ?? null, itemId ?? null, barcode, source ?? null, result, nowIso());
 }
 
-function addPrintIntent({ sessionId, orderId, itemId, target, copies, stationId }) {
-  const id = randomUUID();
-  db.prepare(
-    `INSERT INTO print_intents (id, session_id, order_id, item_id, target, copies, station_id, status, created_at)
-     VALUES (?,?,?,?,?,?,?,'pending',?)`
-  ).run(id, sessionId, orderId, itemId ?? null, target, copies, stationId ?? null, nowIso());
-  return { id, target, itemId: itemId ?? null, copies };
+function addPrintJob({ sessionId, orderId, itemId, target, copies, stationId }) {
+  if (!stationId) {
+    logger.warn(`Ish joyi ko'rsatilmagan (${target} ${orderId}) — job navbatda kutadi.`);
+  }
+  const job = createJob({ sessionId, orderId, itemId, target, copies, stationId });
+  return { id: job.id, target: job.target, itemId: job.itemId, copies: job.copies };
 }
 
-export function pendingPrintIntents(sessionId) {
-  const rows = sessionId
-    ? db.prepare("SELECT * FROM print_intents WHERE session_id = ? ORDER BY created_at").all(sessionId)
-    : db.prepare("SELECT * FROM print_intents WHERE status = 'pending' ORDER BY created_at LIMIT 200").all();
-  return rows.map((r) => ({
-    id: r.id,
-    sessionId: r.session_id,
-    orderId: r.order_id,
-    itemId: r.item_id,
-    target: r.target,
-    copies: r.copies,
-    stationId: r.station_id,
-    status: r.status,
-    createdAt: r.created_at,
-  }));
+export function sessionJobs(sessionId) {
+  return listJobs({ sessionId, limit: 200 });
 }
 
 // Muddati o'tgan sessiyalar lock'ni bo'shatadi. Har yangilanish tsiklida
@@ -343,7 +331,7 @@ function scanInSession(session, barcode, operator, { justOpened = false } = {}) 
       result: RESULT.OK,
     });
     prints.push(
-      addPrintIntent({
+      addPrintJob({
         sessionId: session.id,
         orderId: session.orderId,
         itemId: target.item_id,
@@ -355,13 +343,14 @@ function scanInSession(session, barcode, operator, { justOpened = false } = {}) 
   })();
 
   const updated = getSession(session.id);
+  dispatchTo(session.stationId); // ulangan bo'lsa darhol chop etishga ketadi
 
   // Hamma birlik skanerlandi -> yakunlaymiz.
   if (updated.progress.remaining === 0) {
     db.transaction(() => {
       db.prepare("UPDATE sessions SET status = 'done', finished_at = ? WHERE id = ?").run(nowIso(), session.id);
       prints.push(
-        addPrintIntent({
+        addPrintJob({
           sessionId: session.id,
           orderId: session.orderId,
           target: "big",
@@ -370,6 +359,7 @@ function scanInSession(session, barcode, operator, { justOpened = false } = {}) 
         })
       );
     })();
+    dispatchTo(session.stationId);
     logger.info(`Buyurtma ${session.orderId} yig'ildi (${operator}, ${updated.progress.total} birlik).`);
     return {
       result: RESULT.ORDER_COMPLETE,

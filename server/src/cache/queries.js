@@ -63,18 +63,22 @@ export function getProduct(uuid) {
 
 // Keshdagi buyurtmalar ro'yxati — sinov uchun haqiqiy orderId/barcode topishga
 // va "navbatda nima bor?" savoliga javob berishga xizmat qiladi.
-export function listOrders({ eligible = true, limit = 20 } = {}) {
+export function listOrders({ eligible = true, limit = 20, minUnits = 0 } = {}) {
+  const where = [];
+  if (eligible) where.push("o.eligible = 1");
+  if (minUnits > 0) where.push("o.unit_count >= @minUnits");
+
   const rows = db
     .prepare(
       `SELECT o.order_id, o.eligible, o.reason, o.item_count, o.unit_count, o.arrived_at_ms,
               (SELECT COUNT(*) FROM item_barcodes b JOIN items i ON i.item_id = b.item_id
                 WHERE i.order_id = o.order_id) AS barcode_count
        FROM orders o
-       ${eligible ? "WHERE o.eligible = 1" : ""}
-       ORDER BY o.item_count ASC, o.arrived_at_ms ASC
-       LIMIT ?`
+       ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       ORDER BY o.unit_count DESC, o.item_count ASC, o.arrived_at_ms ASC
+       LIMIT @limit`
     )
-    .all(limit);
+    .all({ limit, minUnits });
 
   return rows.map((r) => ({
     orderId: r.order_id,

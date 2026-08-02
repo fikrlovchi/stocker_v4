@@ -287,7 +287,7 @@ const { config } = await import("../config.js");
 // Testda MoySklad'ga chiqmaymiz (token yo'q) — yakuniy holat tekshiruvini o'chiramiz.
 config.packing.maxMoyskladChecks = 0;
 
-const { scan, getActiveSession, cancelSession, expireStaleSessions, pendingPrintIntents } =
+const { scan, getActiveSession, cancelSession, expireStaleSessions, sessionJobs } =
   await import("../scan/sessions.js");
 
 // Asosiy fixture'larni tiklaymiz (6-bo'lim keshni o'zgartirgan edi).
@@ -295,7 +295,7 @@ applyRefresh({ orderRows, detailRows, packingRows, canceled, nowMs: NOW });
 
 const resetSessions = () =>
   db.exec(
-    "DELETE FROM sessions; DELETE FROM session_items; DELETE FROM session_barcodes; DELETE FROM scans; DELETE FROM print_intents"
+    "DELETE FROM sessions; DELETE FROM session_items; DELETE FROM session_barcodes; DELETE FROM scans; DELETE FROM print_jobs"
   );
 
 // --- Buyurtma ochish va progress ---
@@ -322,10 +322,13 @@ check(
   ["shk", "big"]
 );
 
-const intents = pendingPrintIntents(r.session.id);
-check("niyatlar: 3 ta ShK + 1 ta BIG", intents.filter((i) => i.target === "shk").length, 3);
-check("niyatlar: BIG bitta", intents.filter((i) => i.target === "big").length, 1);
-check("niyatlar: har ShK 2 nusxa", [...new Set(intents.filter((i) => i.target === "shk").map((i) => i.copies))], [2]);
+const completedSessionId = r.session.id;
+const jobs = sessionJobs(completedSessionId);
+check("navbat: 3 ta ShK", jobs.filter((i) => i.target === "shk").length, 3);
+check("navbat: BIG bitta", jobs.filter((i) => i.target === "big").length, 1);
+check("navbat: har ShK 2 nusxa", [...new Set(jobs.filter((i) => i.target === "shk").map((i) => i.copies))], [2]);
+check("navbat: hammasi pending", [...new Set(jobs.map((i) => i.status))], ["pending"]);
+check("navbat: har jobda fetch token bor", jobs.every((j) => j.fetchToken && j.fetchToken.length >= 32), true);
 
 // --- Yig'ilgan buyurtma qayta ochilmaydi ---
 r = await scan({ barcode: "1000111953348", operator: "aziz" });
@@ -371,6 +374,77 @@ r = await scan({ barcode: "9999999999999", operator: "aziz" });
 check("skan: noma'lum barcode", r.result, "unknown_barcode");
 check("skan: noma'lum barcode sessiya ochmaydi", getActiveSession("aziz"), null);
 
+/* ---------------- 8. Chop etish navbati ---------------- */
+
+const {
+  createJob,
+  claimJobsForStation,
+  markSent,
+  ackJob,
+  sweepStaleJobs,
+  getJob,
+  queueStats,
+  upsertStation,
+  getStation,
+} = await import("../print/jobs.js");
+
+resetSessions();
+db.exec("DELETE FROM print_jobs; DELETE FROM stations");
+
+const j1 = createJob({ sessionId: "s1", orderId: "OK1", itemId: "i1", target: "shk", copies: 2, stationId: "Ombor-1" });
+const j2 = createJob({ sessionId: "s1", orderId: "OK1", target: "big", copies: 1, stationId: "Ombor-1" });
+createJob({ sessionId: "s2", orderId: "OK2", itemId: "i3", target: "shk", copies: 2, stationId: "Ombor-2" });
+
+check("navbat: station bo'yicha ajratiladi", claimJobsForStation("Ombor-1").map((j) => j.id), [j1.id, j2.id]);
+check("navbat: boshqa station 1 ta", claimJobsForStation("Ombor-2").length, 1);
+
+// Yuborildi -> darhol qayta olinmaydi (ACK kutamiz)
+markSent(j1.id);
+check("navbat: yuborilgan job qayta olinmaydi", claimJobsForStation("Ombor-1").map((j) => j.id), [j2.id]);
+check("navbat: urinish sanaldi", getJob(j1.id).attempts, 1);
+
+// ACK -> done
+ackJob(j1.id, { ok: true });
+check("ACK: done bo'ldi", getJob(j1.id).status, "done");
+check("ACK: navbatdan chiqdi", claimJobsForStation("Ombor-1").map((j) => j.id), [j2.id]);
+
+// Idempotentlik: takroriy ACK done holatini buzmaydi
+ackJob(j1.id, { ok: false, error: "kechikkan takroriy ACK" });
+check("ACK: takroriy ACK done'ni buzmaydi", [getJob(j1.id).status, getJob(j1.id).lastError], ["done", null]);
+
+// Xato ACK -> qayta navbatga
+markSent(j2.id);
+ackJob(j2.id, { ok: false, error: "printer oflayn" });
+check("ACK xato: qayta navbatga", getJob(j2.id).status, "pending");
+check("ACK xato: sabab saqlandi", getJob(j2.id).lastError, "printer oflayn");
+
+// Urinishlar tugaganda -> error
+markSent(j2.id);
+ackJob(j2.id, { ok: false, error: "yana oflayn" });
+markSent(j2.id);
+ackJob(j2.id, { ok: false, error: "uchinchi marta" });
+check("ACK xato: urinishlar tugadi -> error", getJob(j2.id).status, "error");
+check("ACK xato: urinishlar soni", getJob(j2.id).attempts, 3);
+
+// ACK kelmasa sweep qayta navbatga qo'yadi
+const j3 = createJob({ orderId: "OK1", itemId: "i2", target: "shk", copies: 2, stationId: "Ombor-1" });
+markSent(j3.id);
+db.prepare("UPDATE print_jobs SET sent_at = '2020-01-01T00:00:00.000Z' WHERE id = ?").run(j3.id);
+check("sweep: ACK kelmagan job qayta navbatga", sweepStaleJobs(), { requeued: 1, failed: 0 });
+check("sweep: holati pending", getJob(j3.id).status, "pending");
+
+check("navbat statistikasi", queueStats().error, 1);
+
+// Station ma'lumotlari
+upsertStation({ id: "Ombor-1", name: "Asosiy ombor", shkPrinter: "Proton DTP-4207", bigPrinter: "Gainsha GS-2408" });
+check("station: printerlar saqlandi", [getStation("Ombor-1").shkPrinter, getStation("Ombor-1").bigPrinter], [
+  "Proton DTP-4207",
+  "Gainsha GS-2408",
+]);
+upsertStation({ id: "Ombor-1", shkPrinter: "Yangi ShK printer" });
+check("station: qisman yangilash boshqasini o'chirmaydi", getStation("Ombor-1").bigPrinter, "Gainsha GS-2408");
+
+db.exec("DELETE FROM print_jobs; DELETE FROM stations");
 resetSessions();
 
 /* ---------------- Yakun ---------------- */

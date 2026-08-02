@@ -2,10 +2,11 @@
 
 Uzum buyurtmalarini omborda skanerlab yig'ish serveri. To'liq reja: [../PLAN.md](../PLAN.md).
 
-**Hozirgi holat: 1, 2, 4-fazalar bajarildi** — buyurtma keshi, barcode
-indeksi (Uzum + MoySklad) va skan mantiqi (sessiya, lock, avtomatik
-buyurtma tanlash). Print quvuri (5-faza) va autentifikatsiya (8-faza) hali
-yo'q — chop etish hozircha faqat "niyat" sifatida qayd etiladi.
+**Hozirgi holat: 1, 2, 4, 5-fazalar bajarildi** — buyurtma keshi, barcode
+indeksi (Uzum + MoySklad), skan mantiqi (sessiya, lock, avtomatik buyurtma
+tanlash) va chop etish quvuri (WebSocket hub, navbat, ACK, qayta urinish).
+Desktop client (6-faza), mobil ilova (7-faza) va autentifikatsiya (8-faza)
+hali yo'q.
 
 ## Nima qiladi
 
@@ -118,11 +119,40 @@ Shuning uchun sessiya ochilganda tovarlar va **barcode'lar nusxalanadi**
 (`session_items`, `session_barcodes`) — yangilanish tsikli ochiq sessiyani
 buzmaydi.
 
-### Chop etish
+## Chop etish quvuri
 
 Har muvaffaqiyatli skan → **ShK, 2 nusxa**. Buyurtma yig'ilganda → **BIG, 1 ta**.
-5-fazagacha bular `print_intents` jadvaliga yoziladi va
-`GET /api/print-intents` orqali ko'rinadi; WebSocket quvuri 5-fazada qo'shiladi.
+
+```
+skan → print_jobs (pending) → WS orqali station'ga → sent → ACK → done
+                                    ↑                    │
+                                    └────────────────────┘  ACK kelmasa qayta
+```
+
+**Nega WebSocket:** telefon va PC bir tarmoqda bo'lishi shart emas. PC serverga
+**o'zi ulanadi** (chiquvchi ulanish), server esa print buyrug'ini shu ochiq
+kanal orqali yuboradi. Ish joyida port ochish yoki statik IP kerak emas.
+
+Protokol (`ws://host/ws?stationId=X&token=Y`):
+
+| Yo'nalish | Xabar |
+|---|---|
+| client → | `{type:"hello", stationId, name?, printers:{shk,big}}` |
+| → client | `{type:"welcome", stationId}` |
+| → client | `{type:"print", job:{id, target, copies, orderId, itemId, url}}` |
+| client → | `{type:"ack", jobId, ok, error?}` |
+
+**Idempotentlik:** `job.id` o'zgarmas. ACK kelmasa server 30 soniyadan keyin
+qayta yuboradi (3 martagacha), client esa ko'rgan `jobId`ni eslab qolib
+takror chop etmaydi. Allaqachon `done` bo'lgan jobga kelgan kechikkan ACK
+holatni buzmaydi.
+
+**PDF xavfsizligi:** desktop client PDF'ni to'g'ridan-to'g'ri uzumPDFs'dan
+olmaydi. U `GET /job/<id>/pdf?t=<bir martalik token>` ga boradi, stocker esa
+service token bilan uzumPDFs'ga chiqadi. Shunda service token faqat serverda
+qoladi va ish joylaridagi kompyuterlarga tarqalmaydi.
+
+Client'siz sinash uchun `POST /print/ack {jobId, ok}` bor.
 
 ## Mahalliy ishga tushirish (Windows)
 
@@ -146,7 +176,7 @@ node src/index.js
 
 ## Tekshirish
 
-**Google/MoySklad'siz — mantiq testi** (73 ta tekshiruv, vaqtinchalik bazada):
+**Google/MoySklad'siz — mantiq testi** (91 ta tekshiruv, vaqtinchalik bazada):
 
 ```bash
 node src/scripts/selfTest.js
@@ -176,7 +206,13 @@ node src/scripts/syncBarcodes.js
 | `GET /api/session` | `?operator=` yoki `?id=` — joriy sessiya (telefon qayta ulanganda) |
 | `POST /api/session/cancel` | `{operator, reason}` — sessiyani bekor qilish, lock bo'shaydi |
 | `GET /api/sessions` | Hozir kim nimani yig'yapti |
-| `GET /api/print-intents` | Chop etish niyatlari (`?sessionId=`) |
+| `GET /api/jobs?sessionId=` | Sessiyaning chop etish joblari |
+| `GET /print/queue` | Navbat statistikasi + ulangan stationlar + joblar |
+| `GET /print/stations` | Ish joylari, printerlari, onlayn holati |
+| `POST /print/dispatch` | `{stationId}` — kutayotgan joblarni darhol yuborish |
+| `POST /print/ack` | `{jobId, ok, error}` — client'siz sinash uchun |
+| `GET /job/:id/pdf?t=` | PDF (job tokeni bilan; service token EMAS) |
+| `WS /ws?stationId=&token=` | Desktop client kanali |
 | `GET /health` | Oxirgi yangilanish holati (nginx/monitoring uchun) |
 | `GET /debug/stats` | Kesh statistikasi + sabablar bo'yicha taqsimot |
 | `GET /debug/orders` | Navbatdagi buyurtmalar ro'yxati. `?all=1` — nomoslar ham |
@@ -249,6 +285,11 @@ src/
 ├─ scan/
 │  ├─ sessions.js         sessiya, lock, avtomatik tanlash, holat mashinasi
 │  └─ routes.js           /api/* (mobil ilova uchun)
+├─ print/
+│  ├─ jobs.js             navbat: yaratish, ACK, qayta urinish, stationlar
+│  ├─ hub.js              WebSocket hub (desktop client)
+│  ├─ pdf.js              uzumPDFs'dan PDF olish (service token serverda qoladi)
+│  └─ routes.js           /job/:id/pdf, /print/*
 ├─ google/sheetsClient.js OAuth2 (uzbuyo@gmail.com)
 ├─ db/                    SQLite + migratsiyalar
 ├─ panel/reporter.js      fikrlovchi-panel'ga hisobot (har 5 daqiqa)

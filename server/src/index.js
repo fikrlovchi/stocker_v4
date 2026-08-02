@@ -1,6 +1,7 @@
 // stocker-server — 1-faza: buyurtma keshi va barcode indeksi.
 // Skan/sessiya (4-faza), print quvuri (5-faza) va autentifikatsiya (8-faza)
 // keyingi fazalarda qo'shiladi.
+import http from "node:http";
 import express from "express";
 import { config, env } from "./config.js";
 import logger from "./logger.js";
@@ -18,6 +19,9 @@ import { fullAssortmentSync } from "./moysklad/productBarcodes.js";
 import { startHeartbeat, countError, countSuccess } from "./panel/reporter.js";
 import { scanRouter } from "./scan/routes.js";
 import { expireStaleSessions } from "./scan/sessions.js";
+import { attachPrintHub, dispatchAll } from "./print/hub.js";
+import { jobPdfRouter, printAdminRouter } from "./print/routes.js";
+import { sweepStaleJobs, pruneOldJobs, stuckJobs } from "./print/jobs.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -34,6 +38,21 @@ async function runRefresh(trigger) {
   try {
     // Tashlab ketilgan sessiyalarning lock'ini bo'shatamiz (TTL).
     expireStaleSessions();
+    // ACK kelmagan chop etish joblarini qayta navbatga qo'yamiz.
+    sweepStaleJobs();
+    dispatchAll();
+    pruneOldJobs();
+
+    const stuck = stuckJobs();
+    if (stuck.length) {
+      // 9-fazada shu joydan Telegram ogohlantirishi ketadi.
+      countError();
+      logger.error(
+        `${stuck.length} ta chop etish ishi kutib qolgan: ` +
+          stuck.slice(0, 5).map((j) => `${j.target}/${j.orderId}@${j.stationId || "—"}`).join(", ")
+      );
+    }
+
     const summary = await refreshCache();
     lastRefresh = { at: new Date().toISOString(), ok: true, error: null, summary };
     countSuccess();
@@ -83,6 +102,8 @@ debug.get("/orders", (req, res) => {
     orders: listOrders({
       eligible: req.query.all !== "1",
       limit: Math.min(Number(req.query.limit) || 20, 200),
+      // ?minUnits=2 — ko'p skanli buyurtmalarni topish uchun
+      minUnits: Number(req.query.minUnits) || 0,
     }),
   });
 });
@@ -132,11 +153,22 @@ app.use("/debug", debug);
 // Yig'ish API. 8-fazagacha service token bilan yopiq (keyin operator JWT).
 app.use("/api", requireServiceToken, scanRouter());
 
+// PDF yuklab olish — job'ning bir martalik tokeni bilan (service token EMAS),
+// shunda desktop client'larga maxfiy kalit tarqalmaydi.
+app.use("/job", jobPdfRouter());
+
+// Navbat nazorati
+app.use("/print", requireServiceToken, printAdminRouter());
+
 app.use((req, res) => res.status(404).json({ error: "Topilmadi" }));
 
 /* ==================== Ishga tushirish ==================== */
 
-app.listen(env.port, env.host, async () => {
+// WebSocket uchun HTTP server aniq yaratiladi (app.listen o'rniga).
+const server = http.createServer(app);
+attachPrintHub(server);
+
+server.listen(env.port, env.host, async () => {
   logger.info(`stocker-server ${env.host}:${env.port} da ishga tushdi`);
 
   startHeartbeat(() => {
