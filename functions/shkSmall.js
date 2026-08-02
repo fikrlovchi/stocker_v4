@@ -42,6 +42,12 @@ const DEFAULTS = {
   gapMm: 1.0,
   qrMm: 15,           // O'ZGARMAS
   copies: 2,
+  // Ba'zi termo printer drayverlari bet yo'nalishini o'zi burib yuboradi
+  // (drayverdagi qog'oz o'lchami 40×30 emas, 30×40 deb belgilangan bo'lsa).
+  // Bunda yorliq 90° og'ib chiqadi. Buni drayverdan tuzatish afzal, lekin
+  // imkoni bo'lmasa shu yerdan oldindan burib yuborish mumkin:
+  // uzumPDFs .env da SHK_ROTATE=90 (0 | 90 | 180 | 270).
+  pageRotate: Number(process.env.SHK_ROTATE) || 0,
   boldTail: 4,        // shtrix-kodning oxirgi nechta belgisi qalin
   nameMaxLines: 3,
   skuMaxCols: 2,
@@ -261,6 +267,9 @@ async function createShkSmall(product, options = {}) {
 
   for (let copy = 0; copy < Math.max(1, opt.copies); copy++) {
     const page = pdfDoc.addPage([width, height]);
+    // Bet darajasidagi burilish: mazmun o'zgarmaydi, faqat chop etishda
+    // qanday yo'nalishda chiqishi belgilanadi (DEFAULTS.pageRotate izohiga q.).
+    if (opt.pageRotate) page.setRotation(degrees(opt.pageRotate));
 
     // Tekshiruv rejimi: har elementning HISOBLANGAN chegarasi ramka bilan
     // chiziladi. Siyoh ramkadan chiqib ketsa — hisob xato degani.
