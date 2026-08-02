@@ -3,7 +3,8 @@ import { PDFDocument, } from "pdf-lib";
 import fs from "fs";
 import path from "path";
 import { createProductsPdf, uploadToDrive } from './functions/createPdf.js'
-import { parseOrderIds, buildProductsFromOrders, getShopTokenMap, getOrderShopMap } from './functions/sheetData.js'
+import { createShkSmall } from './functions/shkSmall.js'
+import { parseOrderIds, buildProductsFromOrders, buildProductForItem, getShopTokenMap, getOrderShopMap } from './functions/sheetData.js'
 import { getLabelPdf, cleanupOldLabels } from './functions/uzumLabels.js'
 import { withRetry } from './functions/retry.js'
 import { drive, sheets } from "./google.js";
@@ -453,6 +454,73 @@ app.post("/preview", requireAuth, async (req, res) => {
     }
 });
 
+/* ==================================================================
+ * INTERNAL API — stocker-server (yig'ish tizimi) uchun.
+ * Cookie auth emas, X-Service-Token bilan. Dashboard'ga aloqasi yo'q.
+ *
+ * Yorliq MATNI shu yerda hisoblanadi (stocker tayyor matn yubormaydi) —
+ * shunda format bitta joyda qoladi va ikki loyiha bir-biridan ajralib
+ * ketmaydi. Qarang: functions/sheetData.js -> buildProduct().
+ * ================================================================== */
+const SERVICE_TOKEN = process.env.SERVICE_TOKEN || "";
+
+function requireServiceToken(req, res, next) {
+    if (!SERVICE_TOKEN) {
+        return res.status(503).json({ status: "error", message: "SERVICE_TOKEN o'rnatilmagan" });
+    }
+    if ((req.header("X-Service-Token") || "") !== SERVICE_TOKEN) {
+        return res.status(401).json({ status: "error", message: "Service token noto'g'ri" });
+    }
+    next();
+}
+
+// ShK: bitta tovar uchun kichik termo yorliq (40×30 mm), `copies` betda.
+app.post("/internal/shk-item", requireServiceToken, async (req, res) => {
+    try {
+        const { orderId, itemId, copies, shkConfig } = req.body || {};
+        if (!orderId || !itemId) {
+            return res.status(400).json({ status: "error", message: "orderId va itemId kerak" });
+        }
+
+        const product = await buildProductForItem(orderId, itemId);
+        if (!product) {
+            return res.status(404).json({ status: "error", message: `detail topilmadi (${orderId}/${itemId})` });
+        }
+
+        const bytes = await createShkSmall(product, { ...(shkConfig || {}), copies: copies ?? 2 });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Cache-Control", "no-store");
+        return res.send(Buffer.from(bytes));
+    } catch (err) {
+        console.error("[shk-item]", err.message);
+        return res.status(500).json({ status: "error", message: err.message });
+    }
+});
+
+// BIG: bitta buyurtmaning Uzum label'i (LARGE), shared cache'dan.
+app.get("/internal/big/:orderId", requireServiceToken, async (req, res) => {
+    const orderId = String(req.params.orderId).trim();
+    try {
+        let buf;
+        try {
+            // Odatda label uzumOrderToMC import paytida oldindan cache'ga
+            // olingan bo'ladi — bunda token kerak emas va sheet o'qilmaydi.
+            buf = await getLabelPdf(orderId, null);
+        } catch {
+            const [shopMap, orderShop] = await Promise.all([getShopTokenMap(), getOrderShopMap([orderId])]);
+            const shopId = orderShop.get(orderId);
+            const token = shopId ? shopMap.get(shopId) : null;
+            buf = await getLabelPdf(orderId, token);
+        }
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Cache-Control", "no-store");
+        return res.send(buf);
+    } catch (err) {
+        console.error(`[big ${orderId}]`, err.message);
+        return res.status(404).json({ status: "error", message: err.message });
+    }
+});
+
 // batch holatini tekshirish (dashboard poll qiladi)
 app.get("/batch/:id", requireAuth, (req, res) => {
     const b = batches.get(req.params.id);
@@ -463,8 +531,12 @@ app.get("/batch/:id", requireAuth, (req, res) => {
 // tarix
 app.get("/history", requireAuth, (req, res) => res.json(loadHistory()));
 
-app.listen(4040, () => {
-    console.log("Server running on 4040");
+// HOST: nginx orqasiga o'tgach `127.0.0.1` qilib qo'ying (tashqaridan faqat
+// uzum.fikrlovchi.uz orqali kirilsin). Hozircha eski xatti-harakat saqlanadi,
+// aks holda http://<ip>:4040 dagi dashboard ishlamay qoladi.
+const HOST = process.env.HOST || "0.0.0.0";
+app.listen(4040, HOST, () => {
+    console.log(`Server running on ${HOST}:4040`);
 });
 
 

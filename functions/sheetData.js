@@ -46,9 +46,68 @@ async function getProductNameMap() {
     return map;
 }
 
+/* ---------- uzum_order_detail keshi (yig'ish uchun tez javob) ----------
+ * Skan qilinganda yorliq darhol chiqishi kerak — har chop etishda butun
+ * varaqni o'qish (2-4 s) juda sekin. 60 soniyalik kesh shu uchun.
+ * Yangi buyurtma keshga tushmagan bo'lsa, buildProductForItem majburiy
+ * qayta o'qiydi, ya'ni kesh to'g'rilikni buzmaydi.
+ */
+let detailCache = { rows: null, at: 0 };
+const DETAIL_TTL = 60 * 1000;
+
+async function getDetailRows({ force = false } = {}) {
+    if (!force && detailCache.rows && Date.now() - detailCache.at < DETAIL_TTL) {
+        return detailCache.rows;
+    }
+    const rows = await readRows("uzum_order_detail", "A:L");
+    detailCache = { rows, at: Date.now() };
+    return rows;
+}
+
+/* ---------- Bitta detail qatoridan yorliq ma'lumoti ----------
+ * Yorliq matnining YAGONA manbasi. A5 (dashboard) ham, 40×30 mm (yig'ish)
+ * ham shu funksiyadan foydalanadi — shunda ikki yo'l bir-biridan ajralib
+ * ketmaydi.
+ *   B=Barcode, C=uzum_product, H=uzum_order, I=Product href, K=Quantity for mc
+ */
+function buildProduct(r, nameMap) {
+    const barcode = String(r[1] ?? "").trim();       // B
+    const uzumProduct = String(r[2] ?? "").trim();   // C
+    const uzumOrder = String(r[7] ?? "").trim();     // H
+    const productHref = String(r[8] ?? "").trim();   // I
+    const name = nameMap.get(productHref) || "";
+    return {
+        title: `${uzumProduct},${name}`,
+        barcode: `${barcode},${uzumOrder}`,
+        quantity: Number(r[10]) || 0,                // K
+    };
+}
+
+/* ---------- Bitta tovar (itemId) uchun yorliq — yig'ish jarayoni ----------
+ * itemId = uzum_order_detail!A (Uzum orderItem id).
+ */
+async function buildProductForItem(orderId, itemId) {
+    const wantItem = String(itemId).trim();
+    const wantOrder = String(orderId).trim();
+
+    const find = (rows) => {
+        for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+            if (String(r[0] ?? "").trim() !== wantItem) continue;
+            if (String(r[7] ?? "").trim() !== wantOrder) continue;
+            return r;
+        }
+        return null;
+    };
+
+    const nameMap = await getProductNameMap();
+    let row = find(await getDetailRows());
+    // Keshda yo'q — yangi buyurtma bo'lishi mumkin, bir marta majburiy o'qiymiz.
+    if (!row) row = find(await getDetailRows({ force: true }));
+    return row ? buildProduct(row, nameMap) : null;
+}
+
 /* ---------- Order ID'lardan PDF mahsulotlarini yasash ----------
- * uzum_order_detail (A:L):
- *   B=Barcode, C=uzum_product, H=uzum_order, I=Product href(UUID), K=Quantity for mc
  * Har detail:  title="uzum_product,Name", barcode="Barcode,uzum_order"
  *   va (Quantity for mc * 2) marta takrorlanadi.
  * Natija paste tartibida (order'lar ketma-ketligi) qaytadi.
@@ -75,15 +134,9 @@ async function buildProductsFromOrders(orderIds) {
         const list = byOrder.get(oid);
         if (!list) continue;
         for (const r of list) {
-            const barcode = String(r[1] ?? "").trim();      // B
-            const uzumProduct = String(r[2] ?? "").trim();   // C
-            const uzumOrder = String(r[7] ?? "").trim();     // H
-            const productHref = String(r[8] ?? "").trim();   // I
-            const rep = (Number(r[10]) || 0) * 2;            // K * 2
-            const name = nameMap.get(productHref) || "";
-            const title = `${uzumProduct},${name}`;
-            const bc = `${barcode},${uzumOrder}`;
-            for (let k = 0; k < rep; k++) products.push({ title, barcode: bc });
+            const { title, barcode, quantity } = buildProduct(r, nameMap);
+            const rep = quantity * 2;                  // K * 2
+            for (let k = 0; k < rep; k++) products.push({ title, barcode });
         }
     }
     return products;
@@ -131,4 +184,11 @@ async function getOrderShopMap(orderIds) {
     return map;
 }
 
-export { parseOrderIds, buildProductsFromOrders, getBigFileIds, getShopTokenMap, getOrderShopMap };
+export {
+    parseOrderIds,
+    buildProductsFromOrders,
+    buildProductForItem,
+    getBigFileIds,
+    getShopTokenMap,
+    getOrderShopMap,
+};
