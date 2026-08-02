@@ -39,8 +39,8 @@ if (args.sku === "0") overrides.showSku = false;
 if (args.barcode === "0") overrides.showBarcode = false;
 
 const merged = await PDFDocument.create();
-console.log("namuna          nom   qator  kesildi  buyurtma   SKU   shtrix");
-console.log("─".repeat(64));
+console.log("namuna          nom   qator  kesildi  buyurtma  shtrix  SKU   tasma  sig'di");
+console.log("─".repeat(78));
 
 for (const s of samples) {
   let m = {};
@@ -54,9 +54,11 @@ for (const s of samples) {
       `${String(m.nameSize ?? "-").padEnd(5)} ` +
       `${String(m.nameLines).padEnd(6)} ` +
       `${(m.nameTruncated ? "HA" : "yo'q").padEnd(8)} ` +
-      `${String(m.orderSize ?? "-").padEnd(10)} ` +
+      `${String(m.orderSize ?? "-").padEnd(9)} ` +
+      `${String(m.barcodeSize ?? "-").padEnd(7)} ` +
       `${String(m.skuSize ?? "-").padEnd(5)} ` +
-      `${String(m.barcodeSize ?? "-")}`
+      `${String(m.bandMm + "mm").padEnd(6)} ` +
+      `${m.overflow ? "YO'Q ⚠" : "ha"}`
   );
 }
 
