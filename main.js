@@ -5,7 +5,7 @@
 // shuning uchun hozirgi ishga tushirish usuli buzilmaydi.
 import "dotenv/config";
 import express from "express";
-import { PDFDocument, } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import fs from "fs";
 import path from "path";
 import { createProductsPdf, uploadToDrive } from './functions/createPdf.js'
@@ -499,6 +499,45 @@ app.post("/internal/shk-item", requireServiceToken, async (req, res) => {
         return res.send(Buffer.from(bytes));
     } catch (err) {
         console.error("[shk-item]", err.message);
+        return res.status(500).json({ status: "error", message: err.message });
+    }
+});
+
+// Sinov sahifasi — printer va qog'oz o'lchamini tekshirish uchun.
+// Haqiqiy buyurtma kerak emas, shuning uchun ish joyini sozlashda ishlatiladi.
+app.get("/internal/test-page", requireServiceToken, async (req, res) => {
+    try {
+        const target = req.query.target === "big" ? "big" : "shk";
+        let bytes;
+
+        if (target === "shk") {
+            bytes = await createShkSmall(
+                {
+                    title: "SINOV-SHK-001,Sinov sahifasi — 40×30 mm",
+                    barcode: "1234567890128,000000000",
+                },
+                { copies: 1 }
+            );
+        } else {
+            // BIG uchun 4×4" (288×288 pt) ramka: qog'oz to'g'ri o'rnatilganini
+            // va masshtab buzilmaganini ko'z bilan tekshirish uchun.
+            const doc = await PDFDocument.create();
+            const page = doc.addPage([288, 288]);
+            const font = await doc.embedFont(StandardFonts.Helvetica);
+            page.drawRectangle({ x: 8, y: 8, width: 272, height: 272, borderWidth: 1.5, borderColor: rgb(0, 0, 0) });
+            page.drawLine({ start: { x: 144, y: 8 }, end: { x: 144, y: 280 }, thickness: 0.5 });
+            page.drawLine({ start: { x: 8, y: 144 }, end: { x: 280, y: 144 }, thickness: 0.5 });
+            page.drawText("SINOV — BIG", { x: 20, y: 250, size: 18, font });
+            page.drawText("101.6 x 101.6 mm (4x4\")", { x: 20, y: 228, size: 11, font });
+            page.drawText("Ramka qog'oz chekkasidan 3 mm ichkarida", { x: 20, y: 30, size: 8, font });
+            bytes = await doc.save();
+        }
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Cache-Control", "no-store");
+        return res.send(Buffer.from(bytes));
+    } catch (err) {
+        console.error("[test-page]", err.message);
         return res.status(500).json({ status: "error", message: err.message });
     }
 });
