@@ -24,6 +24,11 @@ async function call(path, init) {
   return Buffer.from(await resp.arrayBuffer());
 }
 
+// Printer sozlashda ishlatiladigan sinov sahifasi (haqiqiy buyurtma kerak emas).
+export async function fetchTestPage(target) {
+  return call(`/internal/test-page?target=${encodeURIComponent(target)}`, { method: "GET" });
+}
+
 export async function fetchJobPdf(job) {
   if (job.target === "shk") {
     if (!job.itemId) throw new Error("ShK uchun itemId kerak");

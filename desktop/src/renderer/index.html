@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stocker Print</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <strong>Stocker Print</strong>
+        <span id="station-label" class="muted">—</span>
+      </div>
+      <div class="right">
+        <span id="status" class="badge">…</span>
+        <button id="reconnect" class="ghost">Qayta ulanish</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="jobs">Navbat</button>
+      <button class="tab" data-tab="settings">Sozlamalar</button>
+      <button class="tab" data-tab="pair">Telefonni ulash</button>
+      <button class="tab" data-tab="logs">Loglar</button>
+    </nav>
+
+    <main>
+      <section id="tab-jobs" class="panel active">
+        <table>
+          <thead>
+            <tr><th>Vaqt</th><th>Tur</th><th>Buyurtma</th><th>Printer</th><th>Natija</th></tr>
+          </thead>
+          <tbody id="jobs-body">
+            <tr><td colspan="5" class="muted">Hozircha chop etilgan yorliq yo'q</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="tab-settings" class="panel">
+        <div class="grid">
+          <label>Server manzili
+            <input id="serverUrl" placeholder="https://uzum.fikrlovchi.uz/pack" />
+          </label>
+          <label>Kalit (token)
+            <input id="token" type="password" placeholder="serverdagi SERVICE_TOKEN" />
+          </label>
+          <label>Ish joyi kodi
+            <input id="stationId" placeholder="Ombor-1" />
+          </label>
+          <label>Ish joyi nomi
+            <input id="stationName" placeholder="Asosiy ombor" />
+          </label>
+        </div>
+
+        <h3>Printerlar</h3>
+        <div class="grid">
+          <label>ShK printeri <span class="muted">(40×30 mm, masshtabsiz)</span>
+            <div class="row">
+              <select id="shkPrinter"></select>
+              <button id="test-shk" class="ghost">Sinov</button>
+            </div>
+          </label>
+          <label>BIG printeri <span class="muted">(101.6×101.6 mm, sig'diriladi)</span>
+            <div class="row">
+              <select id="bigPrinter"></select>
+              <button id="test-big" class="ghost">Sinov</button>
+            </div>
+          </label>
+        </div>
+
+        <label class="check">
+          <input id="autoStart" type="checkbox" /> Windows bilan birga ishga tushsin
+        </label>
+
+        <div class="actions">
+          <button id="save" class="primary">Saqlash</button>
+          <button id="refresh-printers" class="ghost">Printerlar ro'yxatini yangilash</button>
+          <span id="save-note" class="muted"></span>
+        </div>
+      </section>
+
+      <section id="tab-pair" class="panel">
+        <p class="muted">
+          Operator smena boshida telefondagi ilovada shu QR'ni skanerlaydi —
+          shundan keyin uning yorliqlari shu kompyuterdan chiqadi.
+        </p>
+        <div id="qr-box"><span class="muted">QR yasash uchun server va ish joyi kodini saqlang</span></div>
+        <code id="qr-payload" class="muted"></code>
+      </section>
+
+      <section id="tab-logs" class="panel">
+        <div id="logs"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

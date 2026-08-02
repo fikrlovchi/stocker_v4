@@ -2,7 +2,7 @@
 import express from "express";
 import logger from "../logger.js";
 import { getJob, listJobs, queueStats, listStations, ackJob } from "./jobs.js";
-import { fetchJobPdf } from "./pdf.js";
+import { fetchJobPdf, fetchTestPage } from "./pdf.js";
 import { connectedStations, dispatchTo } from "./hub.js";
 
 // PDF yuklab olish — AUTHENTIFIKATSIYA job'ning bir martalik `fetch_token`i
@@ -57,6 +57,18 @@ export function printAdminRouter() {
     const stationId = req.body?.stationId;
     if (!stationId) return res.status(400).json({ error: "stationId kerak" });
     res.json({ sent: dispatchTo(String(stationId)) });
+  });
+
+  // Sinov sahifasi — desktop client printerni sozlashda ishlatadi.
+  router.get("/test-page", async (req, res) => {
+    const target = req.query.target === "big" ? "big" : "shk";
+    try {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Cache-Control", "no-store");
+      return res.send(await fetchTestPage(target));
+    } catch (e) {
+      return res.status(502).json({ error: e.message });
+    }
   });
 
   // Client'siz sinash: ACK'ni qo'lda yuborish.

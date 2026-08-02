@@ -1,0 +1,33 @@
+{
+  "name": "stocker-print-client",
+  "version": "0.1.0",
+  "description": "Stocker yig'ish tizimi uchun Windows print client (ShK + BIG)",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "pdf-to-printer": "^5.6.0",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "uz.fikrlovchi.stocker.print",
+    "productName": "Stocker Print",
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": ["src/**/*", "package.json"]
+  }
+}

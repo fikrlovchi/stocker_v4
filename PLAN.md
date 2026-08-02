@@ -475,7 +475,7 @@ kutubxona. Jadvallar: `orders`, `items`, `barcodes`, `mc_barcodes`, `sessions`,
 | ~~**3**~~ | ~~uzumPDFs: `createShkSmall()` 40×30 + internal endpointlar~~ **✅ BAJARILDI** (`uzumpdfs@f48859d`), maket tasdiqlandi | 1.5 |
 | ~~**4**~~ | ~~Skan mantiqi: sessiya, lock, avto-tanlash, progress API~~ **✅ BAJARILDI** — 73 ta test | 2 |
 | ~~**5**~~ | ~~Print quvuri: WS hub, navbat, idempotentlik, retry~~ **✅ BAJARILDI** — 91 ta test | 1.5 |
-| **6** | Electron client: WS, printer tanlash, SumatraPDF, QR, tray, autostart | 2.5 |
+| ~~**6**~~ | ~~Electron client: WS, printer tanlash, SumatraPDF, QR, tray, autostart~~ **✅ BAJARILDI** — `desktop/`, ⏳ fizik printer sinovi kutilmoqda | 2.5 |
 | **7** | Expo mobil: login, QR juftlash, skan, progress, xatolar, reprint | 3 |
 | **8** | Panel: `project_users` + `stocker_stations` migratsiyalari, Operatorlar va Ish joylari kartalari, API, daemon boshqaruvi tuzatishi | 2 |
 | **9** | Yakunlash: "Собран", `uzum_packing`, Telegram, ingest reporter | 1 |
