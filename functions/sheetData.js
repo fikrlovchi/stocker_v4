@@ -107,6 +107,22 @@ async function buildProductForItem(orderId, itemId) {
     return row ? buildProduct(row, nameMap) : null;
 }
 
+/* ---------- Buyurtmadagi tovarlar ro'yxati (itemId + yorliq ma'lumoti) ----------
+ * Sinov skriptlari va diagnostika uchun: qaysi itemId lar bor va ular
+ * qanday yorliq beradi.
+ */
+async function findOrderItems(orderId) {
+    const want = String(orderId).trim();
+    const [rows, nameMap] = await Promise.all([getDetailRows(), getProductNameMap()]);
+    const out = [];
+    for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (String(r[7] ?? "").trim() !== want) continue;   // H = uzum_order
+        out.push({ itemId: String(r[0] ?? "").trim(), ...buildProduct(r, nameMap) });
+    }
+    return out;
+}
+
 /* ---------- Order ID'lardan PDF mahsulotlarini yasash ----------
  * Har detail:  title="uzum_product,Name", barcode="Barcode,uzum_order"
  *   va (Quantity for mc * 2) marta takrorlanadi.
@@ -188,6 +204,7 @@ export {
     parseOrderIds,
     buildProductsFromOrders,
     buildProductForItem,
+    findOrderItems,
     getBigFileIds,
     getShopTokenMap,
     getOrderShopMap,

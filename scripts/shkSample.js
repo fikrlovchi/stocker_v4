@@ -37,8 +37,12 @@ if (args.qr) overrides.qrMm = Number(args.qr);
 if (args.lines) overrides.nameMaxLines = Number(args.lines);
 if (args.sku === "0") overrides.showSku = false;
 if (args.barcode === "0") overrides.showBarcode = false;
+// --debug: har elementning hisoblangan chegarasini ramka bilan chizadi.
+// Siyoh ramkadan chiqsa hisob xato — ko'z bilan darhol ko'rinadi.
+if (args.debug) overrides.debugBoxes = true;
 
 const merged = await PDFDocument.create();
+let lastMetrics = null;
 console.log("namuna          nom   qator  kesildi  buyurtma  shtrix  SKU   tasma  sig'di");
 console.log("─".repeat(78));
 
@@ -58,14 +62,24 @@ for (const s of samples) {
       `${String(m.barcodeSize ?? "-").padEnd(7)} ` +
       `${String(m.skuSize ?? "-").padEnd(5)} ` +
       `${String(m.bandMm + "mm").padEnd(6)} ` +
-      `${m.overflow ? "YO'Q ⚠" : "ha"}`
+      `${m.fits ? "ha" : "YO'Q ⚠ " + m.overlaps.join(",")}`
   );
+  lastMetrics = m;
 }
 
 const outDir = path.join(process.cwd(), "uploads");
 fs.mkdirSync(outDir, { recursive: true });
 const out = path.join(outDir, "shk_sample.pdf");
 fs.writeFileSync(out, Buffer.from(await merged.save()));
+
+if (lastMetrics) {
+  console.log("\n--- Oxirgi namunaning gorizontal joylashuvi (pt) ---");
+  for (const l of lastMetrics.layout) {
+    console.log(`  ${l.el.padEnd(9)} x: ${String(l.x0).padStart(6)} … ${String(l.x1).padStart(6)}`);
+  }
+  console.log(`  o'ng chekkagacha: ${lastMetrics.rightEdgeMm} mm`);
+  console.log(`  ustma-ust tushish: ${lastMetrics.overlaps.length ? lastMetrics.overlaps.join(", ") : "YO'Q"}`);
+}
 
 const size = merged.getPage(0).getSize();
 console.log(`\nBet o'lchami: ${size.width.toFixed(2)} × ${size.height.toFixed(2)} pt`);

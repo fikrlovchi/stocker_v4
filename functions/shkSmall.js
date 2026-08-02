@@ -47,7 +47,7 @@ const DEFAULTS = {
   skuMaxCols: 2,
   showSku: true,
   showBarcode: true,
-  lineFactor: 1.2,    // aylantirilgan ustunlar orasi (A5 dagi kabi)
+  colGapFactor: 1.1,  // aylantirilgan ustun kengligi = shrift balandligi × shu
   nameLineFactor: 1.15,
   font: {
     name: { max: 9, min: 4 },       // ASOSIY
@@ -178,13 +178,47 @@ async function createShkSmall(product, options = {}) {
   const orderSize = fitLine(normalFont, orderVal, bandHeight, opt.font.order.max, opt.font.order.min);
   const barcodeSize = fitLine(normalFont, barcodeVal, bandHeight, opt.font.barcode.max, opt.font.barcode.min);
 
-  const skuWidth = skuBlock.lines.length * skuBlock.size * opt.lineFactor;
-  const orderWidth = orderVal ? orderSize * opt.lineFactor : 0;
-  const barcodeWidth = barcodeVal ? barcodeSize * opt.lineFactor : 0;
+  // ⚠ pdf-lib matnni (x, y) BASELINE nuqtasi atrofida buradi. 90° da glif
+  // balandligi −X tomonga cho'ziladi, ya'ni siyohning asosiy qismi
+  // baseline'ning CHAP tomonida qoladi. Ustunning chap chekkasi X bo'lishi
+  // uchun baseline X + ascent ga qo'yilishi kerak. Aynan shu hisobga
+  // olinmagani uchun buyurtma ID QR ustiga chiqib ketgan edi.
+  const ascentOf = (font, size) => font.heightAtSize(size, { descender: false });
+  const colWidthOf = (font, size) => font.heightAtSize(size) * opt.colGapFactor;
+
+  const skuColWidth = skuText ? colWidthOf(textFont, skuBlock.size) : 0;
+  const skuWidth = skuBlock.lines.length * skuColWidth;
+  const orderWidth = orderVal ? colWidthOf(normalFont, orderSize) : 0;
+  const barcodeWidth = barcodeVal ? colWidthOf(normalFont, barcodeSize) : 0;
 
   // Guruh gorizontal markazlashadi — ortiqcha joy chapga to'planib qolmasin.
   const groupWidth = skuWidth + (skuWidth ? gap : 0) + qrSize + gap + orderWidth + barcodeWidth;
   const startX = margin + Math.max(0, (width - margin * 2 - groupWidth) / 2);
+
+  // Har elementning gorizontal chegarasi — ustma-ust tushishni ISBOTLAB
+  // tekshirish uchun (avvalgi versiyada buyurtma ID QR ustiga chiqib ketgan edi).
+  const layout = [];
+  {
+    let lx = startX;
+    if (skuText) {
+      layout.push({ el: "SKU", x0: lx, x1: lx + skuWidth });
+      lx += skuWidth + gap;
+    }
+    layout.push({ el: "QR", x0: lx, x1: lx + qrSize });
+    lx += qrSize + gap;
+    if (orderVal) {
+      layout.push({ el: "Buyurtma", x0: lx, x1: lx + orderWidth });
+      lx += orderWidth;
+    }
+    if (barcodeVal) layout.push({ el: "Shtrix", x0: lx, x1: lx + barcodeWidth });
+  }
+  const overlaps = [];
+  for (let i = 1; i < layout.length; i++) {
+    if (layout[i].x0 < layout[i - 1].x1 - 0.01) {
+      overlaps.push(`${layout[i - 1].el}↔${layout[i].el}`);
+    }
+  }
+  const last = layout[layout.length - 1];
 
   const metrics = {
     nameSize: nameBlock.size,
@@ -195,7 +229,10 @@ async function createShkSmall(product, options = {}) {
     skuSize: skuText ? skuBlock.size : null,
     qrMm: opt.qrMm,
     bandMm: +(bandHeight / MM).toFixed(1),
-    overflow: groupWidth > width - margin * 2,
+    layout: layout.map((l) => ({ ...l, x0: +l.x0.toFixed(1), x1: +l.x1.toFixed(1) })),
+    overlaps,
+    rightEdgeMm: +((width - margin - last.x1) / MM).toFixed(2), // manfiy bo'lsa betdan chiqib ketgan
+    fits: overlaps.length === 0 && last.x1 <= width - margin + 0.01,
   };
 
   /* ---------------- chizamiz ---------------- */
@@ -204,12 +241,14 @@ async function createShkSmall(product, options = {}) {
   const qrImage = await pdfDoc.embedPng(Buffer.from(qrDataUrl.split(",")[1], "base64"));
 
   // Aylantirilgan blok: har qator yangi ustun, tasma bo'yicha markazda.
+  // `x` — ustunning CHAP CHEKKASI; baseline ascent'ga suriladi (yuqoriga q.).
   const drawRotatedBlock = (page, block, font, x) => {
-    const lh = block.size * opt.lineFactor;
+    const colW = colWidthOf(font, block.size);
+    const asc = ascentOf(font, block.size);
     block.lines.forEach((line, i) => {
       const w = font.widthOfTextAtSize(line, block.size);
       page.drawText(line, {
-        x: x + i * lh,
+        x: x + asc + i * colW,
         y: bandCenterY - w / 2,
         size: block.size,
         font,
@@ -217,11 +256,36 @@ async function createShkSmall(product, options = {}) {
         color: rgb(0, 0, 0),
       });
     });
-    return x + block.lines.length * lh;
+    return x + block.lines.length * colW;
   };
 
   for (let copy = 0; copy < Math.max(1, opt.copies); copy++) {
     const page = pdfDoc.addPage([width, height]);
+
+    // Tekshiruv rejimi: har elementning HISOBLANGAN chegarasi ramka bilan
+    // chiziladi. Siyoh ramkadan chiqib ketsa — hisob xato degani.
+    // (Aynan shunday xato bo'lgan edi: aylantirilgan matnning baseline'i
+    // ustunning chap chekkasi deb hisoblangan, aslida siyoh chapga cho'zilgan.)
+    if (opt.debugBoxes) {
+      for (const l of layout) {
+        page.drawRectangle({
+          x: l.x0,
+          y: margin,
+          width: l.x1 - l.x0,
+          height: bandTop - margin,
+          borderColor: rgb(0.55, 0.55, 0.55),
+          borderWidth: 0.3,
+        });
+      }
+      page.drawRectangle({
+        x: margin,
+        y: bandTop,
+        width: width - margin * 2,
+        height: height - margin - bandTop,
+        borderColor: rgb(0.55, 0.55, 0.55),
+        borderWidth: 0.3,
+      });
+    }
 
     // --- Nom: gorizontal, yuqori chapdan ---
     let ny = height - margin;
@@ -244,7 +308,7 @@ async function createShkSmall(product, options = {}) {
     if (orderVal) {
       const w = normalFont.widthOfTextAtSize(orderVal, orderSize);
       page.drawText(orderVal, {
-        x,
+        x: x + ascentOf(normalFont, orderSize),
         y: bandCenterY - w / 2,
         size: orderSize,
         font: normalFont,
@@ -261,11 +325,12 @@ async function createShkSmall(product, options = {}) {
       const headWidth = normalFont.widthOfTextAtSize(head, barcodeSize);
       const tailWidth = boldFont.widthOfTextAtSize(tail, barcodeSize);
       const y = bandCenterY - (headWidth + tailWidth) / 2;
+      const bx = x + ascentOf(normalFont, barcodeSize);
       if (head) {
-        page.drawText(head, { x, y, size: barcodeSize, font: normalFont, rotate: degrees(90), color: rgb(0, 0, 0) });
+        page.drawText(head, { x: bx, y, size: barcodeSize, font: normalFont, rotate: degrees(90), color: rgb(0, 0, 0) });
       }
       page.drawText(tail, {
-        x,
+        x: bx,
         y: y + headWidth,
         size: barcodeSize,
         font: boldFont,
