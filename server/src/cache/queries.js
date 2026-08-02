@@ -61,6 +61,50 @@ export function getProduct(uuid) {
   };
 }
 
+// Keshdagi buyurtmalar ro'yxati — sinov uchun haqiqiy orderId/barcode topishga
+// va "navbatda nima bor?" savoliga javob berishga xizmat qiladi.
+export function listOrders({ eligible = true, limit = 20 } = {}) {
+  const rows = db
+    .prepare(
+      `SELECT o.order_id, o.eligible, o.reason, o.item_count, o.unit_count, o.arrived_at_ms,
+              (SELECT COUNT(*) FROM item_barcodes b JOIN items i ON i.item_id = b.item_id
+                WHERE i.order_id = o.order_id) AS barcode_count
+       FROM orders o
+       ${eligible ? "WHERE o.eligible = 1" : ""}
+       ORDER BY o.item_count ASC, o.arrived_at_ms ASC
+       LIMIT ?`
+    )
+    .all(limit);
+
+  return rows.map((r) => ({
+    orderId: r.order_id,
+    eligible: r.eligible === 1,
+    reason: r.reason,
+    reasonText: r.reason ? REASON_TEXT[r.reason] || r.reason : null,
+    itemCount: r.item_count,
+    unitCount: r.unit_count,
+    barcodeCount: r.barcode_count,
+    arrivedAt: r.arrived_at_ms ? new Date(r.arrived_at_ms).toISOString() : null,
+  }));
+}
+
+// Skan sinovi uchun tayyor namunalar: haqiqiy buyurtma + uning haqiqiy
+// barcode'lari (har manbadan bittadan).
+export function sampleBarcodes(limit = 5) {
+  return db
+    .prepare(
+      `SELECT o.order_id, i.sku_title, b.barcode, b.source
+       FROM orders o
+       JOIN items i        ON i.order_id = o.order_id
+       JOIN item_barcodes b ON b.item_id = i.item_id
+       WHERE o.eligible = 1
+       ORDER BY o.arrived_at_ms DESC, b.source
+       LIMIT ?`
+    )
+    .all(limit)
+    .map((r) => ({ orderId: r.order_id, skuTitle: r.sku_title, barcode: r.barcode, source: r.source }));
+}
+
 export function getOrder(orderId) {
   const order = db.prepare("SELECT * FROM orders WHERE order_id = ?").get(String(orderId).trim());
   if (!order) return null;

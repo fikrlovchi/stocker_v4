@@ -5,7 +5,15 @@ import express from "express";
 import { config, env } from "./config.js";
 import logger from "./logger.js";
 import { refreshCache } from "./cache/refresh.js";
-import { getStats, getOrder, getProduct, findByBarcode, findAmbiguousBarcodes } from "./cache/queries.js";
+import {
+  getStats,
+  getOrder,
+  getProduct,
+  listOrders,
+  sampleBarcodes,
+  findByBarcode,
+  findAmbiguousBarcodes,
+} from "./cache/queries.js";
 import { fullAssortmentSync } from "./moysklad/productBarcodes.js";
 import { startHeartbeat, countError, countSuccess } from "./panel/reporter.js";
 
@@ -64,6 +72,21 @@ debug.use(requireServiceToken);
 debug.get("/stats", (req, res) => res.json({ ...getStats(), lastRefresh }));
 
 debug.post("/refresh", async (req, res) => res.json(await runRefresh("manual")));
+
+// Navbatdagi buyurtmalar. ?all=1 — nomos bo'lganlari ham.
+debug.get("/orders", (req, res) => {
+  res.json({
+    orders: listOrders({
+      eligible: req.query.all !== "1",
+      limit: Math.min(Number(req.query.limit) || 20, 200),
+    }),
+  });
+});
+
+// Skan sinovi uchun haqiqiy barcode namunalari.
+debug.get("/samples", (req, res) => {
+  res.json({ samples: sampleBarcodes(Math.min(Number(req.query.limit) || 10, 50)) });
+});
 
 debug.get("/order/:id", (req, res) => {
   const order = getOrder(req.params.id);

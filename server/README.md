@@ -120,6 +120,8 @@ node src/scripts/syncBarcodes.js
 |---|---|
 | `GET /health` | Oxirgi yangilanish holati (nginx/monitoring uchun) |
 | `GET /debug/stats` | Kesh statistikasi + sabablar bo'yicha taqsimot |
+| `GET /debug/orders` | Navbatdagi buyurtmalar ro'yxati. `?all=1` — nomoslar ham |
+| `GET /debug/samples` | Skan sinovi uchun haqiqiy barcode namunalari |
 | `POST /debug/refresh` | Keshni darhol yangilash |
 | `GET /debug/order/:id` | Bitta buyurtma: tovarlari, barcode'lari, **mos/nomos va sababi** |
 | `GET /debug/barcode/:code` | Barcode bo'yicha qidiruv. `?all=1` — nomos buyurtmalar ham |
