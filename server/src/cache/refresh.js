@@ -10,11 +10,16 @@
 // KEY qo'ymasligi kerak — kerakli maydonlarni sessiya ochilganda nusxalab
 // olsin, aks holda yangilanish ochiq sessiyani o'chirib yuboradi.
 import { config } from "../config.js";
-import { db, setMeta } from "../db/index.js";
+import { db, setMeta, getMeta } from "../db/index.js";
 import logger from "../logger.js";
 import { readSheets } from "./readSheets.js";
 import { evaluateOrder, REASONS } from "./eligibility.js";
 import { fetchCanceledOrderIds } from "../moysklad/canceledOrders.js";
+import {
+  syncProductBarcodes,
+  fullAssortmentSync,
+  barcodeCountsByRef,
+} from "../moysklad/productBarcodes.js";
 import {
   columnIndexMap,
   cellText,
@@ -29,6 +34,12 @@ const DET = columnIndexMap(config.columns.details);
 const PACK = columnIndexMap(config.columns.packing);
 
 const RETENTION_MS = config.cache.retentionDays * 24 * 60 * 60 * 1000;
+const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+// `uzum_order_detail!J` da MoySklad entity turi kutiladi, lekin unda boshqa
+// qiymat ham bo'lishi mumkin — faqat haqiqiy turlarni qabul qilamiz, aks
+// holda href'dan ajratib olamiz.
+const MC_ENTITY_TYPES = new Set(["product", "variant", "bundle", "service", "consignment"]);
 
 /* ---------------- xom qatorlarni tuzilmaga aylantirish ---------------- */
 
@@ -65,6 +76,7 @@ function parseDetailRows(rows) {
     const rawBarcode = cellText(r[DET.barcode]);
     const quantity = Number.parseInt(cellText(r[DET.quantity]), 10);
 
+    const sheetType = cellText(r[DET.entityType]).toLowerCase();
     const item = {
       itemId,
       orderId,
@@ -73,7 +85,7 @@ function parseDetailRows(rows) {
       uzumBarcode: normalizeBarcode(rawBarcode),
       skuTitle: cellText(r[DET.skuTitle]),
       productRef: extractProductRef(r[DET.product]),
-      entityType: cellText(r[DET.entityType]) || extractEntityType(r[DET.product]),
+      entityType: MC_ENTITY_TYPES.has(sheetType) ? sheetType : extractEntityType(r[DET.product]),
       quantity: Number.isFinite(quantity) ? quantity : NaN,
     };
 
@@ -81,6 +93,22 @@ function parseDetailRows(rows) {
     byOrder.get(orderId).push(item);
   }
   return byOrder;
+}
+
+// Barcode sinxronizatsiyasi uchun: qaysi MoySklad tovarlari kerak.
+// Map<uuid, entityType|null>
+export function extractProductRefs(detailRows) {
+  const refs = new Map();
+  for (const items of parseDetailRows(detailRows).values()) {
+    for (const it of items) {
+      if (!it.productRef) continue;
+      // Turi ma'lum bo'lgan yozuvni afzal ko'ramiz.
+      if (!refs.has(it.productRef) || (!refs.get(it.productRef) && it.entityType)) {
+        refs.set(it.productRef, it.entityType || null);
+      }
+    }
+  }
+  return refs;
 }
 
 function parsePackingRows(rows) {
@@ -150,6 +178,10 @@ export function applyRefresh({ orderRows, detailRows, packingRows, canceled, now
   };
   const refreshedAt = new Date().toISOString();
 
+  // MoySklad barcode'lari alohida, uzoq muddatli keshda turadi (mc_barcodes) —
+  // eligibility hisobiga ularni ham qo'shamiz.
+  const mcCounts = barcodeCountsByRef();
+
   const toStore = [];
   const reasonCounts = new Map();
   const problems = [];
@@ -157,9 +189,11 @@ export function applyRefresh({ orderRows, detailRows, packingRows, canceled, now
   for (const order of orders) {
     const items = itemsByOrder.get(order.orderId) || [];
 
-    // Barcode sonini oldindan hisoblaymiz — eligibility shunga qaraydi.
-    // 1-fazada faqat Uzum barcode'i; 2-fazada MoySklad barcode'lari qo'shiladi.
-    const withCounts = items.map((i) => ({ ...i, barcodeCount: i.uzumBarcode ? 1 : 0 }));
+    // Tovarni skanerlash mumkinmi — Uzum barcode'i YOKI MoySklad barcode'lari.
+    const withCounts = items.map((i) => ({
+      ...i,
+      barcodeCount: (i.uzumBarcode ? 1 : 0) + (i.productRef ? mcCounts.get(i.productRef) || 0 : 0),
+    }));
 
     const reason = evaluateOrder(order, withCounts, ctx);
     if (reason === REASONS.TOO_OLD) continue; // oynadan tashqari — umuman saqlanmaydi
@@ -189,8 +223,18 @@ export function applyRefresh({ orderRows, detailRows, packingRows, canceled, now
     "INSERT INTO packed_orders (order_id, packed_at, operator, status) VALUES (?, ?, ?, ?)"
   );
 
+  // MoySklad barcode'lari mc_barcodes'dan item_barcodes'ga ko'chiriladi —
+  // shunda skan qidiruvi ikkala manbani bitta oddiy so'rov bilan ko'radi.
+  const stmtMcBarcodes = db.prepare(`
+    INSERT INTO item_barcodes (barcode, item_id, source, raw)
+    SELECT m.barcode, i.item_id, 'moysklad', m.raw
+    FROM items i JOIN mc_barcodes m ON m.uuid = i.product_ref
+    WHERE i.product_ref IS NOT NULL
+    ON CONFLICT(barcode, item_id, source) DO NOTHING
+  `);
+
   db.transaction(() => {
-    db.prepare("DELETE FROM item_barcodes WHERE source = 'uzum'").run();
+    db.prepare("DELETE FROM item_barcodes").run();
     db.prepare("DELETE FROM items").run();
     db.prepare("DELETE FROM orders").run();
     db.prepare("DELETE FROM packed_orders").run();
@@ -231,15 +275,47 @@ export function applyRefresh({ orderRows, detailRows, packingRows, canceled, now
         if (item.uzumBarcode) stmtBarcode.run(item.uzumBarcode, item.itemId, item.rawBarcode);
       }
     }
+
+    stmtMcBarcodes.run();
   })();
+
+  const bySource = Object.fromEntries(
+    db
+      .prepare("SELECT source, COUNT(*) AS n FROM item_barcodes GROUP BY source")
+      .all()
+      .map((r) => [r.source, r.n])
+  );
 
   return {
     eligible: reasonCounts.get("ok") || 0,
     cached: toStore.length,
     packedCount: packedMap.size,
+    barcodesBySource: bySource,
     reasonCounts,
     problems,
   };
+}
+
+/* ---------------- tunda bir marta to'liq assortiment ---------------- */
+
+// MoySklad'da barcode qo'shilgan/o'chirilgan bo'lsa 7 kunlik TTL kutmasdan
+// tushishi uchun — Toshkent vaqti bilan belgilangan soatda, kuniga bir marta.
+async function maybeFullAssortmentSync() {
+  const tashkentNow = new Date(Date.now() + TASHKENT_OFFSET_MS).toISOString();
+  const hour = Number(tashkentNow.slice(11, 13));
+  const today = tashkentNow.slice(0, 10);
+
+  if (hour !== config.moysklad.fullSyncHourTashkent) return false;
+  if (getMeta("last_full_sync_date") === today) return false;
+
+  try {
+    await fullAssortmentSync();
+    setMeta("last_full_sync_date", today);
+    return true;
+  } catch (e) {
+    logger.error(`To'liq assortiment sinxronizatsiyasi xato: ${e.message}`);
+    return false;
+  }
 }
 
 /* ---------------- I/O bilan to'liq tsikl ---------------- */
@@ -266,8 +342,20 @@ export async function refreshCache() {
     );
   }
 
+  // Tovar barcode'lari — keshdan tashqarida, uzun TTL bilan. Har tsiklda
+  // faqat yangi/eskirgan UUID'lar so'raladi, byudjet bilan cheklangan, ya'ni
+  // birinchi ishga tushirish ham yangilanish tsiklini bloklab qo'ymaydi.
+  let barcodeSync = { requested: 0, fetched: 0, missing: 0, barcodes: 0, remaining: 0 };
+  try {
+    const refs = extractProductRefs(detailRows);
+    barcodeSync = await syncProductBarcodes(refs);
+  } catch (e) {
+    logger.error(`Tovar barcode'larini sinxronlashda xato: ${e.message}`);
+  }
+
   const result = applyRefresh({ orderRows, detailRows, packingRows, canceled, nowMs: startedMs });
   pruneCanceled();
+  await maybeFullAssortmentSync();
 
   const durationMs = Date.now() - startedMs;
   setMeta("last_refresh_at", new Date().toISOString());
@@ -296,6 +384,8 @@ export async function refreshCache() {
     canceledFresh,
     canceledCount: canceled.size,
     packedCount: result.packedCount,
+    barcodesBySource: result.barcodesBySource,
+    barcodeSync,
     problems: result.problems.length,
     durationMs,
   };

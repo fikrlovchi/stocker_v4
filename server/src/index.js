@@ -5,7 +5,8 @@ import express from "express";
 import { config, env } from "./config.js";
 import logger from "./logger.js";
 import { refreshCache } from "./cache/refresh.js";
-import { getStats, getOrder, findByBarcode, findAmbiguousBarcodes } from "./cache/queries.js";
+import { getStats, getOrder, getProduct, findByBarcode, findAmbiguousBarcodes } from "./cache/queries.js";
+import { fullAssortmentSync } from "./moysklad/productBarcodes.js";
 import { startHeartbeat, countError, countSuccess } from "./panel/reporter.js";
 
 const app = express();
@@ -83,6 +84,21 @@ debug.get("/barcode/:code", (req, res) => {
 });
 
 debug.get("/ambiguous", (req, res) => res.json({ barcodes: findAmbiguousBarcodes(50) }));
+
+debug.get("/product/:uuid", (req, res) => {
+  const product = getProduct(req.params.uuid);
+  if (!product) return res.status(404).json({ error: "Tovar keshda yo'q" });
+  res.json(product);
+});
+
+// Butun assortimentni darhol qayta o'qish (odatda tunda avtomatik bajariladi).
+debug.post("/sync-barcodes", async (req, res) => {
+  try {
+    res.json(await fullAssortmentSync());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.use("/debug", debug);
 

@@ -17,6 +17,10 @@ export function getStats() {
     .prepare("SELECT COALESCE(reason, 'ok') AS reason, COUNT(*) AS n FROM orders GROUP BY reason ORDER BY n DESC")
     .all();
 
+  const bySource = db
+    .prepare("SELECT source, COUNT(*) AS n FROM item_barcodes GROUP BY source")
+    .all();
+
   return {
     lastRefreshAt: getMeta("last_refresh_at"),
     cachedOrders: row.cached || 0,
@@ -24,9 +28,36 @@ export function getStats() {
     eligibleUnits: row.units || 0,
     items: db.prepare("SELECT COUNT(*) AS n FROM items").get().n,
     barcodes: db.prepare("SELECT COUNT(*) AS n FROM item_barcodes").get().n,
+    barcodesBySource: Object.fromEntries(bySource.map((r) => [r.source, r.n])),
+    // Tovarlarning nechtasida MoySklad barcode'i bor / yo'q
+    itemsWithMcBarcode: db.prepare(
+      `SELECT COUNT(DISTINCT item_id) AS n FROM item_barcodes WHERE source = 'moysklad'`
+    ).get().n,
+    itemsWithoutRef: db.prepare("SELECT COUNT(*) AS n FROM items WHERE product_ref IS NULL").get().n,
+    mcProducts: db.prepare("SELECT COUNT(*) AS n FROM mc_products WHERE missing = 0").get().n,
+    mcProductsMissing: db.prepare("SELECT COUNT(*) AS n FROM mc_products WHERE missing = 1").get().n,
+    mcBarcodes: db.prepare("SELECT COUNT(*) AS n FROM mc_barcodes").get().n,
+    lastFullSyncDate: getMeta("last_full_sync_date"),
     canceledKnown: db.prepare("SELECT COUNT(*) AS n FROM canceled_orders").get().n,
     packedKnown: db.prepare("SELECT COUNT(*) AS n FROM packed_orders").get().n,
     byReason: Object.fromEntries(byReason.map((r) => [r.reason, r.n])),
+  };
+}
+
+// MoySklad tovari: nomi, turi, barcode'lari, kesh yoshi.
+export function getProduct(uuid) {
+  const key = String(uuid).trim().toLowerCase();
+  const product = db.prepare("SELECT * FROM mc_products WHERE uuid = ?").get(key);
+  if (!product) return null;
+  return {
+    uuid: product.uuid,
+    entityType: product.entity_type,
+    name: product.name,
+    fetchedAt: product.fetched_at,
+    missing: product.missing === 1,
+    barcodes: db
+      .prepare("SELECT barcode, type, raw FROM mc_barcodes WHERE uuid = ? ORDER BY type")
+      .all(key),
   };
 }
 
@@ -34,8 +65,14 @@ export function getOrder(orderId) {
   const order = db.prepare("SELECT * FROM orders WHERE order_id = ?").get(String(orderId).trim());
   if (!order) return null;
 
+  // MoySklad nomi faqat ma'lumot uchun — ShK yorlig'ida hamon mc_product!E
+  // ishlatiladi (PLAN.md, 2-qaror).
   const items = db
-    .prepare("SELECT * FROM items WHERE order_id = ? ORDER BY sheet_row")
+    .prepare(
+      `SELECT i.*, p.name AS mc_name, p.missing AS mc_missing
+       FROM items i LEFT JOIN mc_products p ON p.uuid = i.product_ref
+       WHERE i.order_id = ? ORDER BY i.sheet_row`
+    )
     .all(order.order_id);
 
   const barcodesByItem = db
@@ -70,6 +107,8 @@ export function getOrder(orderId) {
       quantity: i.quantity,
       productRef: i.product_ref,
       entityType: i.entity_type,
+      mcName: i.mc_name ?? null,
+      mcMissing: i.mc_missing === 1,
       barcodes: grouped.get(i.item_id) || [],
     })),
   };

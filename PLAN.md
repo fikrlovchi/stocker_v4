@@ -471,7 +471,7 @@ kutubxona. Jadvallar: `orders`, `items`, `barcodes`, `mc_barcodes`, `sessions`,
 | Faza | Ish | Kun |
 |---|---|---|
 | ~~**1**~~ | ~~Server yadrosi: Sheets o'qish, filtr (3.1), MoySklad cancel ro'yxati, SQLite, tozalash~~ **✅ BAJARILDI** — `server/`, [README](server/README.md), 39 ta test o'tdi | 2 |
-| **2** | MoySklad barcode olish + indeks + qidiruv testi | 1.5 |
+| ~~**2**~~ | ~~MoySklad barcode olish + indeks + qidiruv testi~~ **✅ BAJARILDI** — 7 kunlik kesh, bulk so'rov, tungi to'liq sinxronizatsiya, 48 ta test | 1.5 |
 | **3** | uzumPDFs: `createShkSmall()` 40×30 + `buildProductForItem` + internal endpointlar + **fizik sinov chop etish** | 1.5 |
 | **4** | Skan mantiqi: sessiya, lock, avto-tanlash, progress API | 2 |
 | **5** | Print quvuri: WS hub, navbat, idempotentlik, retry | 1.5 |

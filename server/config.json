@@ -45,6 +45,11 @@
   "moysklad": {
     "baseUrl": "https://api.moysklad.ru/api/remap/1.2",
     "canceledLookbackDays": 5,
+    "barcodeTtlDays": 7,
+    "missingRetryHours": 24,
+    "syncBudgetPerCycle": 600,
+    "idChunkSize": 25,
+    "fullSyncHourTashkent": 3,
     "states": {
       "canceledHref": "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/states/a47989ee-97e3-11ed-0a80-0ca1009761c9",
       "assembledHref": "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/states/e3f3673f-8cc0-11f0-0a80-17c2003635fe"

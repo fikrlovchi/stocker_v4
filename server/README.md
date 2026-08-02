@@ -2,15 +2,16 @@
 
 Uzum buyurtmalarini omborda skanerlab yig'ish serveri. To'liq reja: [../PLAN.md](../PLAN.md).
 
-**Hozirgi holat: 1-faza bajarildi** — buyurtma keshi va barcode indeksi.
-Skan/sessiya (4-faza), print quvuri (5-faza), autentifikatsiya (8-faza) hali yo'q.
+**Hozirgi holat: 1–2 fazalar bajarildi** — buyurtma keshi va barcode indeksi
+(Uzum + MoySklad). Skan/sessiya (4-faza), print quvuri (5-faza),
+autentifikatsiya (8-faza) hali yo'q.
 
 ## Nima qiladi
 
 Har 60 soniyada Google Sheets'dan `uzum_order`, `uzum_order_detail` va
 `uzum_packing` varaqlarini o'qiydi, MoySklad'dan bekor qilingan buyurtmalar
-ro'yxatini oladi va yig'ishga tayyor buyurtmalarni SQLite keshiga yozadi.
-Barcode bo'yicha buyurtma topish uchun indeks quradi.
+ro'yxatini hamda tovar barcode'larini oladi va yig'ishga tayyor buyurtmalarni
+SQLite keshiga yozadi. Barcode bo'yicha buyurtma topish uchun indeks quradi.
 
 ## Buyurtma qaysi shartda yig'ishga chiqadi
 
@@ -32,6 +33,34 @@ Barcode bo'yicha buyurtma topish uchun indeks quradi.
 Mos kelmagan buyurtmalar ham keshda saqlanadi — `eligible=0` va **sababi** bilan.
 Shunda "nega bu buyurtma skanerlanmayapti?" savoliga `/debug/order/<id>` javob
 beradi. Faqat 3 kunlik oynadan tashqaridagilar umuman saqlanmaydi.
+
+## Barcode indeksi — ikkita manba
+
+Operator **Uzum barcode'ini ham, MoySklad'dagi istalgan barcode'ni ham**
+skanerlay oladi:
+
+| Manba | Qayerdan | Kesh |
+|---|---|---|
+| `uzum` | `uzum_order_detail!B` | Har tsiklda qayta quriladi |
+| `moysklad` | `uzum_order_detail!I` (href) → `GET assortment` → `barcodes[]` | **7 kun** (`mc_products` / `mc_barcodes`) |
+
+Tovar barcode'i kamdan-kam o'zgaradi, shuning uchun bir marta olingan UUID
+qayta so'ralmaydi. Har tsiklda faqat **yangi yoki eskirgan** UUID'lar olinadi,
+bitta so'rovda 25 tagacha (`assortment?filter=id=<href>;id=<href>...`) — 300 ta
+yangi tovar 300 emas, 12 ta so'rov. Tsikl byudjeti `syncBudgetPerCycle` bilan
+cheklangan, ya'ni birinchi ishga tushirish yangilanish tsiklini bloklab qo'ymaydi.
+
+Kechasi soat 3:00 (Toshkent) da butun assortiment sahifalab qayta o'qiladi —
+MoySklad'da barcode qo'shilgan/o'chirilgan bo'lsa 7 kunlik TTL kutilmaydi.
+
+`uzum_order_detail!I` da to'liq href ham, yalang'och UUID ham bo'lishi mumkin —
+ikkalasi ham qabul qilinadi. Entity turi (`J`) noma'lum bo'lsa `product` va
+`variant` variantlari birga so'raladi. MoySklad'da topilmagan UUID 24 soat
+qayta so'ralmaydi va loglanadi.
+
+> **Yorliq matni bundan o'zgarmaydi.** ShK sarlavhasi hamon
+> `skuTitle , mc_product!E` (PLAN.md, 2-qaror). MoySklad'dan olingan nom faqat
+> diagnostika va mobil ilova ekranida ko'rsatish uchun saqlanadi.
 
 ## Mahalliy ishga tushirish (Windows)
 
@@ -55,7 +84,7 @@ node src/index.js
 
 ## Tekshirish
 
-**Google/MoySklad'siz — mantiq testi** (39 ta tekshiruv, vaqtinchalik bazada):
+**Google/MoySklad'siz — mantiq testi** (48 ta tekshiruv, vaqtinchalik bazada):
 
 ```bash
 node src/scripts/selfTest.js
@@ -78,7 +107,9 @@ node src/scripts/refreshOnce.js
 | `POST /debug/refresh` | Keshni darhol yangilash |
 | `GET /debug/order/:id` | Bitta buyurtma: tovarlari, barcode'lari, **mos/nomos va sababi** |
 | `GET /debug/barcode/:code` | Barcode bo'yicha qidiruv. `?all=1` — nomos buyurtmalar ham |
+| `GET /debug/product/:uuid` | MoySklad tovari: nomi, barcode'lari, kesh yoshi |
 | `GET /debug/ambiguous` | Bir xil barcode turli tovarlarga biriktirilgan holatlar |
+| `POST /debug/sync-barcodes` | Butun assortimentni darhol qayta o'qish (odatda tunda avtomatik) |
 
 Misollar:
 
@@ -93,6 +124,9 @@ curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4043/debug/order/117360845
 ```bash
 curl -s -H "X-Service-Token: $TOKEN" http://127.0.0.1:4043/debug/barcode/1000111953348
 ```
+
+Javobdagi `source` maydoni barcode qaysi manbadan kelganini ko'rsatadi
+(`uzum` yoki `moysklad`).
 
 ## Serverga yuklash
 
@@ -133,7 +167,8 @@ src/
 │  └─ queries.js          keshdan o'qish, barcode qidiruvi
 ├─ moysklad/
 │  ├─ client.js           msFetch (429 retry), holat o'qish
-│  └─ canceledOrders.js   bekor qilinganlar ro'yxati (1 so'rov)
+│  ├─ canceledOrders.js   bekor qilinganlar ro'yxati (1 so'rov)
+│  └─ productBarcodes.js  tovar barcode'lari (7 kunlik kesh, bulk + tungi to'liq)
 ├─ google/sheetsClient.js OAuth2 (uzbuyo@gmail.com)
 ├─ db/                    SQLite + migratsiyalar
 ├─ panel/reporter.js      fikrlovchi-panel'ga hisobot (har 5 daqiqa)
@@ -142,9 +177,13 @@ src/
    └─ refreshOnce.js      bir marta yangilash
 ```
 
-### Diqqat: kesh har tsiklda qayta quriladi
+### Diqqat: qaysi jadvallar qayta quriladi
 
-`orders` / `items` / `item_barcodes` jadvallari har yangilanishda `DELETE` +
-`INSERT` qilinadi. Keyingi fazalardagi sessiya/lock jadvallari bu jadvallarga
-**FOREIGN KEY qo'ymasligi kerak** — sessiya ochilganda kerakli maydonlarni
-nusxalab olsin, aks holda yangilanish ochiq sessiyani o'chirib yuboradi.
+`orders` / `items` / `item_barcodes` / `packed_orders` har yangilanishda
+`DELETE` + `INSERT` qilinadi. Keyingi fazalardagi sessiya/lock jadvallari bu
+jadvallarga **FOREIGN KEY qo'ymasligi kerak** — sessiya ochilganda kerakli
+maydonlarni nusxalab olsin, aks holda yangilanish ochiq sessiyani o'chirib
+yuboradi.
+
+`mc_products` / `mc_barcodes` / `canceled_orders` esa **saqlanib qoladi** —
+ular uzoq muddatli kesh, TTL bo'yicha yangilanadi.

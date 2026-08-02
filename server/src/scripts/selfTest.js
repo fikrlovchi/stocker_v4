@@ -12,11 +12,14 @@ const TMP_DB = path.join(os.tmpdir(), `stocker-selftest-${process.pid}.db`);
 process.env.DB_FILE = TMP_DB;
 process.env.SERVICE_TOKEN = "selftest";
 
-const { applyRefresh } = await import("../cache/refresh.js");
-const { getStats, getOrder, findByBarcode, findAmbiguousBarcodes } = await import("../cache/queries.js");
+const { applyRefresh, extractProductRefs } = await import("../cache/refresh.js");
+const { getStats, getOrder, getProduct, findByBarcode, findAmbiguousBarcodes } = await import(
+  "../cache/queries.js"
+);
 const { normalizeBarcode, extractProductRef, parseSheetTimeToEpochMs } = await import(
   "../util/sheetValues.js"
 );
+const { db } = await import("../db/index.js");
 
 /* ---------------- yordamchi ---------------- */
 
@@ -105,7 +108,8 @@ const orderRows = [
   ok("OLD", 24 * 5),                                      // saqlash oynasidan eski
   ok("NOITEMS"),                                          // detail'da qatori yo'q
   ok("BADQTY"),                                           // K bo'sh
-  ok("NOBC"),                                             // B bo'sh
+  ok("NOBC"),                                             // B bo'sh, lekin MoySklad barcode'i bor
+  ok("NOBC2"),                                            // B ham, href ham yo'q
   // ⚠️ ASOSIY REGRESSIYA TESTI: V=1 va 30 soatlik, lekin sog'lom.
   // cancelSync 24 soatdan keyin bekor qilinmaganga ham V=1 qo'yadi, shuning
   // uchun V filtr sifatida ISHLATILMASLIGI kerak.
@@ -129,8 +133,11 @@ const detailRows = [
   det("i10", "PACKED", "1000111953348", "MT2-ELEGANT,SS", UUID_A, 1),
   det("i11", "OLD", "1000111953348", "MT2-ELEGANT,SS", UUID_A, 1),
   det("i12", "BADQTY", "1000111953348", "MT2-ELEGANT,SS", UUID_A, ""),
+  // Uzum barcode'i yo'q, lekin MoySklad href'i bor -> MoySklad barcode'i orqali skanerlanadi
   det("i13", "NOBC", "", "MT5-NOBARCODE,XL", UUID_A, 1),
   det("i14", "VSET", "1000444953348", "MT6-OLD,S", UUID_B, 1),
+  // Na Uzum barcode'i, na MoySklad href'i -> hech qachon skanerlanmaydi
+  det("i16", "NOBC2", "", "MT7-NOREF,XXL", null, 1),
 ];
 
 const packingRows = [
@@ -142,7 +149,45 @@ const packingRows = [
 
 const canceled = new Set(["CANCELED"]);
 
-/* ---------------- 3. applyRefresh ---------------- */
+/* ---------------- 3. MoySklad tovar keshi ---------------- */
+// Odatda syncProductBarcodes MoySklad'dan to'ldiradi; testda to'g'ridan-to'g'ri
+// yozamiz (mc_products/mc_barcodes har tsiklda qayta qurilmaydi — uzoq TTL kesh).
+
+function seedMc(uuid, name, barcodes) {
+  db.prepare(
+    "INSERT OR REPLACE INTO mc_products (uuid, entity_type, name, fetched_at, missing) VALUES (?,?,?,?,0)"
+  ).run(uuid, "product", name, new Date().toISOString());
+  db.prepare("DELETE FROM mc_barcodes WHERE uuid = ?").run(uuid);
+  for (const bc of barcodes) {
+    db.prepare("INSERT INTO mc_barcodes (uuid, barcode, type, raw) VALUES (?,?,?,?)").run(
+      uuid,
+      normalizeBarcode(bc),
+      "ean13",
+      bc
+    );
+  }
+}
+
+seedMc(UUID_A, "Elegant ko'ylak SS", ["4600000000011"]);
+seedMc(UUID_C, "Slim shim L", ["4600000000033", "4600000000034"]);
+
+check(
+  "extractProductRefs: noyob UUID'lar + turi",
+  [...extractProductRefs(detailRows).entries()].sort(),
+  [
+    [UUID_A, "product"],
+    [UUID_B, "product"],
+    [UUID_C, "product"],
+  ].sort()
+);
+
+check("getProduct: barcode'lar", getProduct(UUID_C).barcodes.map((b) => b.barcode), [
+  "4600000000033",
+  "4600000000034",
+]);
+check("getProduct: UUID katta harfda ham topiladi", getProduct(UUID_A.toUpperCase())?.name, "Elegant ko'ylak SS");
+
+/* ---------------- 4. applyRefresh ---------------- */
 
 const result = applyRefresh({ orderRows, detailRows, packingRows, canceled, nowMs: NOW });
 
@@ -165,16 +210,39 @@ check("CANCELED chiqarib tashlandi", reasonOf("CANCELED"), "canceled_in_moysklad
 check("PACKED chiqarib tashlandi", reasonOf("PACKED"), "already_packed");
 check("NOITEMS chiqarib tashlandi", reasonOf("NOITEMS"), "no_items");
 check("BADQTY chiqarib tashlandi", reasonOf("BADQTY"), "bad_quantity");
-check("NOBC chiqarib tashlandi", reasonOf("NOBC"), "unscannable_item");
+check("NOBC mos — Uzum barcode'i yo'q, MoySklad'niki bor", reasonOf("NOBC"), null);
+check("NOBC2 chiqarib tashlandi — hech qanday barcode yo'q", reasonOf("NOBC2"), "unscannable_item");
 check("OLD umuman saqlanmadi", getOrder("OLD"), null);
 
-check("mos buyurtmalar soni", result.eligible, 3);
-check("keshdagi buyurtmalar (OLD'siz)", result.cached, 13);
+check("mos buyurtmalar soni", result.eligible, 4);
+check("keshdagi buyurtmalar (OLD'siz)", result.cached, 14);
 check("OK1 birliklar soni (1+2)", getOrder("OK1").unitCount, 3);
 check("OK1 tovarlar soni", getOrder("OK1").itemCount, 2);
-check("problems: BADQTY + NOBC", result.problems.length, 2);
+check("problems: BADQTY + NOBC2", result.problems.length, 2);
 
-/* ---------------- 4. Barcode qidiruvi ---------------- */
+/* ---------------- 5. MoySklad barcode indeksi ---------------- */
+
+check(
+  "OK2 tovarida 3 ta barcode (1 uzum + 2 moysklad)",
+  getOrder("OK2").items[0].barcodes.map((b) => b.source).sort(),
+  ["moysklad", "moysklad", "uzum"]
+);
+check("MoySklad nomi ko'rsatiladi", getOrder("OK2").items[0].mcName, "Slim shim L");
+check(
+  "skan: MoySklad barcode'i buyurtmani topadi",
+  findByBarcode("4600000000033").matches.map((m) => [m.orderId, m.source]),
+  [["OK2", "moysklad"]]
+);
+check(
+  "skan: NOBC faqat MoySklad barcode'i orqali topiladi",
+  findByBarcode("4600000000011").matches.map((m) => m.orderId).includes("NOBC"),
+  true
+);
+// moysklad: UUID_A 10 ta tovarda (×1 barcode) + UUID_C 1 ta tovarda (×2) = 12
+// uzum: B ustuni to'ldirilgan 12 ta tovar (i13/i16 bo'sh, i11 saqlanmagan)
+check("barcode manbalari", result.barcodesBySource, { moysklad: 12, uzum: 12 });
+
+/* ---------------- 6. Barcode qidiruvi ---------------- */
 
 check("skan: OK1 birinchi tovari", findByBarcode("1000111953348").matches.map((m) => m.orderId), ["OK1"]);
 check(
