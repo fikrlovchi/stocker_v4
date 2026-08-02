@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "refresh": "node src/scripts/refreshOnce.js"
+    "refresh": "node src/scripts/refreshOnce.js",
+    "sync-barcodes": "node src/scripts/syncBarcodes.js",
+    "test": "node src/scripts/selfTest.js"
   },
   "license": "ISC",
   "dependencies": {

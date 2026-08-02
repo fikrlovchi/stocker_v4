@@ -105,6 +105,13 @@ node src/scripts/selfTest.js
 node src/scripts/refreshOnce.js
 ```
 
+**Butun assortimentni majburiy qayta o'qish** (TTL va "topilmadi" belgisiga
+qaramasdan — odatda kechasi 3:00 da avtomatik bajariladi):
+
+```bash
+node src/scripts/syncBarcodes.js
+```
+
 ## Endpointlar
 
 `/health` ochiq, qolgani `X-Service-Token` talab qiladi.
