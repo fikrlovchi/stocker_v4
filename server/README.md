@@ -203,7 +203,8 @@ node src/scripts/syncBarcodes.js
 | Endpoint | Vazifa |
 |---|---|
 | `POST /api/scan` | `{barcode, operator, stationId}` → skan natijasi + sessiya |
-| `GET /api/session` | `?operator=` yoki `?id=` — joriy sessiya (telefon qayta ulanganda) |
+| `GET /api/session` | `?operator=` yoki `?id=` — joriy sessiya (telefon qayta ulanganda). `&last=1` — yopilganini ham |
+| `POST /api/reprint` | `{jobId}` — yorliqni qayta chiqarish (yangi job yasaladi) |
 | `POST /api/session/cancel` | `{operator, reason}` — sessiyani bekor qilish, lock bo'shaydi |
 | `GET /api/sessions` | Hozir kim nimani yig'yapti |
 | `GET /api/jobs?sessionId=` | Sessiyaning chop etish joblari |

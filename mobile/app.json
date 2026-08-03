@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Stocker",
+    "slug": "stocker-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0f172a",
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "uz.fikrlovchi.stocker",
+      "permissions": ["CAMERA", "VIBRATE"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Barcode skanerlash uchun kamera kerak"
+        }
+      ]
+    ]
+  }
+}

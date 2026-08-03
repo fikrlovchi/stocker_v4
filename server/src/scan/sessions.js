@@ -80,6 +80,15 @@ function shapeSession(s) {
   };
 }
 
+// Operatorning oxirgi sessiyasi (holatidan qat'i nazar) — buyurtma yig'ilib
+// bo'lgandan keyin ham mobil ilovada "qayta chiqarish" ishlashi uchun.
+export function getLastSession(operator) {
+  const s = db
+    .prepare("SELECT id FROM sessions WHERE operator = ? ORDER BY started_at DESC LIMIT 1")
+    .get(String(operator).trim());
+  return s ? getSession(s.id) : null;
+}
+
 export function listActiveSessions() {
   return db
     .prepare("SELECT id FROM sessions WHERE status = 'active' ORDER BY started_at")
@@ -105,6 +114,26 @@ function addPrintJob({ sessionId, orderId, itemId, target, copies, stationId }) 
 
 export function sessionJobs(sessionId) {
   return listJobs({ sessionId, limit: 200 });
+}
+
+// Qayta chiqarish: mavjud jobni nusxalab yangi job yasaydi. Eski job
+// o'zgarmaydi (tarix saqlanadi), yangisining id'si boshqa — shuning uchun
+// client uni takror deb hisoblab tashlab yubormaydi.
+export function reprintJob(jobId, { stationId } = {}) {
+  const source = listJobs({ limit: 1000 }).find((j) => j.id === jobId);
+  if (!source) return null;
+
+  const job = createJob({
+    sessionId: source.sessionId,
+    orderId: source.orderId,
+    itemId: source.itemId,
+    target: source.target,
+    copies: source.copies,
+    stationId: stationId || source.stationId,
+  });
+  dispatchTo(job.stationId);
+  logger.info(`Qayta chiqarish: ${job.target} ${job.orderId} (asl job ${jobId})`);
+  return job;
 }
 
 // Muddati o'tgan sessiyalar lock'ni bo'shatadi. Har yangilanish tsiklida

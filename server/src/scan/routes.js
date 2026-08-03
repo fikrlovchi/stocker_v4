@@ -8,10 +8,12 @@ import express from "express";
 import {
   scan,
   getActiveSession,
+  getLastSession,
   getSession,
   listActiveSessions,
   cancelSession,
   sessionJobs,
+  reprintJob,
   RESULT,
 } from "./sessions.js";
 
@@ -36,15 +38,31 @@ export function scanRouter() {
   });
 
   // Joriy sessiya — telefon qayta ulanganda holatni tiklaydi.
+  // ?last=1 — ochiq sessiya bo'lmasa oxirgi yopilganini qaytaradi (qayta
+  // chiqarish uchun kerak: buyurtma yig'ilgach ham yorliqni qayta bosish mumkin).
   router.get("/session", (req, res) => {
-    const { operator, id } = req.query;
+    const { operator, id, last } = req.query;
     if (id) {
       const s = getSession(String(id));
       return s ? res.json(s) : res.status(404).json({ error: "Sessiya topilmadi" });
     }
     if (!operator) return res.status(400).json({ error: "operator yoki id kerak" });
-    const s = getActiveSession(String(operator));
-    return s ? res.json(s) : res.status(404).json({ error: "Ochiq sessiya yo'q" });
+
+    const active = getActiveSession(String(operator));
+    if (active) return res.json(active);
+    if (last === "1") {
+      const prev = getLastSession(String(operator));
+      if (prev) return res.json(prev);
+    }
+    return res.status(404).json({ error: "Ochiq sessiya yo'q" });
+  });
+
+  // Qayta chiqarish — yorliq buzuq chiqqanda yoki yo'qolganda.
+  router.post("/reprint", (req, res) => {
+    const { jobId, stationId } = req.body || {};
+    if (!jobId) return res.status(400).json({ error: "jobId kerak" });
+    const job = reprintJob(String(jobId), { stationId });
+    return job ? res.json(job) : res.status(404).json({ error: "Job topilmadi" });
   });
 
   router.post("/session/cancel", (req, res) => {
