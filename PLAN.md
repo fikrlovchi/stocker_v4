@@ -13,7 +13,7 @@ print client** (Electron, Windows). Boshqaruv va loglar — `fikrlovchi-panel`da
 
 | # | Savol | Qaror |
 |---|---|---|
-| 1 | Mobil platforma | **React Native (Expo)**, Android APK. iOS keyinchalik (kod bir xil) |
+| 1 | Mobil platforma | **Native Android (Kotlin + Compose)**. Uchinchi tomon runtime'i yo'q — telefonga faqat `Stocker.apk`. *(Dastlab Expo tanlangan, keyin native'ga o'tildi)* |
 | 2 | ShK matni | **O'zgarmaydi.** `uzum_order_detail!I` (MoySklad href) faqat **barcode ro'yxatini** olish uchun |
 | 3 | Buyurtma tanlash | **Server avtomatik tanlaydi**, operator almashtira olmaydi |
 | 4 | Skan boshiga yorliq | **2 ta** (1 birlik = 2 bet). Miqdor 3 → 3 marta skan |
@@ -476,7 +476,7 @@ kutubxona. Jadvallar: `orders`, `items`, `barcodes`, `mc_barcodes`, `sessions`,
 | ~~**4**~~ | ~~Skan mantiqi: sessiya, lock, avto-tanlash, progress API~~ **✅ BAJARILDI** — 73 ta test | 2 |
 | ~~**5**~~ | ~~Print quvuri: WS hub, navbat, idempotentlik, retry~~ **✅ BAJARILDI** — 91 ta test | 1.5 |
 | ~~**6**~~ | ~~Electron client: WS, printer tanlash, SumatraPDF, QR, tray, autostart~~ **✅ BAJARILDI** — `desktop/`, ⏳ fizik printer sinovi kutilmoqda | 2.5 |
-| ~~**7**~~ | ~~Expo mobil: QR juftlash, skan, progress, xatolar, reprint~~ **✅ BAJARILDI** — `mobile/`, ⏳ telefonda sinov (login 8-fazada) | 3 |
+| ~~**7**~~ | ~~Mobil: QR juftlash, skan, progress, xatolar, reprint~~ **✅ BAJARILDI** — `android/` (native Kotlin), ⏳ build + telefonda sinov (login 8-fazada) | 3 |
 | **8** | Panel: `project_users` + `stocker_stations` migratsiyalari, Operatorlar va Ish joylari kartalari, API, daemon boshqaruvi tuzatishi | 2 |
 | **9** | Yakunlash: "Собран", `uzum_packing`, Telegram, ingest reporter | 1 |
 | **10** | Deploy: DNS, nginx, certbot, systemd, APK, ombor sinovi | 1.5 |
