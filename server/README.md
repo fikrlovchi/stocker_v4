@@ -299,19 +299,57 @@ src/
    └─ syncBarcodes.js     to'liq assortimentni majburiy o'qish
 ```
 
-### Serverdagi portlar
+### Serverdagi portlar va servislar
 
-Stocker **4044** da tinglaydi. Band portlar (yangi servis qo'shishda tekshiring
-— `ss -ltnp`):
+`64.226.69.129` (Ubuntu, DigitalOcean). Stocker **4044** da tinglaydi.
 
-| Port | Servis |
+| Port | Loyiha | Yo'li | Boshqaruvi | Domen |
+|---|---|---|---|---|
+| 80 / 443 | nginx | — | systemd `nginx` | barcha domenlar |
+| 3000 | fikrlovchi-panel | `/root/fikrlovchi-panel` | systemd `fikrlovchi-panel` | `fikrlovchi.uz`, `buyo.fikrlovchi.uz` |
+| 4040 | uzumPDFs | `/root/uzumpdfs` | **pm2** `uzumpdfs` | `uzum.fikrlovchi.uz/` |
+| 4041 | receiveMCPost | `/root/receiveMCPost` | **pm2** `mc-webhook` | — (MoySklad webhook) |
+| 4042 | mcCancelServer | `/root/uzumOrderToMC` | **pm2** `mc-cancel` | — |
+| 4043 | analytics | `/root/analytics` | systemd `analytics` | `analytics.fikrlovchi.uz` |
+| **4044** | **stocker-server** | `/root/stocker/server` | systemd `stocker-server` | `uzum.fikrlovchi.uz/pack/` |
+
+**Ikki xil boshqaruv ishlatilgan** — yangi servis qo'shishda yoki qayta ishga
+tushirishda chalkashmaslik uchun:
+
+```bash
+pm2 restart uzumpdfs                      # pm2 ostidagilar
+sudo systemctl restart stocker-server     # systemd ostidagilar
+```
+
+Port band emasligini tekshirish:
+
+```bash
+ss -ltnp | grep :PORT
+```
+
+Port egasini to'liq aniqlash:
+
+```bash
+for p in $(ss -ltnH | awk '{print $4}' | sed 's/.*://' | sort -un); do pid=$(ss -ltnpH "sport = :$p" | grep -oP 'pid=\K[0-9]+' | head -1); [ -n "$pid" ] && printf "%-6s %s\n" "$p" "$(ps -p $pid -o args= | cut -c1-100)"; done
+```
+
+> Port to'qnashuvi bir marta bo'lgan: stocker dastlab 4043 ga qo'yilgan edi,
+> u esa `analytics` tomonidan band edi. Diagnostika so'rovlari jimgina boshqa
+> ilovaga tushib ketdi. Shuning uchun yangi servisda avval shu jadvalni
+> tekshiring.
+
+Port band qilmaydigan davriy vazifa bittagina: **`uzum-order.timer`** —
+uzumOrderToMC asosiy sinxronizatsiyasi (Uzum → Sheets → MoySklad), har
+2 daqiqada. `systemctl list-timers` bilan ko'riladi.
+
+Domenlar (`/etc/nginx/sites-enabled/`), hammasi certbot TLS bilan:
+
+| Domen | Port |
 |---|---|
-| 3000 | fikrlovchi-panel |
-| 4040 | uzumPDFs |
-| 4041 | receiveMCPost |
-| 4042 | mcCancelServer (uzumOrderToMC) |
-| 4043 | moneyReport dashboard (analytics.fikrlovchi.uz) |
-| **4044** | **stocker-server** |
+| `fikrlovchi.uz`, `www.fikrlovchi.uz` | 3000 |
+| `buyo.fikrlovchi.uz` | 3000 |
+| `analytics.fikrlovchi.uz` | 4043 |
+| `uzum.fikrlovchi.uz` | `/` → 4040, `/pack/` → 4044 |
 
 ### Diqqat: qaysi jadvallar qayta quriladi
 
