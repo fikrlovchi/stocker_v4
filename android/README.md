@@ -104,9 +104,30 @@ ekranga qaramasdan ham natijani biladi.
 kodni sekundiga o'nlab marta beradi; busiz bitta tovar bir necha marta
 skanerlangan bo'lib qolardi.
 
-**Faqat kerakli barcode formatlari yoqilgan** (EAN-13/8, UPC-A/E,
-Code128/39/93, ITF, Codabar). Cheklangan ro'yxat tanib olishni tezlashtiradi
-va noto'g'ri o'qishni kamaytiradi.
+**Uchta skanerlash rejimi** — kamera ustidagi tugmalardan tanlanadi va
+sozlamalarda saqlanadi:
+
+| Rejim | Formatlar |
+|---|---|
+| **Shtrix** | EAN-13/8, UPC-A/E, Code128/39/93, ITF, Codabar |
+| **QR** | QR, DataMatrix, PDF417, Aztec |
+| **Aralash** | ikkalasi ham — o'zi aniqlaydi |
+
+ML Kit qancha kam format qidirsa, shuncha tez va ishonchli o'qiydi. Aralash
+rejim qulay, lekin tovarlarda faqat shtrix-kod bo'lsa "Shtrix" rejimi
+noto'g'ri o'qishni ham kamaytiradi (yorliqdagi QR tasodifan tushib qolmaydi).
+
+Rejim o'zgarganda **kamera qayta ishga tushmaydi** — analizator har kadrda
+eng yangi scanner'ni o'qiydi (`rememberUpdatedState`), shuning uchun
+almashish bir zumda bo'ladi.
+
+Nishon ramkasi rejimga qarab o'zgaradi: QR uchun kvadrat, shtrix uchun
+cho'ziq — operator kodni qanday tutish kerakligini ko'radi.
+
+**Telefon chirog'i** (kamera ustidagi 🔦) — qorong'i omborda yoki
+yaltiroq yorliqda kerak bo'ladi. Tugma faqat qurilmada chiroq bo'lsa
+ko'rinadi (`cameraInfo.hasFlashUnit()`). Chiroq holati **saqlanmaydi** —
+smena oxirida yoqilgan holda qolib batareyani yeb qo'ymasin.
 
 **Ekran o'chmaydi** (`FLAG_KEEP_SCREEN_ON`) — yig'ish paytida qo'l band.
 

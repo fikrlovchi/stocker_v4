@@ -30,6 +30,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import uz.fikrlovchi.stocker.scan.ScanMode
 import uz.fikrlovchi.stocker.scan.ScannerView
 import uz.fikrlovchi.stocker.util.Buzz
 import uz.fikrlovchi.stocker.util.Feedback
@@ -52,7 +53,8 @@ fun PairScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         ScannerView(
             modifier = Modifier.fillMaxSize(),
-            qrOnly = true,
+            // Juftlash QR'i — boshqa formatlar bu ekranda kerak emas.
+            mode = ScanMode.QR,
             onBarcode = { raw ->
                 val now = System.currentTimeMillis()
                 if (now - lastAttempt < 1500) return@ScannerView

@@ -106,6 +106,11 @@ class MainActivity : ComponentActivity() {
                                 config = config,
                                 api = api,
                                 feedback = feedback,
+                                onScanModeChange = { m ->
+                                    val next = config.copy(scanMode = m.name)
+                                    config = next
+                                    store.save(next)
+                                },
                                 onOpenSettings = { screen = Screen.SETUP },
                                 onOpenPair = { screen = Screen.PAIR },
                             )

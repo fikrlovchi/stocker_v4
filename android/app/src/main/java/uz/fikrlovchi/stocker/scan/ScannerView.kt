@@ -1,6 +1,8 @@
 package uz.fikrlovchi.stocker.scan
 
 import android.annotation.SuppressLint
+import android.util.Size
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -10,18 +12,21 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 // lifecycle-runtime-compose'dagi variant — compose.ui.platform'dagisi eskirgan.
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.barcode.BarcodeScanner
-import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
@@ -31,47 +36,46 @@ import java.util.concurrent.Executors
  * ML Kit'ning "bundled" varianti modelni APK ichida olib yuradi — Google Play
  * Services ham, internet ham kerak emas. Ombor sharoitida bu muhim.
  *
- * Faqat kerakli formatlar yoqilgan: cheklangan ro'yxat tanib olishni
- * tezlashtiradi va noto'g'ri o'qishni kamaytiradi.
+ * @param mode qaysi formatlar qidiriladi (ScanMode)
+ * @param torchOn telefon chirog'i
+ * @param paused true bo'lsa kadrlar tashlab yuboriladi (so'rov ketayotganda)
+ * @param onTorchAvailable qurilmada chiroq bor-yo'qligi (tugmani yashirish uchun)
  */
-private val SCANNER_OPTIONS = BarcodeScannerOptions.Builder()
-    .setBarcodeFormats(
-        Barcode.FORMAT_EAN_13,
-        Barcode.FORMAT_EAN_8,
-        Barcode.FORMAT_UPC_A,
-        Barcode.FORMAT_UPC_E,
-        Barcode.FORMAT_CODE_128,
-        Barcode.FORMAT_CODE_39,
-        Barcode.FORMAT_CODE_93,
-        Barcode.FORMAT_ITF,
-        Barcode.FORMAT_CODABAR,
-    )
-    .build()
-
-/** QR uchun alohida sozlama — ish joyini juftlashda ishlatiladi. */
-private val QR_OPTIONS = BarcodeScannerOptions.Builder()
-    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-    .build()
-
 @Composable
 fun ScannerView(
     modifier: Modifier = Modifier,
-    qrOnly: Boolean = false,
-    /** true bo'lsa kadrlar tashlab yuboriladi (so'rov ketayotganda). */
+    mode: ScanMode = ScanMode.MIXED,
+    torchOn: Boolean = false,
     paused: Boolean = false,
+    onTorchAvailable: (Boolean) -> Unit = {},
     onBarcode: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Callback va `paused` o'zgarganda kamera qayta ishga tushmasligi kerak —
+    // Callback va holat o'zgarganda kamera QAYTA ISHGA TUSHMASLIGI kerak —
     // shuning uchun ular rememberUpdatedState orqali o'qiladi.
     val currentOnBarcode = rememberUpdatedState(onBarcode)
     val currentPaused = rememberUpdatedState(paused)
 
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
-    val scanner: BarcodeScanner = remember(qrOnly) {
-        BarcodeScanning.getClient(if (qrOnly) QR_OPTIONS else SCANNER_OPTIONS)
+    DisposableEffect(Unit) { onDispose { analysisExecutor.shutdown() } }
+
+    // Rejim o'zgarganda yangi scanner yasaladi, kamera esa qayta bog'lanmaydi:
+    // analizator har kadrda ENG YANGI scanner'ni o'qiydi.
+    val scanner: BarcodeScanner = remember(mode) { BarcodeScanning.getClient(scannerOptions(mode)) }
+    val currentScanner = rememberUpdatedState(scanner)
+    DisposableEffect(scanner) { onDispose { runCatching { scanner.close() } } }
+
+    var camera by remember { mutableStateOf<Camera?>(null) }
+
+    // Chiroq holati va qurilmada chiroq bor-yo'qligi.
+    LaunchedEffect(camera, torchOn) {
+        val cam = camera ?: return@LaunchedEffect
+        onTorchAvailable(cam.cameraInfo.hasFlashUnit())
+        if (cam.cameraInfo.hasFlashUnit()) {
+            runCatching { cam.cameraControl.enableTorch(torchOn) }
+        }
     }
 
     AndroidView(
@@ -85,8 +89,6 @@ fun ScannerView(
             providerFuture.addListener({
                 val provider = providerFuture.get()
 
-                // setSurfaceProvider() — Kotlin property sintaksisi emas:
-                // Preview'da getter yo'q, faqat setter bor.
                 val preview = Preview.Builder().build().also {
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
@@ -96,7 +98,7 @@ fun ScannerView(
                 val resolution = ResolutionSelector.Builder()
                     .setResolutionStrategy(
                         ResolutionStrategy(
-                            android.util.Size(1280, 720),
+                            Size(1280, 720),
                             ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
                         )
                     )
@@ -113,7 +115,7 @@ fun ScannerView(
                     if (currentPaused.value) {
                         imageProxy.close()
                     } else {
-                        process(scanner, imageProxy) { value ->
+                        process(currentScanner.value, imageProxy) { value ->
                             ContextCompat.getMainExecutor(ctx).execute {
                                 currentOnBarcode.value(value)
                             }
@@ -123,7 +125,7 @@ fun ScannerView(
 
                 runCatching {
                     provider.unbindAll()
-                    provider.bindToLifecycle(
+                    camera = provider.bindToLifecycle(
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
                         preview,
@@ -145,11 +147,14 @@ private fun process(scanner: BarcodeScanner, imageProxy: ImageProxy, onValue: (S
         return
     }
     val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-    scanner.process(image)
-        .addOnSuccessListener { barcodes ->
-            barcodes.firstNotNullOfOrNull { barcode ->
-                barcode.rawValue?.takeIf { it.isNotBlank() }
-            }?.let(onValue)
-        }
-        .addOnCompleteListener { imageProxy.close() }
+    // Scanner rejim o'zgarishida yopilishi mumkin — bunda process() otadi.
+    runCatching {
+        scanner.process(image)
+            .addOnSuccessListener { barcodes ->
+                barcodes.firstNotNullOfOrNull { barcode ->
+                    barcode.rawValue?.takeIf { it.isNotBlank() }
+                }?.let(onValue)
+            }
+            .addOnCompleteListener { imageProxy.close() }
+    }.onFailure { imageProxy.close() }
 }

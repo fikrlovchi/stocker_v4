@@ -2,6 +2,7 @@ package uz.fikrlovchi.stocker.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import uz.fikrlovchi.stocker.data.Config
 import uz.fikrlovchi.stocker.data.PrintJob
 import uz.fikrlovchi.stocker.data.ScanResult
 import uz.fikrlovchi.stocker.data.Session
+import uz.fikrlovchi.stocker.scan.ScanMode
 import uz.fikrlovchi.stocker.scan.ScannerView
 import uz.fikrlovchi.stocker.util.Buzz
 import uz.fikrlovchi.stocker.util.Feedback
@@ -62,6 +64,7 @@ fun ScanScreen(
     config: Config,
     api: Api,
     feedback: Feedback,
+    onScanModeChange: (ScanMode) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenPair: () -> Unit,
 ) {
@@ -69,6 +72,12 @@ fun ScanScreen(
     var banner by remember { mutableStateOf<Banner?>(null) }
     var busy by remember { mutableStateOf(false) }
     var offline by remember { mutableStateOf(false) }
+
+    // Rejim sozlamalarda saqlanadi; chiroq esa sessiya davomida — smena
+    // oxirida yoqilgan holda qolib batareyani yeb qo'ymasin.
+    val mode = ScanMode.from(config.scanMode)
+    var torchOn by remember { mutableStateOf(false) }
+    var torchAvailable by remember { mutableStateOf(false) }
 
     var manualOpen by remember { mutableStateOf(false) }
     var manualValue by remember { mutableStateOf("") }
@@ -173,10 +182,13 @@ fun ScanScreen(
         }
 
         /* ---------- Kamera ---------- */
-        Box(Modifier.fillMaxWidth().height(230.dp).background(Color.Black)) {
+        Box(Modifier.fillMaxWidth().height(250.dp).background(Color.Black)) {
             ScannerView(
                 modifier = Modifier.fillMaxSize(),
+                mode = mode,
+                torchOn = torchOn,
                 paused = busy,
+                onTorchAvailable = { torchAvailable = it },
                 onBarcode = { code ->
                     val now = System.currentTimeMillis()
                     if (code == lastCode && now - lastCodeAt < SAME_CODE_COOLDOWN_MS) return@ScannerView
@@ -185,12 +197,64 @@ fun ScanScreen(
                     submit(code)
                 },
             )
+
+            // Nishon: QR rejimida kvadrat, shtrix rejimida cho'ziq — operator
+            // kodni qanday tutish kerakligini ko'rsatadi.
             Box(
                 Modifier
                     .align(Alignment.Center)
-                    .size(width = 220.dp, height = 150.dp)
+                    .then(
+                        if (mode == ScanMode.QR) Modifier.size(160.dp)
+                        else Modifier.size(width = 230.dp, height = 130.dp)
+                    )
                     .border(3.dp, Color(0xBFFFFFFF), RoundedCornerShape(14.dp))
             )
+
+            // Chiroq — yuqori o'ngda
+            if (torchAvailable) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(if (torchOn) Palette.accent else Color(0x8C000000))
+                        .clickable { torchOn = !torchOn },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("🔦", fontSize = 20.sp)
+                }
+            }
+
+            // Rejim tanlash — pastda
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 10.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0x8C000000))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                ScanMode.entries.forEach { m ->
+                    val active = m == mode
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (active) Palette.accent else Color.Transparent)
+                            .clickable { if (!active) onScanModeChange(m) }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                    ) {
+                        Text(
+                            m.label,
+                            color = if (active) Color.White else Color(0xFFCBD5E1),
+                            fontSize = 13.sp,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+
             if (busy) {
                 Box(
                     Modifier.fillMaxSize().background(Color(0x73000000)),
