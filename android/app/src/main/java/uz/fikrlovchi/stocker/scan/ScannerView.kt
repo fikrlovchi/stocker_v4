@@ -82,6 +82,13 @@ fun ScannerView(
         modifier = modifier,
         factory = { ctx ->
             val previewView = PreviewView(ctx).apply {
+                // MUHIM: standart PERFORMANCE rejimi SurfaceView ishlatadi, u
+                // esa oynada "teshik" ochib alohida qatlamda chiziladi va
+                // Compose'ning kesishini ham, qatlam tartibini ham HISOBGA
+                // OLMAYDI. Natijada kamera o'z qutisidan chiqib ketadi va
+                // ustidagi tugmalar orqasida ko'rinmay qoladi.
+                // COMPATIBLE — TextureView, oddiy view ierarxiyasida chiziladi.
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 scaleType = PreviewView.ScaleType.FILL_CENTER
             }
 

@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -182,7 +183,15 @@ fun ScanScreen(
         }
 
         /* ---------- Kamera ---------- */
-        Box(Modifier.fillMaxWidth().height(250.dp).background(Color.Black)) {
+        // clipToBounds: kamera view'i qutidan chiqib ketmasin (ScannerView
+        // izohiga qarang — SurfaceView bilan aynan shunday bo'lgan edi).
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(250.dp)
+                .clipToBounds()
+                .background(Color.Black)
+        ) {
             ScannerView(
                 modifier = Modifier.fillMaxSize(),
                 mode = mode,
