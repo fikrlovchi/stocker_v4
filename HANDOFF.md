@@ -3,8 +3,8 @@
 Yangi sessiyada ishni davom ettirish uchun. Loyihaning **dizayni**
 [PLAN.md](PLAN.md) da, bu yerda **holat, topilgan tuzoqlar va ochiq savollar**.
 
-Oxirgi commit'lar: `stocker_v4@d836a86` · `uzumpdfs@1ba725f` ·
-`fikrlovchi_project_panel` — operatorlar kartasi qo'shildi (commit qilinmagan)
+Oxirgi commit'lar: `stocker_v4@bd37b6a` · `uzumpdfs@1ba725f` ·
+`fikrlovchi_project_panel@0bae7ea` — ikkalasi ham **push qilinmagan**
 
 ---
 
