@@ -85,8 +85,10 @@ fun ScannerView(
             providerFuture.addListener({
                 val provider = providerFuture.get()
 
+                // setSurfaceProvider() — Kotlin property sintaksisi emas:
+                // Preview'da getter yo'q, faqat setter bor.
                 val preview = Preview.Builder().build().also {
-                    it.surfaceProvider = previewView.surfaceProvider
+                    it.setSurfaceProvider(previewView.surfaceProvider)
                 }
 
                 // 1280×720 yetarli: kichik barcode'ni ham o'qiydi, lekin
@@ -145,8 +147,9 @@ private fun process(scanner: BarcodeScanner, imageProxy: ImageProxy, onValue: (S
     val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
     scanner.process(image)
         .addOnSuccessListener { barcodes ->
-            barcodes.firstNotNullOfOrNull { it.rawValue?.takeIf(String::isNotBlank) }
-                ?.let(onValue)
+            barcodes.firstNotNullOfOrNull { barcode ->
+                barcode.rawValue?.takeIf { it.isNotBlank() }
+            }?.let(onValue)
         }
         .addOnCompleteListener { imageProxy.close() }
 }

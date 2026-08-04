@@ -19,33 +19,49 @@ o'rnatiladi. Expo Go, React Native yoki boshqa runtime yo'q.
 
 ## Build muhiti
 
-Loyihani yig'ish uchun ikkita narsa kerak (hozir kompyuterda **yo'q**):
+Sinovdan o'tgan kombinatsiya:
 
-1. **JDK 17** — Android Gradle Plugin 8.x shuni talab qiladi
-2. **Android SDK** (API 35)
+| Komponent | Versiya |
+|---|---|
+| JDK | **21** (`C:\Program Files\Java\jdk-21.0.12`) |
+| Android SDK Platform | **35** |
+| Gradle | **8.11.1** |
+| Android Gradle Plugin | **8.7.3** |
+| Kotlin | **2.1.0** |
 
-Eng oson yo'li — **Android Studio** o'rnatish (ikkalasi ham ichida keladi):
-<https://developer.android.com/studio>
+Eng oson yo'li — **Android Studio** o'rnatish, SDK va JDK ham u orqali
+keladi: <https://developer.android.com/studio>
 
-O'rnatgach: `File → Open` → `stocker_v4/android` papkasini tanlang. Studio
-Gradle wrapper'ni o'zi yasaydi va bog'liqliklarni yuklab oladi (birinchi
-sinxronizatsiya ~10 daqiqa).
+O'rnatgach `Tools → SDK Manager` → "Show Package Details" → **Android SDK
+Platform 35** ni belgilang.
 
-> `gradlew` / `gradle-wrapper.jar` repoda yo'q (binar fayl). Android Studio
-> loyihani ochganda uni o'zi yasaydi. Studio'siz qilish uchun tizimda Gradle
-> bo'lishi va bir marta `gradle wrapper` bajarilishi kerak.
+> ⚠️ **Gradle JDK ni 21 qilib qo'yish shart.** Yangi Android Studio ichida
+> JDK 25 keladi, Gradle 8.11 esa JDK 23 gacha qo'llaydi — JDK 25 bilan build
+> yiqiladi. Studio'da: `Settings → Build, Execution, Deployment → Build Tools
+> → Gradle → Gradle JDK → 21`.
 
 ## APK yasash
 
 Android Studio'da: `Build → Build Bundle(s)/APK(s) → Build APK(s)`
 
-Yoki buyruq satridan:
+Yoki buyruq satridan (`JAVA_HOME` JDK 21 ga ishora qilishi kerak):
 
 ```bash
 gradlew.bat assembleRelease
 ```
 
-Natija: `app/build/outputs/apk/release/app-release.apk`
+Natija: `app/build/outputs/apk/release/app-release.apk` (~32 MB)
+
+> ⚠️ **Android Studio va buyruq satridagi build bir vaqtda ishlamaydi** —
+> ikkisi bir xil Gradle qulfini talashadi va biri kutib qolib ketadi. Buyruq
+> satridan build qilishdan oldin Studio'ni yoping.
+
+Build davomida chiqadigan, e'tibor bermaslik kerak bo'lgan ogohlantirishlar:
+
+- `SDK XML version 4 was encountered` — Studio'ning SDK'si Gradle'ning
+  o'quvchisidan yangiroq, ta'siri yo'q
+- `Unable to strip ... libbarhopper_v3.so` — ML Kit va CameraX'ning native
+  kutubxonalari siqilmasdan qadoqlanadi, ishlashiga ta'siri yo'q
 
 > Hozir release ham **debug kaliti** bilan imzolanadi (`build.gradle.kts`) —
 > shunda APK darhol o'rnatiladi. Play Store'ga chiqarish kerak bo'lsa o'z

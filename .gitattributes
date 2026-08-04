@@ -1,3 +1,7 @@
 # systemd unit va nginx konfiglari Linux serverda LF bilan bo'lishi shart
 server/deploy/*.service text eol=lf
 server/deploy/*.conf    text eol=lf
+
+# Gradle wrapper: sh skripti LF bo'lishi kerak, jar — binar
+android/gradlew         text eol=lf
+*.jar                   binary
