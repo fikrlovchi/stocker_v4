@@ -73,5 +73,11 @@
   },
   "panel": {
     "heartbeatIntervalMs": 300000
+  },
+  "auth": {
+    "syncIntervalMs": 60000,
+    "tokenTtlDays": 30,
+    "maxFailedAttempts": 5,
+    "lockoutMs": 300000
   }
 }

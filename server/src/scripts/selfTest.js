@@ -462,6 +462,67 @@ check("listJobs(): mos kelmaydigan filtr", listJobs({ stationId: "yo'q" }).lengt
 db.exec("DELETE FROM print_jobs; DELETE FROM stations");
 resetSessions();
 
+/* ---------------- 10. Operator autentifikatsiyasi (8-faza) ---------------- */
+// Panel'ga chiqmaymiz: ro'yxatni to'g'ridan-to'g'ri keshga yozamiz — aynan
+// panel yo'q holatda login ishlashi kerak bo'lgani uchun bu to'g'ri sinov.
+
+const bcrypt = (await import("bcryptjs")).default;
+const auth = await import("../auth/operators.js");
+
+const seedOperator = (login, password, isActive = 1) =>
+  db
+    .prepare(
+      "INSERT INTO operators (login, display_name, password_hash, is_active, synced_at) VALUES (?, ?, ?, ?, ?)"
+    )
+    .run(login, login.toUpperCase(), bcrypt.hashSync(password, 10), isActive, new Date().toISOString());
+
+seedOperator("operator1", "parol1");
+seedOperator("nofaol", "parol1", 0);
+
+const good = auth.login({ login: "operator1", password: "parol1", ip: "1.1.1.1", device: "selftest" });
+check("login: to'g'ri parol token beradi", typeof good.token === "string" && good.token.length === 64, true);
+check("login: displayName qaytadi", good.displayName, "OPERATOR1");
+check("login: login normalizatsiya (bosh harf/bo'shliq)", Boolean(auth.login({ login: " OPERATOR1 ", password: "parol1", ip: "1.1.1.2" }).token), true);
+check("login: noto'g'ri parol", auth.login({ login: "operator1", password: "xato", ip: "2.2.2.2" }).error, "Login yoki parol noto'g'ri");
+check("login: yo'q operator", auth.login({ login: "yoq", password: "parol1", ip: "3.3.3.3" }).error, "Login yoki parol noto'g'ri");
+check("login: faolsizlantirilgan hisob", auth.login({ login: "nofaol", password: "parol1", ip: "4.4.4.4" }).error, "Hisob faolsizlantirilgan");
+
+check("token: yaroqli", auth.resolveToken(good.token)?.login, "operator1");
+check("token: yasama", auth.resolveToken("00" + good.token.slice(2)), null);
+check("token: bo'sh", auth.resolveToken(""), null);
+
+// Ko'p urinishdan keyin qulflash — bir IP dan parol terib ko'rishga qarshi.
+for (let i = 0; i < 5; i++) auth.login({ login: "operator1", password: "xato", ip: "9.9.9.9" });
+const locked = auth.login({ login: "operator1", password: "parol1", ip: "9.9.9.9" });
+check("qulflash: to'g'ri parol ham o'tmaydi", Boolean(locked.error && locked.retryAfterMs > 0), true);
+check("qulflash: boshqa IP ta'sirlanmaydi", Boolean(auth.login({ login: "operator1", password: "parol1", ip: "8.8.8.8" }).token), true);
+
+// Panel'dan sinxronlash: faolsizlantirilganning tokeni bekor qilinadi,
+// o'chirilgani keshdan chiqadi.
+const sessionToken = auth.login({ login: "operator1", password: "parol1", ip: "7.7.7.7" }).token;
+const applyUsers = auth.applyPanelUsers;
+applyUsers([
+  { login: "operator1", displayName: "Operator Bir", passwordHash: bcrypt.hashSync("yangi", 10), isActive: false },
+]);
+check("sinxron: faolsizlantirilganda token bekor", auth.resolveToken(sessionToken), null);
+check("sinxron: o'chirilgan operator keshdan chiqdi", auth.getOperator("nofaol"), undefined);
+check("sinxron: yangi parol keshga tushdi", auth.login({ login: "operator1", password: "yangi", ip: "6.6.6.6" }).error, "Hisob faolsizlantirilgan");
+
+applyUsers([
+  { login: "operator1", displayName: "Operator Bir", passwordHash: bcrypt.hashSync("yangi", 10), isActive: true },
+]);
+const afterSync = auth.login({ login: "operator1", password: "yangi", ip: "6.6.6.7" });
+check("sinxron: qayta faollashtirilgach kiradi", afterSync.displayName, "Operator Bir");
+check("logout: token o'chadi", [auth.logout(afterSync.token), auth.resolveToken(afterSync.token)], [true, null]);
+
+// Muddati o'tgan token tozalanadi.
+const stale = auth.login({ login: "operator1", password: "yangi", ip: "6.6.6.8" }).token;
+db.prepare("UPDATE operator_tokens SET created_at = '2020-01-01T00:00:00.000Z'").run();
+check("token: muddati o'tgani yaroqsiz", auth.resolveToken(stale), null);
+check("prune: eski tokenlar o'chadi", auth.pruneExpiredTokens() >= 0, true);
+
+db.exec("DELETE FROM operator_tokens; DELETE FROM operators");
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

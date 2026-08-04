@@ -3,7 +3,8 @@
 Yangi sessiyada ishni davom ettirish uchun. Loyihaning **dizayni**
 [PLAN.md](PLAN.md) da, bu yerda **holat, topilgan tuzoqlar va ochiq savollar**.
 
-Oxirgi commit'lar: `stocker_v4@142dfd6` · `uzumpdfs@1ba725f`
+Oxirgi commit'lar: `stocker_v4@d836a86` · `uzumpdfs@1ba725f` ·
+`fikrlovchi_project_panel` — operatorlar kartasi qo'shildi (commit qilinmagan)
 
 ---
 
@@ -17,8 +18,9 @@ Oxirgi commit'lar: `stocker_v4@142dfd6` · `uzumpdfs@1ba725f`
 | 4 · Skan mantiqi (sessiya, lock, avto-tanlash) | ✅ | qisman UNIQUE indeks bilan lock |
 | 5 · Print quvuri (WS, navbat, ACK, retry) | ✅ | idempotent, PDF proxy orqali |
 | 6 · Electron desktop client | ✅ | + qog'oz yo'nalishi sozlamasi |
-| 7 · Android native (Kotlin + Compose) | ✅ | **v0.2.0**, APK yig'ilgan, skan→print ishladi |
-| **8 · Panel: operator login + ish joylari** | ⏳ | **keyingi ish** |
+| 7 · Android native (Kotlin + Compose) | ✅ | **v0.3.0**, tugmalar va chiroq sinovdan o'tdi |
+| 8a · Operator login (PLAN 6.4) | ✅ | panel karta + stocker kesh/login + Android kirish ekrani, **deploy qilinmagan** |
+| **8b · Ish joylari kartasi (PLAN 6.5)** | ⏳ | **keyingi ish** — enrollment kod, station tokeni |
 | 9 · MoySklad "Собран" + `uzum_packing` + Telegram | ⏳ | |
 | 10 · Deploy yakuni (TLS, backlog tozalash) | ⏳ | qisman bajarilgan |
 
@@ -40,10 +42,8 @@ Oxirgi commit'lar: `stocker_v4@142dfd6` · `uzumpdfs@1ba725f`
 
 ## 3. Ochiq savollar — birinchi navbatda hal qilinadi
 
-1. **Android v0.2.0 sinovi.** Chiroq va rejim tugmalari endi ko'rinadimi?
-   Oldingi skrinshot v0.1.0 dan edi (nishon ramkasi 220×150dp — rejim
-   funksiyasidan oldingi o'lchov). Skan ekranida `v0.2.0` yozuvi bo'lishi
-   kerak — bo'lmasa o'rnatish o'tmagan.
+1. **Operator login'ini deploy qilish va sinash** (kod tayyor, serverga
+   chiqarilmagan). Ketma-ketlik 6-bo'limda.
 
 2. **HTTPS tasdiqlanmadi.**
    ```bash
@@ -204,25 +204,59 @@ cd C:\Users\User\Desktop\Buyo\Server\Stocker\stocker_v4\server && node src/scrip
 
 ---
 
-## 6. Keyingi ish — 8-faza
+## 6. Keyingi ish
 
-Panel'ga (`C:\Users\User\Desktop\Buyo\Server\fikrlovchi_project_panel`) qo'shish:
+### 6.1 Operator login'ini deploy qilish (kod tayyor)
 
-1. **Migratsiya `007_project_users.sql`** — loyihaga bog'langan umumiy
-   foydalanuvchilar jadvali. Panel'da hozir faqat bitta admin bor
-   (`ADMIN_PASSWORD_HASH`), foydalanuvchilar jadvali yo'q.
-2. **"Operatorlar" kartasi** — qo'shish / nom o'zgartirish / parol tiklash /
-   faolsizlantirish. `bcryptjs` allaqachon bog'liqlikda.
-3. **Migratsiya `008_stocker_stations.sql`** + **"Ish joylari" kartasi** —
+Panel (`fikrlovchi_project_panel`) va stocker ikkalasi ham yangilanadi.
+Panel'da stocker loyihasi **hali ro'yxatdan o'tmagan** (`projects` da faqat
+`test-proj` va `uzum-order-to-mc` bor) — birinchi qadam shu.
+
+1. Panel'ni yangilash va restart:
+   ```bash
+   cd /root/fikrlovchi-panel && git pull && npm i && sudo systemctl restart fikrlovchi-panel
+   ```
+   `007_project_users.sql` boot'da o'zi qo'llanadi.
+
+2. Stocker loyihasini panel'ga qo'shish va API kalitini olish:
+   ```bash
+   cd /root/fikrlovchi-panel && node scripts/seed-project.js stocker "Stocker — yig'ish" stocker-server.service
+   ```
+   Chiqqan API kalitni stocker `.env` ga yozish:
+   `PANEL_PROJECT_SLUG=stocker`, `PANEL_API_KEY=...`,
+   `PANEL_INGEST_URL=https://<panel>/api/ingest/runs`.
+
+3. Panel'da loyiha sahifasi → **Operatorlar** kartasidan ikkita hisob:
+   loginlari `operator1` va `operator2`, parollari kartada qo'lda kiritiladi
+   (git'ga yozilmaydi). To'liq ismlar keyin tahrirlanadi — karta nomni
+   o'zgartirishga ruxsat beradi.
+
+4. Stocker'ni yangilash:
+   ```bash
+   cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart stocker-server
+   ```
+   `npm i` majburiy — yangi bog'liqlik `bcryptjs`.
+
+5. Tekshirish:
+   ```bash
+   S http://127.0.0.1:4044/debug/operators     # ikkita faol operator ko'rinishi kerak
+   curl -s -X POST http://127.0.0.1:4044/api/auth/login -H "Content-Type: application/json" -d '{"login":"operator1","password":"<parol>"}'
+   ```
+   Ikkinchi buyruq `{"token":"...","displayName":"..."}` qaytarishi kerak.
+
+6. Telefonga **v0.3.0** APK (`android/app/build/outputs/apk/release/stocker-0.3.0.apk`)
+   — kirish ekranida server manzili, `operator1` va uning paroli.
+
+### 6.2 Ish joylari kartasi — PLAN 6.5
+
+1. **Migratsiya `008_stocker_stations.sql`** + **"Ish joylari" kartasi** —
    bir martalik enrollment kod, printerlar, onlayn holat, tokenni bekor qilish.
-4. **API** `GET /api/project-users` — stocker 60 s da tortib o'z SQLite'iga
-   keshlaydi va login'ni **mahalliy** tekshiradi (panel o'chsa ham operatorlar
-   ishlayveradi).
-5. **Panel daemon boshqaruvi** — `projectControl.js` systemd **timer**ga
+2. Stocker: station tokeni bilan WS ulanish (hozir umumiy `SERVICE_TOKEN`),
+   `POST /api/station/enroll` bir martalik kod bo'yicha.
+3. Electron client: birinchi ochilganda kod so'raladi, token saqlanadi.
+4. **Panel daemon boshqaruvi** — `projectControl.js` systemd **timer**ga
    mo'ljallangan, stocker esa doimiy daemon. `timerUnit` bo'lmaganda faqat
-   start/stop/restart ko'rsatadigan qilib kichik tuzatish kerak.
+   start/stop/restart ko'rsatadigan qilib kichik tuzatish kerak (stocker'ni
+   `manageable-units.js` ga qo'shishdan oldin).
 
-Batafsil: [PLAN.md](PLAN.md) 6.4 va 6.5 bo'limlari.
-
-Ishni boshlashdan oldin sizdan kerak: **dastlabki 2 operatorning login
-nomlari va to'liq ismlari**.
+Batafsil: [PLAN.md](PLAN.md) 6.5 bo'limi.

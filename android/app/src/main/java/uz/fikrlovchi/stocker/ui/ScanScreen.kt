@@ -69,6 +69,7 @@ fun ScanScreen(
     onScanModeChange: (ScanMode) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenPair: () -> Unit,
+    onAuthExpired: () -> Unit,
 ) {
     var session by remember { mutableStateOf<Session?>(null) }
     var banner by remember { mutableStateOf<Banner?>(null) }
@@ -120,6 +121,7 @@ fun ScanScreen(
             .onSuccess { session = it; offline = false }
             .onFailure { e ->
                 if (e is ApiException && e.status == 404) session = null
+                else if (e is ApiException && e.authExpired) onAuthExpired()
                 else if (e is ApiException) offline = e.offline
             }
     }
@@ -139,6 +141,8 @@ fun ScanScreen(
                     feedback.buzz(Buzz.ERROR)
                     val apiErr = e as? ApiException
                     offline = apiErr?.offline == true
+                    // Token kuygan bo'lsa skan qilishdan ma'no yo'q — login ekrani.
+                    if (apiErr?.authExpired == true) onAuthExpired()
                     banner = Banner(
                         Palette.err,
                         if (apiErr?.offline == true) "ULANISH YO'Q" else "XATO",
@@ -159,7 +163,7 @@ fun ScanScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(config.operator, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(config.displayName, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     // Versiya shu yerda: qaysi build o'rnatilganini bir
                     // qarashda bilish uchun (yangi APK haqiqatan o'rnatildimi).

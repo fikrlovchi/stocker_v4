@@ -195,17 +195,50 @@ qaramasdan — odatda kechasi 3:00 da avtomatik bajariladi):
 node src/scripts/syncBarcodes.js
 ```
 
+## Operator autentifikatsiyasi (8-faza)
+
+Operatorlar **fikrlovchi-panel**da yaratiladi (loyiha sahifasi → "Operatorlar"),
+stocker esa ro'yxatni `GET /api/ingest/project-users` orqali **har 60 s** da
+tortib o'z SQLite'iga yozadi va login'ni **mahalliy** tekshiradi. Panel o'chib
+qolsa ham operatorlar ishlayveradi — faqat yangi operator qo'shish yoki parol
+tiklash to'xtaydi.
+
+```
+telefon ──POST /api/auth/login {login, password}──> stocker
+        <──────── {token, login, displayName} ─────
+telefon ──Authorization: Bearer <token>──────────> /api/scan ...
+```
+
+* Parol panel'dagi **bcrypt hash** bilan solishtiriladi (ochiq parol hech
+  qayerda saqlanmaydi va uzatilmaydi).
+* Token — 32 bayt tasodifiy qiymat, bazada faqat `sha256` hash'i. Muddati
+  `auth.tokenTtlDays` (30 kun) — har smenada qayta kirish shart emas.
+* Panel'da hisob **faolsizlantirilsa yoki o'chirilsa**, keyingi sinxronda uning
+  barcha tokenlari o'chadi — ilova kirish ekraniga qaytadi.
+* Bitta IP dan `auth.maxFailedAttempts` (5) marta xato parol → `auth.lockoutMs`
+  (5 daqiqa) qulf.
+* `/api/*` uchun **service token ham** qabul qilinadi (desktop client,
+  diagnostika, selfTest). Operator tokeni bilan kelganda so'rov tanasidagi
+  `operator` maydoni **e'tiborga olinmaydi** — nom tokendan olinadi.
+
+`.env` da qo'shimcha o'zgaruvchi kerak emas: ro'yxat manzili
+`PANEL_INGEST_URL` dan hosil qilinadi (`.../runs` → `.../project-users`).
+Panel boshqa manzilda bo'lsa `PANEL_USERS_URL` beriladi.
+
 ## Endpointlar
 
-`/health` ochiq, qolgani `X-Service-Token` talab qiladi. (`/api/*` uchun
-8-fazada operator JWT'si qo'shiladi.)
+`/health` va `/api/auth/login` ochiq; `/api/*` operator tokeni yoki
+`X-Service-Token` talab qiladi; `/debug/*` va `/print/*` faqat service token.
 
 | Endpoint | Vazifa |
 |---|---|
-| `POST /api/scan` | `{barcode, operator, stationId}` → skan natijasi + sessiya |
-| `GET /api/session` | `?operator=` yoki `?id=` — joriy sessiya (telefon qayta ulanganda). `&last=1` — yopilganini ham |
+| `POST /api/auth/login` | `{login, password, device}` → `{token, login, displayName}` |
+| `GET /api/auth/me` | Token hali yaroqlimi (ilova ochilganda) |
+| `POST /api/auth/logout` | Tokenni bekor qilish |
+| `POST /api/scan` | `{barcode, stationId}` → skan natijasi + sessiya |
+| `GET /api/session` | `?id=` yoki tokendagi operator. `&last=1` — yopilganini ham |
 | `POST /api/reprint` | `{jobId}` — yorliqni qayta chiqarish (yangi job yasaladi) |
-| `POST /api/session/cancel` | `{operator, reason}` — sessiyani bekor qilish, lock bo'shaydi |
+| `POST /api/session/cancel` | `{reason}` — sessiyani bekor qilish, lock bo'shaydi |
 | `GET /api/sessions` | Hozir kim nimani yig'yapti |
 | `GET /api/jobs?sessionId=` | Sessiyaning chop etish joblari |
 | `GET /print/queue` | Navbat statistikasi + ulangan stationlar + joblar |
@@ -223,6 +256,8 @@ node src/scripts/syncBarcodes.js
 | `GET /debug/barcode/:code` | Barcode bo'yicha qidiruv. `?all=1` — nomos buyurtmalar ham |
 | `GET /debug/product/:uuid` | MoySklad tovari: nomi, barcode'lari, kesh yoshi |
 | `GET /debug/ambiguous` | Bir xil barcode turli tovarlarga biriktirilgan holatlar |
+| `GET /debug/operators` | Keshdagi operatorlar: kim faol, ro'yxat qachon sinxronlangan |
+| `POST /debug/sync-operators` | Operatorlarni panel'dan darhol qayta tortish |
 | `POST /debug/sync-barcodes` | Butun assortimentni darhol qayta o'qish (odatda tunda avtomatik) |
 
 Misollar:
@@ -283,6 +318,7 @@ src/
 │  ├─ client.js           msFetch (429 retry), holat o'qish
 │  ├─ canceledOrders.js   bekor qilinganlar ro'yxati (1 so'rov)
 │  └─ productBarcodes.js  tovar barcode'lari (7 kunlik kesh, bulk + tungi to'liq)
+├─ auth/operators.js      panel'dan operator keshi, login, token, middleware
 ├─ scan/
 │  ├─ sessions.js         sessiya, lock, avtomatik tanlash, holat mashinasi
 │  └─ routes.js           /api/* (mobil ilova uchun)

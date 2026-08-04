@@ -22,5 +22,8 @@ export const env = {
     ingestUrl: process.env.PANEL_INGEST_URL || "",
     slug: process.env.PANEL_PROJECT_SLUG || "",
     apiKey: process.env.PANEL_API_KEY || "",
+    // Odatda PANEL_INGEST_URL'dan hosil qilinadi (.../runs → .../project-users),
+    // faqat panel boshqa manzilda bo'lsa qo'lda beriladi.
+    usersUrl: process.env.PANEL_USERS_URL || "",
   },
 };

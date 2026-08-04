@@ -1,9 +1,10 @@
 // Yig'ish API'si (mobil ilova uchun).
 //
-// 4-fazada autentifikatsiya hali yo'q: `operator` va `stationId` so'rov
-// tanasidan olinadi, butun router esa X-Service-Token bilan yopilgan.
-// 8-fazada operator JWT bilan almashadi (panel'dagi project_users),
-// station esa QR juftlash orqali beriladigan doimiy token bilan.
+// Autentifikatsiya (8-faza): operator tokeni bilan kelinsa `req.operator`
+// to'ladi va `operator` maydoni so'rov tanasidan OLINMAYDI — aks holda bir
+// telefon boshqa operator nomidan yig'a olardi. Service token bilan kelgan
+// so'rovlar (desktop client, diagnostika, selfTest) uchun eski tartib qoladi.
+// Station tokeni 6.5 bandda qo'shiladi.
 import express from "express";
 import {
   scan,
@@ -20,9 +21,13 @@ import {
 export function scanRouter() {
   const router = express.Router();
 
+  // Operator tokeni bo'lsa — u; bo'lmasa (service token) so'rov tanasidagi nom.
+  const who = (req, fromBody) => req.operator?.login || fromBody;
+
   // Skan. Javob mobil ilova to'g'ridan-to'g'ri ko'rsata oladigan shaklda.
   router.post("/scan", async (req, res) => {
-    const { barcode, operator, stationId } = req.body || {};
+    const { barcode, stationId } = req.body || {};
+    const operator = who(req, req.body?.operator);
     if (!operator) return res.status(400).json({ error: "operator kerak" });
     if (barcode === undefined || barcode === null) {
       return res.status(400).json({ error: "barcode kerak" });
@@ -41,7 +46,8 @@ export function scanRouter() {
   // ?last=1 — ochiq sessiya bo'lmasa oxirgi yopilganini qaytaradi (qayta
   // chiqarish uchun kerak: buyurtma yig'ilgach ham yorliqni qayta bosish mumkin).
   router.get("/session", (req, res) => {
-    const { operator, id, last } = req.query;
+    const { id, last } = req.query;
+    const operator = who(req, req.query.operator);
     if (id) {
       const s = getSession(String(id));
       return s ? res.json(s) : res.status(404).json({ error: "Sessiya topilmadi" });
@@ -66,7 +72,8 @@ export function scanRouter() {
   });
 
   router.post("/session/cancel", (req, res) => {
-    const { operator, reason } = req.body || {};
+    const { reason } = req.body || {};
+    const operator = who(req, req.body?.operator);
     if (!operator) return res.status(400).json({ error: "operator kerak" });
     const s = cancelSession(String(operator), reason);
     return s ? res.json(s) : res.status(404).json({ error: "Ochiq sessiya yo'q" });

@@ -252,7 +252,14 @@ tanlanadi, `project_telegram_links` orqali bog'lanadi va `.env` ga yoziladi.
 `uzumOrderToMC` bilan bir xil kalitlar: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`,
 `TELEGRAM_TOPIC_ID`.
 
-### 6.4 Operatorlar — panel'ga YANGI funksiya
+### 6.4 Operatorlar — panel'ga YANGI funksiya  ✅ bajarildi
+
+> Holat: panel'da `007_project_users.sql`, "Operatorlar" kartasi va
+> `GET /api/ingest/project-users`; stocker'da `005_operators.sql`,
+> `src/auth/operators.js` (60 s sinxron, bcrypt login, token) va Android
+> v0.3.0 kirish ekrani. Batafsil: `server/README.md` → "Operator
+> autentifikatsiyasi".
+
 
 Panel'da hozir foydalanuvchilar jadvali **yo'q** (faqat bitta admin). Boshida
 **2 ta operator**, lekin son cheklanmagan — panel'dan istalgancha qo'shiladi.
@@ -498,7 +505,7 @@ kutubxona. Jadvallar: `orders`, `items`, `barcodes`, `mc_barcodes`, `sessions`,
 | 6 | Domen + TLS | ✅ 8-bo'limda tayyor ko'rsatma |
 | 7 | Telegram | ✅ panel'dan |
 | 8 | Platforma | ✅ Android (Expo) |
-| **9** | **Dastlabki 2 operator** | ⏳ **sizdan** — login nomlari va to'liq ismlari |
+| **9** | **Dastlabki 2 operator** | ✅ `operator1`, `operator2` — panel'da yaratiladi, to'liq ismlar keyin tahrirlanadi |
 | **10** | **40×30 yorliqda nima majburiy** | ⏳ 3-fazada namuna chiqarib birga hal qilamiz |
 
 ---

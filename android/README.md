@@ -73,7 +73,7 @@ ruxsatini bering, so'ng APK'ni oching.
 ## Oqim
 
 ```
-Sozlash (server, kalit, operator)
+Kirish (server manzili, login, parol)
    ↓
 Ish joyini ulash — desktop ilovadagi QR'ni skanerlash
    ↓
@@ -142,8 +142,15 @@ mipmap'lar kerak emas.
 | Maydon | Qiymat |
 |---|---|
 | Server manzili | `https://uzum.fikrlovchi.uz/pack` |
-| Kalit | serverdagi `SERVICE_TOKEN` (8-fazada operator paroli bilan almashadi) |
-| Operator | ismingiz, masalan `aziz` |
+| Login | panel'da berilgan login, masalan `operator1` |
+| Parol | panel'da berilgan parol |
+
+Login va parol **fikrlovchi-panel**da yaratiladi (loyiha sahifasi →
+"Operatorlar"). Ilova `POST /api/auth/login` orqali token oladi va uni
+telefonda saqlaydi — har smenada qayta kirish shart emas. Panel'da hisob
+faolsizlantirilsa token kuyadi va kirish ekrani qaytadi. ⚙ tugmasi ham shu
+ekranni ochadi: server manzilini o'zgartirish yoki boshqa operator sifatida
+kirish uchun.
 
 So'ng **ish joyini ulash**: kompyuterdagi Stocker Print ilovasida
 "Telefonni ulash" tabini ochib, QR'ni skanerlang. Ulanmasa yorliqlar
@@ -165,20 +172,20 @@ navbatda kutib qoladi va chop etilmaydi.
 app/src/main/java/uz/fikrlovchi/stocker/
 ├─ MainActivity.kt          ekran yo'naltirish, kamera ruxsati
 ├─ data/
-│  ├─ Api.kt                OkHttp + JSON (8-fazada JWT shu yerda)
+│  ├─ Api.kt                OkHttp + JSON, `Authorization: Bearer <token>`
 │  ├─ Config.kt             SharedPreferences
 │  └─ Models.kt             server javoblari
 ├─ scan/ScannerView.kt      CameraX + ML Kit
 ├─ ui/
 │  ├─ Theme.kt              palitra, natija ranglari
 │  ├─ Common.kt             maydon va tugmalar
-│  ├─ SetupScreen.kt
+│  ├─ LoginScreen.kt        server manzili + login/parol (sozlama ham)
 │  ├─ PairScreen.kt
 │  └─ ScanScreen.kt         asosiy ekran
 └─ util/Feedback.kt         tebranish naqshlari
 ```
 
-## Hali yo'q (8-faza)
+## Hali yo'q
 
-- Operator **login/parol** bilan kiradi (hozir kalit + ism qo'lda kiritiladi)
-- Ish joyi uchun alohida doimiy token (hozir umumiy `SERVICE_TOKEN`)
+- Ish joyi uchun alohida doimiy token (hozir desktop client umumiy
+  `SERVICE_TOKEN` bilan ulanadi) — PLAN.md 6.5

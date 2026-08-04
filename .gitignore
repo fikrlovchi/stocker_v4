@@ -6,8 +6,13 @@ node_modules/
 oauth.json
 credentials.json
 
-# Ish vaqtida hosil bo'ladigan fayllar
-data/
+# Ish vaqtida hosil bo'ladigan fayllar.
+# DIQQAT: shablon `data/` bo'lmasligi kerak — u Android'ning
+# `.../stocker/data/` manba paketiga ham tushib, Api.kt/Config.kt/Models.kt
+# ni git'dan yashirib qo'ygan edi (klondan ilova yig'ilmaydi).
+/data/
+/server/data/
+/desktop/data/
 logs/
 *.db
 *.db-wal

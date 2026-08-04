@@ -34,15 +34,15 @@ import androidx.core.content.ContextCompat
 import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.Config
 import uz.fikrlovchi.stocker.data.ConfigStore
+import uz.fikrlovchi.stocker.ui.LoginScreen
 import uz.fikrlovchi.stocker.ui.Palette
 import uz.fikrlovchi.stocker.ui.PairScreen
 import uz.fikrlovchi.stocker.ui.PrimaryButton
 import uz.fikrlovchi.stocker.ui.ScanScreen
-import uz.fikrlovchi.stocker.ui.SetupScreen
 import uz.fikrlovchi.stocker.ui.StockerTheme
 import uz.fikrlovchi.stocker.util.Feedback
 
-private enum class Screen { SETUP, PAIR, SCAN }
+private enum class Screen { LOGIN, PAIR, SCAN }
 
 class MainActivity : ComponentActivity() {
 
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
                 var screen by remember {
                     mutableStateOf(
                         when {
-                            !store.load().isConfigured -> Screen.SETUP
+                            !store.load().isConfigured -> Screen.LOGIN
                             // Ish joyisiz yorliq chiqmaydi, shuning uchun
                             // birinchi navbatda juftlashga yuboramiz.
                             store.load().stationId.isBlank() -> Screen.PAIR
@@ -76,13 +76,16 @@ class MainActivity : ComponentActivity() {
 
                 Box(Modifier.fillMaxSize().background(Palette.bg)) {
                     when (screen) {
-                        Screen.SETUP -> SetupScreen(
+                        Screen.LOGIN -> LoginScreen(
                             initial = config,
-                            onSaved = { saved ->
+                            onLoggedIn = { saved ->
                                 config = saved
                                 store.save(saved)
                                 screen = if (saved.stationId.isBlank()) Screen.PAIR else Screen.SCAN
                             },
+                            // Allaqachon kirilgan bo'lsa (⚙ orqali kelingan) —
+                            // qaytish yo'li bo'lsin.
+                            onBack = if (config.isConfigured) ({ screen = Screen.SCAN }) else null,
                         )
 
                         Screen.PAIR -> RequireCamera {
@@ -111,8 +114,15 @@ class MainActivity : ComponentActivity() {
                                     config = next
                                     store.save(next)
                                 },
-                                onOpenSettings = { screen = Screen.SETUP },
+                                onOpenSettings = { screen = Screen.LOGIN },
                                 onOpenPair = { screen = Screen.PAIR },
+                                // Token kuygan (panel'da faolsizlantirilgan yoki
+                                // muddati o'tgan) — saqlangan tokenni tashlab,
+                                // kirish ekraniga qaytamiz.
+                                onAuthExpired = {
+                                    config = store.clearAuth()
+                                    screen = Screen.LOGIN
+                                },
                             )
                         }
                     }

@@ -1,6 +1,5 @@
-// stocker-server — 1-faza: buyurtma keshi va barcode indeksi.
-// Skan/sessiya (4-faza), print quvuri (5-faza) va autentifikatsiya (8-faza)
-// keyingi fazalarda qo'shiladi.
+// stocker-server — buyurtma keshi, barcode indeksi, skan/sessiya (4-faza),
+// print quvuri (5-faza) va operator autentifikatsiyasi (8-faza).
 import http from "node:http";
 import express from "express";
 import { config, env } from "./config.js";
@@ -22,6 +21,14 @@ import { expireStaleSessions } from "./scan/sessions.js";
 import { attachPrintHub, dispatchAll } from "./print/hub.js";
 import { jobPdfRouter, printAdminRouter } from "./print/routes.js";
 import { sweepStaleJobs, pruneOldJobs, stuckJobs } from "./print/jobs.js";
+import {
+  authRouter,
+  requireOperatorOrService,
+  startOperatorSync,
+  syncOperators,
+  listOperators,
+  pruneExpiredTokens,
+} from "./auth/operators.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -42,6 +49,7 @@ async function runRefresh(trigger) {
     sweepStaleJobs();
     dispatchAll();
     pruneOldJobs();
+    pruneExpiredTokens();
 
     const stuck = stuckJobs();
     if (stuck.length) {
@@ -133,6 +141,12 @@ debug.get("/barcode/:code", (req, res) => {
 
 debug.get("/ambiguous", (req, res) => res.json({ barcodes: findAmbiguousBarcodes(50) }));
 
+// Operator keshi: kim kirishga haqli va ro'yxat qachon yangilangan.
+debug.get("/operators", (req, res) => res.json({ operators: listOperators() }));
+
+// Panel'dan darhol qayta tortish (60 soniyani kutmasdan).
+debug.post("/sync-operators", async (req, res) => res.json(await syncOperators()));
+
 debug.get("/product/:uuid", (req, res) => {
   const product = getProduct(req.params.uuid);
   if (!product) return res.status(404).json({ error: "Tovar keshda yo'q" });
@@ -150,8 +164,11 @@ debug.post("/sync-barcodes", async (req, res) => {
 
 app.use("/debug", debug);
 
-// Yig'ish API. 8-fazagacha service token bilan yopiq (keyin operator JWT).
-app.use("/api", requireServiceToken, scanRouter());
+// Operator login/logout — token olishning o'zi tokensiz bo'lishi kerak.
+app.use("/api/auth", authRouter(express));
+
+// Yig'ish API. Operator tokeni yoki service token bilan.
+app.use("/api", requireOperatorOrService, scanRouter());
 
 // PDF yuklab olish — job'ning bir martalik tokeni bilan (service token EMAS),
 // shunda desktop client'larga maxfiy kalit tarqalmaydi.
@@ -175,6 +192,10 @@ server.listen(env.port, env.host, async () => {
     const s = lastRefresh.summary;
     return s ? `${s.eligible} ta buyurtma yig'ishga tayyor, ${s.cached} ta keshda` : "kesh hali yangilanmagan";
   });
+
+  // Operator ro'yxati: darhol bir marta, keyin har 60 s da.
+  await syncOperators();
+  startOperatorSync();
 
   await runRefresh("startup");
 

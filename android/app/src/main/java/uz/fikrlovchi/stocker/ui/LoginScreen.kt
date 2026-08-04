@@ -1,5 +1,6 @@
 package uz.fikrlovchi.stocker.ui
 
+import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,21 +26,27 @@ import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.Config
 
 /**
- * Sozlash: server, kalit, operator ismi.
+ * Kirish ekrani (8-faza): server manzili + operator login/paroli.
  *
- * 8-fazada bu ekran login (foydalanuvchi nomi + parol) bilan almashadi —
- * kalit o'rniga JWT olinadi. Boshqa ekranlar tegilmaydi.
+ * Operatorlar fikrlovchi-panel'da yaratiladi, stocker-server esa ro'yxatni
+ * o'zida keshlab tekshiradi. Token telefonda saqlanadi — har smenada qayta
+ * kiritish shart emas, lekin panel'da hisob faolsizlantirilsa token darhol
+ * kuyadi va shu ekran qaytadi.
+ *
+ * Bu ekran sozlama ekrani ham: ⚙ tugmasidan kelinganda server manzilini
+ * o'zgartirib, boshqa operator sifatida kirish mumkin.
  */
 @Composable
-fun SetupScreen(
+fun LoginScreen(
     initial: Config,
-    onSaved: (Config) -> Unit,
+    onLoggedIn: (Config) -> Unit,
+    onBack: (() -> Unit)? = null,
 ) {
     var serverUrl by remember { mutableStateOf(initial.serverUrl) }
-    var token by remember { mutableStateOf(initial.token) }
-    var operator by remember { mutableStateOf(initial.operator) }
+    var login by remember { mutableStateOf(initial.operator) }
+    var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var checking by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -52,7 +59,7 @@ fun SetupScreen(
     ) {
         Text("Stocker", color = Palette.text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
         Text(
-            "Yig'ish ilovasi — sozlash  ·  v${BuildConfig.VERSION_NAME}",
+            "Yig'ish ilovasi — kirish  ·  v${BuildConfig.VERSION_NAME}",
             color = Palette.muted,
             fontSize = 15.sp,
         )
@@ -65,17 +72,17 @@ fun SetupScreen(
             placeholder = "https://uzum.fikrlovchi.uz/pack",
         )
         Field(
-            label = "Kalit",
-            value = token,
-            onValueChange = { token = it },
-            placeholder = "serverdagi SERVICE_TOKEN",
-            secret = true,
+            label = "Login",
+            value = login,
+            onValueChange = { login = it },
+            placeholder = "masalan: operator1",
         )
         Field(
-            label = "Operator",
-            value = operator,
-            onValueChange = { operator = it },
-            placeholder = "ismingiz (masalan: aziz)",
+            label = "Parol",
+            value = password,
+            onValueChange = { password = it },
+            placeholder = "panel'da berilgan parol",
+            secret = true,
         )
 
         error?.let {
@@ -85,38 +92,48 @@ fun SetupScreen(
 
         Spacer(Modifier.height(28.dp))
         PrimaryButton(
-            text = "Tekshirish va saqlash",
+            text = "Kirish",
             modifier = Modifier.fillMaxWidth(),
-            loading = checking,
+            loading = busy,
             onClick = {
                 error = null
-                val candidate = Config(
-                    serverUrl = serverUrl.trim(),
-                    token = token.trim(),
-                    operator = operator.trim(),
-                    stationId = initial.stationId,
-                )
-                if (!candidate.isConfigured) {
+                val url = serverUrl.trim()
+                val user = login.trim().lowercase()
+                if (url.isBlank() || user.isBlank() || password.isBlank()) {
                     error = "Uchala maydon ham to'ldirilishi kerak"
                     return@PrimaryButton
                 }
-                checking = true
+                busy = true
                 scope.launch {
-                    // Saqlashdan oldin ulanishni tekshiramiz — noto'g'ri
-                    // sozlama bilan skan ekraniga o'tib, keyin har skanda
-                    // xato ko'rgandan yaxshiroq.
-                    runCatching { Api { candidate }.health() }
-                        .onSuccess { onSaved(candidate) }
-                        .onFailure { error = it.message ?: "Ulanib bo'lmadi" }
-                    checking = false
+                    // Tokensiz Api: login so'rovi sarlavhasiz ketadi.
+                    val probe = Config(serverUrl = url)
+                    runCatching { Api { probe }.login(user, password, Build.MODEL ?: "android") }
+                        .onSuccess { res ->
+                            onLoggedIn(
+                                initial.copy(
+                                    serverUrl = url,
+                                    authToken = res.token,
+                                    operator = res.login,
+                                    operatorName = res.displayName,
+                                )
+                            )
+                        }
+                        .onFailure { error = it.message ?: "Kirib bo'lmadi" }
+                    busy = false
                 }
             },
         )
 
+        if (onBack != null) {
+            Spacer(Modifier.height(12.dp))
+            GhostButton("Bekor qilish", onBack, Modifier.fillMaxWidth())
+        }
+
         Spacer(Modifier.height(24.dp))
         Text(
-            "Ish joyi (printer) keyingi ekranda QR orqali ulanadi. Ulanmasa " +
-                "yorliqlar navbatda kutib qoladi va chop etilmaydi.",
+            "Login va parolni panel beradi (loyiha sahifasi → Operatorlar). Ish joyi " +
+                "(printer) keyingi ekranda QR orqali ulanadi — ulanmasa yorliqlar navbatda " +
+                "kutib qoladi va chop etilmaydi.",
             color = Palette.muted,
             fontSize = 13.sp,
         )
