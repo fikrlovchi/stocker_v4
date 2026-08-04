@@ -1,32 +1,27 @@
 // ShK — kichik termo yorliq (Proton DTP-4207, 40×30 mm).
 //
-// Maket:
+// Maket (foydalanuvchi maketi bo'yicha, hammasi GORIZONTAL):
+//
 //   ┌──────────────────────────────────────────────┐
-//   │ Диспенсер для мыла                           │ ← MoySklad nomi: GORIZONTAL,
-//   │                                              │   yuqori tasmada, 3 qatorgacha
-//   ├──────────────────────────────────────────────┤
-//   │ S   ┌──────────┐   O          B              │
-//   │ K   │          │   r          a              │ ← qolganlari 90° aylantirilgan
-//   │ U   │    QR    │   d          r              │   (A5 varianti kabi)
-//   │     │          │   e          c              │
-//   │     └──────────┘   r          o              │
-//   │                    I          d              │
-//   │                    D          e              │
+//   │ Стакан керамическая        ┌──────────┐      │  1. NOM (MoySklad)
+//   │ белая 450 мл               │    QR    │      │  2. QR
+//   │                            └──────────┘      │
+//   │ 120103126               LYDISP3              │  3. BUYURTMA ID  4. SKU PREFIKSI
+//   │ 697JLYF00 6648                               │  5. SHTRIX (dumi qalin+yirik)
 //   └──────────────────────────────────────────────┘
-//     kichik   O'ZGARMAS   ASOSIY    kichik
 //
-// A5 (createProductsPdf) dan farqlari — foydalanuvchi talabi:
-//   • Tovar nomi AYLANTIRILMAYDI, yuqori tasmada gorizontal turadi va
-//     butun kenglikdan foydalanadi (aylantirilganda u QR bilan bir qatorda
-//     siqilib qolardi).
-//   • QR o'lchami O'ZGARMAS (`qrMm`) — yorliqdan yorliqqa farq qilmaydi.
-//   • Buyurtma ID da oxirgi 4 ta belgi QALIN EMAS (A5 da qalin edi).
-//   • Faqat shtrix-kodning oxirgi 4 tasi qalin.
-//   • SKU va shtrix-kod "yaxshi ko'rinishi" shart emas — ular kichik.
+// Maydonlar:
+//   1. Tovar nomi     — mc_product!E, 3 qatorgacha, avto o'lcham
+//   2. QR             — shtrix-kod, o'zgarmas o'lcham
+//   3. Buyurtma ID    — yirik, qalin dum YO'Q
+//   4. SKU prefiksi   — SKU ning birinchi chiziqqacha qismi, QALIN
+//                       LYDISP3-F006632-1        -> LYDISP3
+//                       ENVACCE-SS00589          -> ENVACCE
+//                       LIVAUTO-TT1612002063-ЧЕРН -> LIVAUTO
+//   5. Shtrix-kod     — oxirgi 4 belgi qalin va kattaroq
 //
-// Nom tasmasi balandligi matnga qarab o'zgaradi, lekin QR har doim sig'adigan
-// darajada cheklangan. Nom qisqa bo'lsa pastki tasma balandroq bo'ladi va
-// buyurtma ID yirikroq chiqadi.
+// Bandlar balandligi va o'rta bandning kenglik bo'linishi konfiguratsiyadan —
+// fizik sinovdan keyin kodga tegmasdan sozlash mumkin.
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import QRCode from "qrcode";
 import fs from "fs";
@@ -40,26 +35,37 @@ const DEFAULTS = {
   heightMm: 30,
   marginMm: 1.2,
   gapMm: 1.0,
-  qrMm: 15,           // O'ZGARMAS
+  qrMm: 15,             // o'zgarmas
   copies: 2,
-  // Ba'zi termo printer drayverlari bet yo'nalishini o'zi burib yuboradi
-  // (drayverdagi qog'oz o'lchami 40×30 emas, 30×40 deb belgilangan bo'lsa).
-  // Bunda yorliq 90° og'ib chiqadi. Buni drayverdan tuzatish afzal, lekin
-  // imkoni bo'lmasa shu yerdan oldindan burib yuborish mumkin:
-  // uzumPDFs .env da SHK_ROTATE=90 (0 | 90 | 180 | 270).
+
+  // Bandlar balandligi (mm). Yuqori band QR'dan kichik bo'lmaydi, qolgan
+  // ikkisi esa qolgan joyga NISBATAN taqsimlanadi — shuning uchun `qrMm`
+  // ni o'zgartirsa yetarli, boshqa o'lchamlarni qo'lda moslash kerak emas.
+  rowNameMm: 15,        // nom + QR
+  rowMidMm: 7,          // buyurtma ID + SKU prefiksi
+  rowBarcodeMm: 5.6,    // shtrix
+
+  // O'rta band kengligining buyurtma ID ga tegadigan ulushi (qolgani prefiksga)
+  midOrderShare: 0.55,
+
+  nameMaxLines: 4,
+  boldTail: 4,          // shtrix-kodning oxirgi nechta belgisi qalin
+  boldTailScale: 1.2,   // qalin dumning nisbiy o'lchami
+
+  // Ba'zi drayverlar bet yo'nalishini o'zi buradi (qog'oz o'lchami 40×30
+  // emas, 30×40 deb belgilangan bo'lsa). Drayverdan tuzatish afzal, lekin
+  // imkoni bo'lmasa: uzumPDFs .env da SHK_ROTATE=90 (0 | 90 | 180 | 270).
   pageRotate: Number(process.env.SHK_ROTATE) || 0,
-  boldTail: 4,        // shtrix-kodning oxirgi nechta belgisi qalin
-  nameMaxLines: 3,
-  skuMaxCols: 2,
-  showSku: true,
-  showBarcode: true,
-  colGapFactor: 1.1,  // aylantirilgan ustun kengligi = shrift balandligi × shu
-  nameLineFactor: 1.15,
+
+  // Tekshiruv rejimi: har maydonning hisoblangan chegarasi ramka bilan
+  // chiziladi. Siyoh ramkadan chiqsa hisob xato degani.
+  debugBoxes: false,
+
   font: {
-    name: { max: 9, min: 4 },       // ASOSIY
-    order: { max: 14, min: 6 },     // ASOSIY
-    sku: { max: 5, min: 3.5 },      // kichik
-    barcode: { max: 8, min: 4.5 },  // kichik
+    name: { max: 10, min: 4.5 },
+    order: { max: 18, min: 8 },
+    prefix: { max: 16, min: 7 },
+    barcode: { max: 11, min: 5.5 },
   },
 };
 
@@ -72,14 +78,22 @@ function merge(defaults, override) {
   return out;
 }
 
-// So'z bo'yicha o'raydi; bitta so'z sig'masa (uzun SKU kodi) belgi bo'yicha sindiradi.
-function wrap(font, text, size, maxLen) {
+/** SKU ning birinchi chiziqqacha bo'lgan qismi. */
+function skuPrefix(sku) {
+  const s = String(sku || "").trim();
+  if (!s) return "";
+  const i = s.indexOf("-");
+  return (i > 0 ? s.slice(0, i) : s).trim();
+}
+
+/** So'z bo'yicha o'raydi; bitta so'z sig'masa belgi bo'yicha sindiradi. */
+function wrap(font, text, size, maxWidth) {
   const lines = [];
   let current = "";
 
   const pushChars = (word) => {
     for (const ch of word) {
-      if (current && font.widthOfTextAtSize(current + ch, size) > maxLen) {
+      if (current && font.widthOfTextAtSize(current + ch, size) > maxWidth) {
         lines.push(current);
         current = ch;
       } else current += ch;
@@ -88,7 +102,7 @@ function wrap(font, text, size, maxLen) {
 
   for (const word of String(text).split(/\s+/).filter(Boolean)) {
     const candidate = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxLen) {
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
       current = candidate;
       continue;
     }
@@ -96,42 +110,56 @@ function wrap(font, text, size, maxLen) {
       lines.push(current);
       current = "";
     }
-    if (font.widthOfTextAtSize(word, size) <= maxLen) current = word;
+    if (font.widthOfTextAtSize(word, size) <= maxWidth) current = word;
     else pushChars(word);
   }
   if (current) lines.push(current);
   return lines;
 }
 
-// Qatorlar soni chegaradan oshmaydigan ENG KATTA o'lcham.
-// (O'lcham kichraysa qatorga ko'proq belgi sig'adi -> qatorlar kamayadi.)
-function fitBlock(font, text, maxLen, maxLines, max, min) {
-  if (!text) return { size: 0, lines: [] };
-  for (let size = max; size >= min; size -= 0.25) {
-    const lines = wrap(font, text, size, maxLen);
-    if (lines.length <= maxLines) return { size, lines };
+/** To'rtburchakka sig'adigan eng katta o'lchamda ko'p qatorli matn. */
+function fitParagraph(font, text, box, range, maxLines, lineFactor = 1.12) {
+  if (!text) return { size: 0, lines: [], truncated: false };
+  for (let size = range.max; size >= range.min; size -= 0.25) {
+    const lines = wrap(font, text, size, box.w);
+    if (lines.length <= maxLines && lines.length * size * lineFactor <= box.h) {
+      return { size, lines, truncated: false };
+    }
   }
-  const lines = wrap(font, text, min, maxLen);
-  return { size: min, lines: lines.slice(0, maxLines), truncated: lines.length > maxLines };
+  const size = range.min;
+  const allowed = Math.max(1, Math.min(maxLines, Math.floor(box.h / (size * lineFactor))));
+  const all = wrap(font, text, size, box.w);
+  const lines = all.slice(0, allowed);
+  let truncated = false;
+  if (all.length > allowed && lines.length) {
+    let last = lines[lines.length - 1];
+    while (last && font.widthOfTextAtSize(last + "…", size) > box.w) last = last.slice(0, -1);
+    lines[lines.length - 1] = last + "…";
+    truncated = true;
+  }
+  return { size, lines, truncated };
 }
 
-// Bir qatorga sig'adigan eng katta o'lcham.
-function fitLine(font, text, maxLen, max, min) {
+/** O'lchamlarni 0.25 qadamga tekislaydi — sonlar toza va takrorlanadigan bo'lsin. */
+const step = (v) => Math.floor(v * 4) / 4;
+
+/** Bir qatorga sig'adigan eng katta o'lcham (kenglik va balandlik bo'yicha). */
+function fitLine(font, text, box, range) {
   if (!text) return 0;
-  let size = max;
-  while (size > min && font.widthOfTextAtSize(text, size) > maxLen) size -= 0.25;
-  return size;
+  let size = step(Math.min(range.max, box.h / 1.05));
+  while (size > range.min && font.widthOfTextAtSize(text, size) > box.w) size -= 0.25;
+  return Math.max(size, range.min);
 }
 
 // product: { title: "<SKU>,<MoySklad nomi>", barcode: "<shtrix>,<buyurtma №>" }
 async function createShkSmall(product, options = {}) {
   const opt = merge(DEFAULTS, options);
 
-  const width = opt.widthMm * MM;
-  const height = opt.heightMm * MM;
-  const margin = opt.marginMm * MM;
+  const W = opt.widthMm * MM;
+  const H = opt.heightMm * MM;
+  const m = opt.marginMm * MM;
   const gap = opt.gapMm * MM;
-  const qrSize = opt.qrMm * MM;
+  const qr = opt.qrMm * MM;
 
   /* ---------------- matnlarni ajratamiz ---------------- */
 
@@ -139,213 +167,152 @@ async function createShkSmall(product, options = {}) {
   const ci = titleStr.indexOf(",");
   const sku = (ci >= 0 ? titleStr.slice(0, ci) : titleStr).trim();
   const mcName = ci >= 0 ? titleStr.slice(ci + 1).trim() : "";
-  // mc_product'da mos topilmasa nom bo'sh keladi — bunda SKU asosiy matn
-  // bo'ladi va alohida SKU ustuni chizilmaydi (takrorlanmasin).
+  // mc_product'da mos topilmasa nom bo'sh keladi — bunda to'liq SKU nom
+  // maydoniga chiqadi (yorliq nomsiz qolmasin).
   const nameText = mcName || sku;
-  const skuText = opt.showSku && sku && sku !== nameText ? sku : "";
+  const prefixText = skuPrefix(sku);
 
   const parts = String(product.barcode ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  const barcodeVal = opt.showBarcode ? parts[0] || "" : "";
+  const barcodeVal = parts[0] || "";
   const orderVal = parts.slice(1).join(",");
+
+  /* ---------------- maydonlar (chap-past burchak, kenglik, balandlik) ---------------- */
+
+  // Yuqori band QR'ni sig'dirishi kerak; qolgan balandlik o'rta va pastki
+  // bandlar orasida NISBATAN bo'linadi. Shu sababdan QR kattalashsa
+  // buyurtma ID va prefiks avtomatik pastga tushadi.
+  const usableH = H - m * 2;
+  const rowName = Math.max(opt.rowNameMm * MM, qr);
+  const restH = usableH - rowName - gap * 2;
+  const wantMid = opt.rowMidMm * MM;
+  const wantBar = opt.rowBarcodeMm * MM;
+  const scale = wantMid + wantBar > 0 ? restH / (wantMid + wantBar) : 0;
+  const rowMid = Math.max(0, wantMid * scale);
+  const rowBar = Math.max(0, wantBar * scale);
+
+  const yName = H - m - rowName;
+  const yMid = yName - gap - rowMid;
+  const yBar = yMid - gap - rowBar;
+
+  const innerW = W - m * 2;
+  const midOrderW = innerW * opt.midOrderShare;
+  const midPrefixW = innerW - midOrderW - gap;
+
+  const box = {
+    name: { x: m, y: yName, w: innerW - qr - gap, h: rowName },
+    qr: { x: W - m - qr, y: yName, w: qr, h: qr },
+    order: { x: m, y: yMid, w: midOrderW, h: rowMid },
+    prefix: { x: m + midOrderW + gap, y: yMid, w: midPrefixW, h: rowMid },
+    barcode: { x: m, y: yBar, w: innerW, h: rowBar },
+  };
 
   /* ---------------- shriftlar ---------------- */
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
-  const normalFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  // Tovar nomi kirillcha bo'lishi mumkin — Helvetica kirillni qo'llamaydi.
-  const textFont = await pdfDoc.embedFont(
+  const normal = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // Tovar nomi kirillcha bo'ladi — Helvetica kirillni qo'llamaydi.
+  const uni = await pdfDoc.embedFont(
     fs.readFileSync(path.resolve("./fonts/dejavu/ttf/DejaVuLGCSans.ttf"))
   );
 
-  /* ---------------- 1. Yuqori tasma: nom (gorizontal) ---------------- */
+  const qrDataUrl = await QRCode.toDataURL(barcodeVal || " ", { margin: 0 });
+  const qrImage = await pdfDoc.embedPng(Buffer.from(qrDataUrl.split(",")[1], "base64"));
 
-  // Nom tasmasi QR sig'adigan joyni yeb qo'ymasligi kerak.
-  const maxNameHeight = height - margin * 2 - gap - qrSize;
-  const nameLineLimit = Math.max(1, Math.floor(maxNameHeight / (opt.font.name.min * opt.nameLineFactor)));
-  const nameBlock = fitBlock(
-    textFont,
-    nameText,
-    width - margin * 2,
-    Math.min(opt.nameMaxLines, nameLineLimit),
-    opt.font.name.max,
-    opt.font.name.min
-  );
-  const nameHeight = nameBlock.lines.length * nameBlock.size * opt.nameLineFactor;
+  /* ---------------- o'lchamlarni hisoblaymiz ---------------- */
 
-  /* ---------------- 2. Pastki tasma: aylantirilgan ustunlar ---------------- */
+  const name = fitParagraph(uni, nameText, box.name, opt.font.name, opt.nameMaxLines);
+  const orderSize = fitLine(normal, orderVal, box.order, opt.font.order);
+  const prefixSize = fitLine(bold, prefixText, box.prefix, opt.font.prefix);
 
-  const bandTop = height - margin - nameHeight - (nameHeight ? gap : 0);
-  const bandHeight = bandTop - margin;          // aylantirilgan matn qator uzunligi
-  const bandCenterY = margin + bandHeight / 2;
-
-  const skuBlock = fitBlock(textFont, skuText, bandHeight, opt.skuMaxCols, opt.font.sku.max, opt.font.sku.min);
-  const orderSize = fitLine(normalFont, orderVal, bandHeight, opt.font.order.max, opt.font.order.min);
-  const barcodeSize = fitLine(normalFont, barcodeVal, bandHeight, opt.font.barcode.max, opt.font.barcode.min);
-
-  // ⚠ pdf-lib matnni (x, y) BASELINE nuqtasi atrofida buradi. 90° da glif
-  // balandligi −X tomonga cho'ziladi, ya'ni siyohning asosiy qismi
-  // baseline'ning CHAP tomonida qoladi. Ustunning chap chekkasi X bo'lishi
-  // uchun baseline X + ascent ga qo'yilishi kerak. Aynan shu hisobga
-  // olinmagani uchun buyurtma ID QR ustiga chiqib ketgan edi.
-  const ascentOf = (font, size) => font.heightAtSize(size, { descender: false });
-  const colWidthOf = (font, size) => font.heightAtSize(size) * opt.colGapFactor;
-
-  const skuColWidth = skuText ? colWidthOf(textFont, skuBlock.size) : 0;
-  const skuWidth = skuBlock.lines.length * skuColWidth;
-  const orderWidth = orderVal ? colWidthOf(normalFont, orderSize) : 0;
-  const barcodeWidth = barcodeVal ? colWidthOf(normalFont, barcodeSize) : 0;
-
-  // Guruh gorizontal markazlashadi — ortiqcha joy chapga to'planib qolmasin.
-  const groupWidth = skuWidth + (skuWidth ? gap : 0) + qrSize + gap + orderWidth + barcodeWidth;
-  const startX = margin + Math.max(0, (width - margin * 2 - groupWidth) / 2);
-
-  // Har elementning gorizontal chegarasi — ustma-ust tushishni ISBOTLAB
-  // tekshirish uchun (avvalgi versiyada buyurtma ID QR ustiga chiqib ketgan edi).
-  const layout = [];
-  {
-    let lx = startX;
-    if (skuText) {
-      layout.push({ el: "SKU", x0: lx, x1: lx + skuWidth });
-      lx += skuWidth + gap;
-    }
-    layout.push({ el: "QR", x0: lx, x1: lx + qrSize });
-    lx += qrSize + gap;
-    if (orderVal) {
-      layout.push({ el: "Buyurtma", x0: lx, x1: lx + orderWidth });
-      lx += orderWidth;
-    }
-    if (barcodeVal) layout.push({ el: "Shtrix", x0: lx, x1: lx + barcodeWidth });
-  }
-  const overlaps = [];
-  for (let i = 1; i < layout.length; i++) {
-    if (layout[i].x0 < layout[i - 1].x1 - 0.01) {
-      overlaps.push(`${layout[i - 1].el}↔${layout[i].el}`);
-    }
-  }
-  const last = layout[layout.length - 1];
+  // Shtrix: bosh qism oddiy, oxirgi `boldTail` belgi qalin va kattaroq.
+  const bcHead = barcodeVal.slice(0, -opt.boldTail);
+  const bcTail = barcodeVal.slice(-opt.boldTail);
+  const bcWidth = (s) =>
+    normal.widthOfTextAtSize(bcHead, s) + bold.widthOfTextAtSize(bcTail, s * opt.boldTailScale);
+  let bcSize = step(Math.min(opt.font.barcode.max, box.barcode.h / (1.05 * opt.boldTailScale)));
+  while (bcSize > opt.font.barcode.min && bcWidth(bcSize) > box.barcode.w) bcSize -= 0.25;
+  bcSize = Math.max(bcSize, opt.font.barcode.min);
 
   const metrics = {
-    nameSize: nameBlock.size,
-    nameLines: nameBlock.lines.length,
-    nameTruncated: Boolean(nameBlock.truncated),
+    nameSize: name.size,
+    nameLines: name.lines.length,
+    nameTruncated: name.truncated,
     orderSize: orderVal ? orderSize : null,
-    barcodeSize: barcodeVal ? barcodeSize : null,
-    skuSize: skuText ? skuBlock.size : null,
+    prefix: prefixText || null,
+    prefixSize: prefixText ? prefixSize : null,
+    barcodeSize: barcodeVal ? bcSize : null,
+    barcodeTailSize: barcodeVal ? +(bcSize * opt.boldTailScale).toFixed(2) : null,
     qrMm: opt.qrMm,
-    bandMm: +(bandHeight / MM).toFixed(1),
-    layout: layout.map((l) => ({ ...l, x0: +l.x0.toFixed(1), x1: +l.x1.toFixed(1) })),
-    overlaps,
-    rightEdgeMm: +((width - margin - last.x1) / MM).toFixed(2), // manfiy bo'lsa betdan chiqib ketgan
-    fits: overlaps.length === 0 && last.x1 <= width - margin + 0.01,
+    boxes: Object.fromEntries(
+      Object.entries(box).map(([k, b]) => [
+        k,
+        { x: +b.x.toFixed(1), y: +b.y.toFixed(1), w: +b.w.toFixed(1), h: +b.h.toFixed(1) },
+      ])
+    ),
+    // Ishchi balandlik yetarlimi (bandlar + oraliqlar betga sig'dimi)
+    fitsVertically: yBar >= m - 0.01,
   };
 
   /* ---------------- chizamiz ---------------- */
 
-  const qrDataUrl = await QRCode.toDataURL(parts[0] || " ", { margin: 0 });
-  const qrImage = await pdfDoc.embedPng(Buffer.from(qrDataUrl.split(",")[1], "base64"));
-
-  // Aylantirilgan blok: har qator yangi ustun, tasma bo'yicha markazda.
-  // `x` — ustunning CHAP CHEKKASI; baseline ascent'ga suriladi (yuqoriga q.).
-  const drawRotatedBlock = (page, block, font, x) => {
-    const colW = colWidthOf(font, block.size);
-    const asc = ascentOf(font, block.size);
-    block.lines.forEach((line, i) => {
-      const w = font.widthOfTextAtSize(line, block.size);
-      page.drawText(line, {
-        x: x + asc + i * colW,
-        y: bandCenterY - w / 2,
-        size: block.size,
-        font,
-        rotate: degrees(90),
-        color: rgb(0, 0, 0),
-      });
-    });
-    return x + block.lines.length * colW;
-  };
-
   for (let copy = 0; copy < Math.max(1, opt.copies); copy++) {
-    const page = pdfDoc.addPage([width, height]);
-    // Bet darajasidagi burilish: mazmun o'zgarmaydi, faqat chop etishda
-    // qanday yo'nalishda chiqishi belgilanadi (DEFAULTS.pageRotate izohiga q.).
+    const page = pdfDoc.addPage([W, H]);
     if (opt.pageRotate) page.setRotation(degrees(opt.pageRotate));
 
-    // Tekshiruv rejimi: har elementning HISOBLANGAN chegarasi ramka bilan
-    // chiziladi. Siyoh ramkadan chiqib ketsa — hisob xato degani.
-    // (Aynan shunday xato bo'lgan edi: aylantirilgan matnning baseline'i
-    // ustunning chap chekkasi deb hisoblangan, aslida siyoh chapga cho'zilgan.)
     if (opt.debugBoxes) {
-      for (const l of layout) {
+      for (const b of Object.values(box)) {
         page.drawRectangle({
-          x: l.x0,
-          y: margin,
-          width: l.x1 - l.x0,
-          height: bandTop - margin,
-          borderColor: rgb(0.55, 0.55, 0.55),
-          borderWidth: 0.3,
+          x: b.x, y: b.y, width: b.w, height: b.h,
+          borderWidth: 0.3, borderColor: rgb(0.75, 0.75, 0.75),
         });
       }
-      page.drawRectangle({
-        x: margin,
-        y: bandTop,
-        width: width - margin * 2,
-        height: height - margin - bandTop,
-        borderColor: rgb(0.55, 0.55, 0.55),
-        borderWidth: 0.3,
-      });
     }
 
-    // --- Nom: gorizontal, yuqori chapdan ---
-    let ny = height - margin;
-    for (const line of nameBlock.lines) {
-      ny -= nameBlock.size;
-      page.drawText(line, { x: margin, y: ny, size: nameBlock.size, font: textFont, color: rgb(0, 0, 0) });
-      ny -= nameBlock.size * (opt.nameLineFactor - 1);
+    // 1. Nom — maydonning yuqorisidan pastga
+    let ny = box.name.y + box.name.h;
+    for (const line of name.lines) {
+      ny -= name.size;
+      page.drawText(line, { x: box.name.x, y: ny, size: name.size, font: uni, color: rgb(0, 0, 0) });
+      ny -= name.size * 0.12;
     }
 
-    let x = startX;
+    // 2. QR
+    page.drawImage(qrImage, { x: box.qr.x, y: box.qr.y, width: qr, height: qr });
 
-    // --- SKU (kichik) ---
-    if (skuText) x = drawRotatedBlock(page, skuBlock, textFont, x) + gap;
-
-    // --- QR: o'zgarmas o'lcham, tasma markazida ---
-    page.drawImage(qrImage, { x, y: bandCenterY - qrSize / 2, width: qrSize, height: qrSize });
-    x += qrSize + gap;
-
-    // --- Buyurtma ID (asosiy) — QALIN DUM YO'Q ---
+    // 3. Buyurtma ID — maydon markazida vertikal bo'yicha (qalin dum YO'Q)
     if (orderVal) {
-      const w = normalFont.widthOfTextAtSize(orderVal, orderSize);
       page.drawText(orderVal, {
-        x: x + ascentOf(normalFont, orderSize),
-        y: bandCenterY - w / 2,
+        x: box.order.x,
+        y: box.order.y + (box.order.h - orderSize * 0.72) / 2,
         size: orderSize,
-        font: normalFont,
-        rotate: degrees(90),
+        font: normal,
         color: rgb(0, 0, 0),
       });
-      x += orderWidth;
     }
 
-    // --- Shtrix-kod (kichik) — oxirgi 4 ta belgi QALIN ---
-    if (barcodeVal) {
-      const head = barcodeVal.slice(0, -opt.boldTail);
-      const tail = barcodeVal.slice(-opt.boldTail);
-      const headWidth = normalFont.widthOfTextAtSize(head, barcodeSize);
-      const tailWidth = boldFont.widthOfTextAtSize(tail, barcodeSize);
-      const y = bandCenterY - (headWidth + tailWidth) / 2;
-      const bx = x + ascentOf(normalFont, barcodeSize);
-      if (head) {
-        page.drawText(head, { x: bx, y, size: barcodeSize, font: normalFont, rotate: degrees(90), color: rgb(0, 0, 0) });
-      }
-      page.drawText(tail, {
-        x: bx,
-        y: y + headWidth,
-        size: barcodeSize,
-        font: boldFont,
-        rotate: degrees(90),
+    // 4. SKU prefiksi — QALIN, o'ng tomonda
+    if (prefixText) {
+      page.drawText(prefixText, {
+        x: box.prefix.x,
+        y: box.prefix.y + (box.prefix.h - prefixSize * 0.72) / 2,
+        size: prefixSize,
+        font: bold,
         color: rgb(0, 0, 0),
       });
+    }
+
+    // 5. Shtrix-kod — oxirgi 4 belgi qalin va kattaroq, umumiy asos chiziqda
+    if (barcodeVal) {
+      const tailSize = bcSize * opt.boldTailScale;
+      const baseY = box.barcode.y + (box.barcode.h - tailSize * 0.72) / 2;
+      let x = box.barcode.x;
+      if (bcHead) {
+        page.drawText(bcHead, { x, y: baseY, size: bcSize, font: normal, color: rgb(0, 0, 0) });
+        x += normal.widthOfTextAtSize(bcHead, bcSize);
+      }
+      page.drawText(bcTail, { x, y: baseY, size: tailSize, font: bold, color: rgb(0, 0, 0) });
     }
   }
 

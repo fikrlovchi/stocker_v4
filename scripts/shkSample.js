@@ -2,8 +2,11 @@
 // chiqarib maketni ko'z bilan baholash uchun. Google Sheets kerak emas.
 //
 //   node scripts/shkSample.js
-//   node scripts/shkSample.js --qr=16 --lines=3     QR kattaroq, nom 3 qator
-//   node scripts/shkSample.js --sku=0               SKU'siz (nomga ko'proq joy)
+//   node scripts/shkSample.js --debug          maydon chegaralarini ramkada ko'rsatadi
+//   node scripts/shkSample.js --qr=12          QR o'lchami (mm)
+//   node scripts/shkSample.js --share=0.5      buyurtma ID / SKU prefiksi kenglik ulushi
+//   node scripts/shkSample.js --mid=10         o'rta band balandligi (mm)
+//   node scripts/shkSample.js --rotate=90      betni burib chiqarish
 //
 // Natija: uploads/shk_sample.pdf
 import fs from "fs";
@@ -21,30 +24,32 @@ const args = Object.fromEntries(
 // Haqiqiy ma'lumotdan olingan namunalar — eng og'ir holatlarni ham qamraydi.
 const samples = [
   { label: "odatiy", title: "LYDISP1-697JLYF006648-1,Диспенсер для мыла", barcode: "1000076067784,120185532" },
-  { label: "uzun SKU", title: "MT2-ELEGANT-SS-XXL-2026-EDITION-01,Ко'ylak Elegant SS", barcode: "1000057600931,119706915" },
-  { label: "qisqa SKU", title: "AB1,Стакан", barcode: "697JLYF006648,120103126" },
-  { label: "kirillcha nom", title: "KRUZH-450,Кружка керамическая белая 450 мл", barcode: "1000114076242,120185532" },
+  { label: "uzun prefiks", title: "LIVAUTO-TT1612002063-ЧЕРН,Автомобильный держатель", barcode: "1000057600931,119706915" },
+  { label: "chiziqsiz SKU", title: "AB1,Стакан", barcode: "697JLYF006648,120103126" },
+  { label: "kirillcha nom", title: "ENVACCE-SS00589,Кружка керамическая белая 450 мл", barcode: "1000114076242,120185532" },
   {
     label: "juda uzun nom",
-    title: "DISP-500A,Диспенсер для жидкого мыла автоматический сенсорный настенный 500 мл",
+    title: "LYDISP3-F006632-1,Диспенсер для жидкого мыла автоматический сенсорный настенный 500 мл",
     barcode: "1000076067791,119706915",
   },
-  { label: "nomsiz (#N/A)", title: "LYDISP1-697JLYF006648-1,", barcode: "697JLYF006648,120103126" },
+  { label: "nomsiz (#N/A)", title: "LYDISP1-006654-3,", barcode: "697JLYF006648,120103126" },
 ];
 
 const overrides = {};
 if (args.qr) overrides.qrMm = Number(args.qr);
 if (args.lines) overrides.nameMaxLines = Number(args.lines);
-if (args.sku === "0") overrides.showSku = false;
-if (args.barcode === "0") overrides.showBarcode = false;
-// --debug: har elementning hisoblangan chegarasini ramka bilan chizadi.
+if (args.share) overrides.midOrderShare = Number(args.share);
+if (args.mid) overrides.rowMidMm = Number(args.mid);
+if (args.rotate) overrides.pageRotate = Number(args.rotate);
+// --debug: har maydonning hisoblangan chegarasini ramka bilan chizadi.
 // Siyoh ramkadan chiqsa hisob xato — ko'z bilan darhol ko'rinadi.
 if (args.debug) overrides.debugBoxes = true;
 
 const merged = await PDFDocument.create();
-let lastMetrics = null;
-console.log("namuna          nom   qator  kesildi  buyurtma  shtrix  SKU   tasma  sig'di");
-console.log("─".repeat(78));
+let last = null;
+
+console.log("namuna           nom  qator kesildi buyurtma prefiks       shtrix  sig'di");
+console.log("─".repeat(76));
 
 for (const s of samples) {
   let m = {};
@@ -54,17 +59,16 @@ for (const s of samples) {
   pages.forEach((p) => merged.addPage(p));
 
   console.log(
-    `${s.label.padEnd(15)} ` +
-      `${String(m.nameSize ?? "-").padEnd(5)} ` +
-      `${String(m.nameLines).padEnd(6)} ` +
-      `${(m.nameTruncated ? "HA" : "yo'q").padEnd(8)} ` +
-      `${String(m.orderSize ?? "-").padEnd(9)} ` +
+    `${s.label.padEnd(16)} ` +
+      `${String(m.nameSize ?? "-").padEnd(4)} ` +
+      `${String(m.nameLines).padEnd(5)} ` +
+      `${(m.nameTruncated ? "HA" : "yo'q").padEnd(7)} ` +
+      `${String(m.orderSize ?? "-").padEnd(8)} ` +
+      `${(`${m.prefix ?? "-"} ${m.prefixSize ?? ""}`).padEnd(13)} ` +
       `${String(m.barcodeSize ?? "-").padEnd(7)} ` +
-      `${String(m.skuSize ?? "-").padEnd(5)} ` +
-      `${String(m.bandMm + "mm").padEnd(6)} ` +
-      `${m.fits ? "ha" : "YO'Q ⚠ " + m.overlaps.join(",")}`
+      `${m.fitsVertically ? "ha" : "YO'Q ⚠"}`
   );
-  lastMetrics = m;
+  last = m;
 }
 
 const outDir = path.join(process.cwd(), "uploads");
@@ -72,13 +76,12 @@ fs.mkdirSync(outDir, { recursive: true });
 const out = path.join(outDir, "shk_sample.pdf");
 fs.writeFileSync(out, Buffer.from(await merged.save()));
 
-if (lastMetrics) {
-  console.log("\n--- Oxirgi namunaning gorizontal joylashuvi (pt) ---");
-  for (const l of lastMetrics.layout) {
-    console.log(`  ${l.el.padEnd(9)} x: ${String(l.x0).padStart(6)} … ${String(l.x1).padStart(6)}`);
+if (last) {
+  console.log("\n--- Maydonlar (pt: x, y, kenglik × balandlik) ---");
+  for (const [name, b] of Object.entries(last.boxes)) {
+    console.log(`  ${name.padEnd(8)} x=${String(b.x).padStart(6)}  y=${String(b.y).padStart(6)}  ${String(b.w).padStart(6)} × ${b.h}`);
   }
-  console.log(`  o'ng chekkagacha: ${lastMetrics.rightEdgeMm} mm`);
-  console.log(`  ustma-ust tushish: ${lastMetrics.overlaps.length ? lastMetrics.overlaps.join(", ") : "YO'Q"}`);
+  console.log(`  shtrix dumi: ${last.barcodeTailSize}pt (asos ${last.barcodeSize}pt)`);
 }
 
 const size = merged.getPage(0).getSize();
