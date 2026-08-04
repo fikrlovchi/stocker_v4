@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import uz.fikrlovchi.stocker.BuildConfig
 import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.Config
 
@@ -50,7 +51,11 @@ fun SetupScreen(
             .padding(top = 64.dp, bottom = 32.dp)
     ) {
         Text("Stocker", color = Palette.text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-        Text("Yig'ish ilovasi — sozlash", color = Palette.muted, fontSize = 15.sp)
+        Text(
+            "Yig'ish ilovasi — sozlash  ·  v${BuildConfig.VERSION_NAME}",
+            color = Palette.muted,
+            fontSize = 15.sp,
+        )
         Spacer(Modifier.height(16.dp))
 
         Field(

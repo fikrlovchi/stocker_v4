@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import uz.fikrlovchi.stocker.BuildConfig
 import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.ApiException
 import uz.fikrlovchi.stocker.data.Config
@@ -160,7 +161,10 @@ fun ScanScreen(
             Column {
                 Text(config.operator, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    if (config.stationId.isNotBlank()) "📍 ${config.stationId}" else "⚠ ish joyi ulanmagan",
+                    // Versiya shu yerda: qaysi build o'rnatilganini bir
+                    // qarashda bilish uchun (yangi APK haqiqatan o'rnatildimi).
+                    (if (config.stationId.isNotBlank()) "📍 ${config.stationId}" else "⚠ ish joyi ulanmagan") +
+                        "  ·  v${BuildConfig.VERSION_NAME}",
                     color = if (config.stationId.isNotBlank()) Palette.muted else Palette.warn,
                     fontSize = 13.sp,
                 )

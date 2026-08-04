@@ -15,8 +15,8 @@ android {
         // Android 8.0+ — barcha zamonaviy telefonlar.
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     buildTypes {
@@ -41,6 +41,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Versiyani ekranda ko'rsatish uchun (BuildConfig.VERSION_NAME) —
+        // qaysi build o'rnatilganini bir qarashda bilish uchun kerak.
+        buildConfig = true
     }
 
     packaging {
