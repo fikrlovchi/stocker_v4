@@ -80,7 +80,28 @@
               <option value="noscale">noscale — aynan o'lchamda</option>
             </select>
           </label>
+          <label>ShK qog'oz yo'nalishi
+            <select id="shkOrientation">
+              <option value="">drayver sozlamasi (tavsiya)</option>
+              <option value="landscape">landscape — yotiq</option>
+              <option value="portrait">portrait — tik</option>
+            </select>
+          </label>
+          <label>BIG qog'oz yo'nalishi
+            <select id="bigOrientation">
+              <option value="">drayver sozlamasi (tavsiya)</option>
+              <option value="landscape">landscape — yotiq</option>
+              <option value="portrait">portrait — tik</option>
+            </select>
+          </label>
         </div>
+
+        <p class="muted">
+          Yo'nalishni faqat yorliq noto'g'ri burilib chiqsa o'zgartiring. Avval
+          Windows'dagi printer sozlamasidan qog'oz o'lchamini to'g'rilash afzal
+          (ShK uchun 40×30 mm). Server tomonidagi <code>SHK_ROTATE</code> bilan
+          birga ishlatmang — ikkisi qo'shilib yorliq teskari chiqadi.
+        </p>
 
         <label class="check">
           <input id="autoStart" type="checkbox" /> Windows bilan birga ishga tushsin

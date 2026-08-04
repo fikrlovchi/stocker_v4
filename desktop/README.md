@@ -4,10 +4,27 @@ Ish joyidagi Windows kompyuterda ishlaydigan tray ilova. Serverga WebSocket
 bilan ulanib turadi, kelgan print job'larni PDF sifatida yuklab olib termo
 printerdan chiqaradi va ACK qaytaradi.
 
-| Yorliq | Printer | Masshtab |
-|---|---|---|
-| **ShK** (40×30 mm) | Proton DTP-4207 | `noscale` — yorliq aynan shu o'lchamda yasalgan |
-| **BIG** (101.6×101.6 mm) | Gainsha GS-2408 | `fit` — Uzum labeli 166×242 mm, qog'ozga sig'diriladi |
+| Yorliq | Printer | Masshtab | Yo'nalish |
+|---|---|---|---|
+| **ShK** (40×30 mm) | Proton DTP-4207 | `noscale` — yorliq aynan shu o'lchamda yasalgan | drayver sozlamasi |
+| **BIG** (101.6×101.6 mm) | Gainsha GS-2408 | `shrink` — Uzum labeli 166×242 mm, qog'ozga sig'diriladi | drayver sozlamasi |
+
+Masshtab va **qog'oz yo'nalishi** ikkalasi ham Sozlamalar tabidan tanlanadi —
+drayver injiqligini qayta build qilmasdan hal qilish uchun.
+
+### Yorliq noto'g'ri burilib chiqsa
+
+Uch xil yechim bor, **shu tartibda** sinang — pastdagilari yuqoridagisi
+ishlamaganda:
+
+1. **Windows printer sozlamasi** — qog'oz o'lchamini to'g'rilash (ShK uchun
+   40×30 mm). Eng to'g'ri yechim: drayver o'zi burmaydigan bo'ladi.
+2. **Client'dagi yo'nalish** — Sozlamalar → "ShK qog'oz yo'nalishi" →
+   `landscape` yoki `portrait`.
+3. **Server tomonida** — `uzumpdfs/.env` da `SHK_ROTATE=90` (bet darajasidagi
+   `/Rotate`).
+
+> ⚠️ 2 va 3 ni **birga ishlatmang** — ikkisi qo'shilib yorliq teskari chiqadi.
 
 ## Nega shunday qilingan
 

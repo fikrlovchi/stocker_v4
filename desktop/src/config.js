@@ -26,6 +26,12 @@ const DEFAULTS = {
   // "fit" bilan xato qaytarishi mumkin. UI'dan almashtirsa bo'ladi.
   shkScale: "noscale",
   bigScale: "shrink",
+  // Qog'oz yo'nalishi. Bo'sh = drayver o'z sozlamasini ishlatadi (tavsiya).
+  // "portrait" / "landscape" — drayver betni noto'g'ri burib chiqarganda.
+  // Diqqat: server tomonidagi SHK_ROTATE bilan BIRGA ishlatilmasin, ikkisi
+  // qo'shilib yorliq teskari chiqadi. Bittasini tanlang.
+  shkOrientation: "",
+  bigOrientation: "",
   autoStart: true,
 };
 

@@ -26,22 +26,29 @@ async function listPrinters() {
 }
 
 // PDF baytlarini vaqtinchalik faylga yozib chop etadi, so'ng o'chiradi.
-async function printPdf(buffer, { printer, scale = "noscale", copies = 1, label = "job" }) {
+async function printPdf(buffer, { printer, scale = "noscale", orientation = "", copies = 1, label = "job" }) {
   if (!printer) throw new Error("Printer tanlanmagan");
 
   const file = path.join(TMP_DIR, `${label}_${Date.now()}.pdf`);
   fs.writeFileSync(file, buffer);
+
+  const opts = { printer, scale, copies: Math.max(1, copies) };
+  // Bo'sh bo'lsa umuman uzatilmaydi — shunda drayverning o'z sozlamasi
+  // kuchda qoladi. pdf-to-printer noto'g'ri qiymatda xato otadi.
+  if (orientation) opts.orientation = orientation;
+
   try {
-    await print(file, { printer, scale, copies: Math.max(1, copies) });
+    await print(file, opts);
   } catch (e) {
     // SumatraPDF'ning "Command failed" xabari sababni ko'rsatmaydi. Eng
     // ko'p uchraydigan sabablar: printer qog'ozi PDF betidan kichik,
-    // drayver masshtab rejimini qo'llamaydi, yoki printer oflayn.
+    // drayver masshtab/yo'nalish rejimini qo'llamaydi, yoki printer oflayn.
     throw new Error(
-      `Chop etib bo'lmadi (${printer}, masshtab: ${scale}).\n` +
-        `Sabablari: qog'oz o'lchami betdan kichik, drayver bu masshtab rejimini ` +
+      `Chop etib bo'lmadi (${printer}, masshtab: ${scale}` +
+        `${orientation ? `, yo'nalish: ${orientation}` : ""}).\n` +
+        `Sabablari: qog'oz o'lchami betdan kichik, drayver bu rejimni ` +
         `qo'llamaydi, yoki printer tayyor emas.\n` +
-        `Sozlamalarda masshtab rejimini almashtirib ko'ring.\n\n${e.message}`
+        `Sozlamalarda masshtab yoki yo'nalishni almashtirib ko'ring.\n\n${e.message}`
     );
   } finally {
     // Diagnostika kerak bo'lsa fayl qoladigan qilish uchun STOCKER_KEEP_PDF=1

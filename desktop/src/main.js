@@ -126,8 +126,8 @@ function describeFetchError(err, url) {
 function printerFor(target) {
   const cfg = getConfig();
   return target === "big"
-    ? { printer: cfg.bigPrinter, scale: cfg.bigScale }
-    : { printer: cfg.shkPrinter, scale: cfg.shkScale };
+    ? { printer: cfg.bigPrinter, scale: cfg.bigScale, orientation: cfg.bigOrientation }
+    : { printer: cfg.shkPrinter, scale: cfg.shkScale, orientation: cfg.shkOrientation };
 }
 
 function recordJob(entry) {
@@ -145,7 +145,7 @@ async function handleJob(job) {
     return;
   }
 
-  const { printer, scale } = printerFor(job.target);
+  const { printer, scale, orientation } = printerFor(job.target);
   if (!printer) {
     const msg = `${job.target.toUpperCase()} printeri tanlanmagan`;
     client.ack(job.id, false, msg);
@@ -165,7 +165,13 @@ async function handleJob(job) {
     if (!resp.ok) throw new Error(`PDF olinmadi: HTTP ${resp.status}`);
     const buffer = Buffer.from(await resp.arrayBuffer());
 
-    await printPdf(buffer, { printer, scale, copies: 1, label: `${job.target}_${job.orderId}` });
+    await printPdf(buffer, {
+      printer,
+      scale,
+      orientation,
+      copies: 1,
+      label: `${job.target}_${job.orderId}`,
+    });
 
     // Avval belgilaymiz, keyin ACK: ACK yo'lda yo'qolsa ham qayta chop
     // etilmasin (server qayta yuboradi, biz esa faqat ACK takrorlaymiz).
@@ -207,7 +213,7 @@ ipcMain.handle("config:save", (e, patch) => {
 ipcMain.handle("printers:list", () => listPrinters());
 
 ipcMain.handle("printers:test", async (e, target) => {
-  const { printer, scale } = printerFor(target);
+  const { printer, scale, orientation } = printerFor(target);
   if (!printer) return { ok: false, error: "Printer tanlanmagan" };
 
   // Sinov sahifasi serverdan olinadi — shunda bitta bosishda butun zanjir
@@ -226,8 +232,11 @@ ipcMain.handle("printers:test", async (e, target) => {
     if (!resp.ok) throw new Error(`Server HTTP ${resp.status}`);
 
     const buffer = Buffer.from(await resp.arrayBuffer());
-    await printPdf(buffer, { printer, scale, copies: 1, label: `test_${target}` });
-    pushLog(`Sinov sahifasi yuborildi: ${target.toUpperCase()} → ${printer}`);
+    await printPdf(buffer, { printer, scale, orientation, copies: 1, label: `test_${target}` });
+    pushLog(
+      `Sinov sahifasi yuborildi: ${target.toUpperCase()} → ${printer}` +
+        ` (masshtab ${scale}${orientation ? `, ${orientation}` : ""})`
+    );
     return { ok: true };
   } catch (err) {
     pushLog(`Sinov chop etish xatosi: ${err.message}`, "error");
