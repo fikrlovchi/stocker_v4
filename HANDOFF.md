@@ -191,8 +191,10 @@ eski yuklab olingan fayl bilan chalkashmasin.
 cd C:\Users\User\Desktop\Buyo\Server\Stocker\stocker_v4\desktop && npm start
 ```
 
-O'rnatgich: `npm run build` (Developer Mode yoqilgan bo'lishi kerak, aks holda
-`winCodeSign` symlink xatosi).
+O'rnatgich: `npm run build` → `desktop/dist/Stocker Print Setup 0.1.0.exe`
+(~86 MB, 2026-08-05 da yig'ilgan va tekshirilgan). Imzolanmagan, shuning uchun
+Windows SmartScreen "More info → Run anyway" so'raydi. Developer Mode yoqilgan
+bo'lishi kerak, aks holda `winCodeSign` symlink xatosi.
 
 ### Testlar
 
@@ -217,6 +219,12 @@ Panel'da stocker loyihasi **hali ro'yxatdan o'tmagan** (`projects` da faqat
    cd /root/fikrlovchi-panel && git pull && npm i && sudo systemctl restart fikrlovchi-panel
    ```
    `007_project_users.sql` boot'da o'zi qo'llanadi.
+
+   Panel kodida `stocker` allaqachon `manageable-units.js` ga qo'shilgan
+   (`stocker-server.service`, timer'siz daemon, `envPath=/root/stocker/server/.env`)
+   — loyiha sahifasida "Boshqaruv" kartasi **"Qayta ishga tushirish"** va
+   "To'xtatish/Davom ettirish" bilan, hamda "Muhit sozlamalari" kartasi
+   ko'rinadi.
 
 2. Stocker loyihasini panel'ga qo'shish va API kalitini olish:
    ```bash

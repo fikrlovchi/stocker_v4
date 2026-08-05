@@ -77,9 +77,20 @@ Sozlamalar `%APPDATA%\stocker-print-client\config.json` da saqlanadi
 npm run build
 ```
 
-`dist/` papkasida NSIS o'rnatgich paydo bo'ladi. O'rnatilgandan keyin
-PowerShell umuman kerak emas — ilova Start menyusidan ochiladi va Windows
-bilan birga tray'da ishga tushadi.
+`dist/` papkasida NSIS o'rnatgich paydo bo'ladi —
+**`dist/Stocker Print Setup 0.1.0.exe`** (~86 MB, ichida Electron ham bor).
+O'rnatilgandan keyin PowerShell umuman kerak emas — ilova Start menyusidan
+ochiladi va Windows bilan birga tray'da ishga tushadi.
+
+O'rnatgich `oneClick: false` bilan yasaladi: papkani tanlash mumkin va
+o'rnatish **administrator huquqisiz**, faqat joriy foydalanuvchi uchun ketadi.
+
+> **SmartScheen ogohlantirishi.** Fayl kod-imzo sertifikati bilan
+> imzolanmagan (bizda sertifikat yo'q), shuning uchun Windows birinchi
+> ishga tushirishda "Windows protected your PC" deb to'sadi:
+> **Batafsil (More info) → Baribir ishga tushirish (Run anyway)**.
+> Har bir yangi versiyada takrorlanadi. Yo'q qilish uchun to'lovli
+> code-signing sertifikati kerak bo'ladi.
 
 ### ⚠️ "Cannot create symbolic link: A required privilege is not held"
 
