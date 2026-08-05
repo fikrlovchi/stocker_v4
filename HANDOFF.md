@@ -21,7 +21,7 @@ Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
 | 7 · Android native (Kotlin + Compose) | ✅ | **v0.4.0** (brend palitrasi), tugmalar va chiroq sinovdan o'tdi |
 | 8a · Operator login (PLAN 6.4) | ✅ | panel karta + stocker kesh/login + Android kirish ekrani, **serverda sinalmadi** |
 | 8c · Brend (logo, palitra) | ✅ | `brand/`, Android v0.4.0 + desktop v0.2.0 ga qo'llandi |
-| **8d · stocker.uz domeni** | ⏳ | nginx konfigi va landing tayyor, **DNS va deploy qolgan** |
+| 8d · stocker.uz domeni | ✅ | DNS + nginx + TLS ishlayapti: `/` panel, `/pack/` API, `/about` landing |
 | **8b · Ish joylari kartasi (PLAN 6.5)** | ⏳ | **keyingi ish** — enrollment kod, station tokeni |
 | 9 · MoySklad "Собран" + `uzum_packing` + Telegram | ⏳ | |
 | 10 · Deploy yakuni (TLS, backlog tozalash) | ⏳ | qisman bajarilgan |
@@ -44,17 +44,29 @@ Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
 
 ## 3. Ochiq savollar — birinchi navbatda hal qilinadi
 
-1. **Operator login'ini deploy qilish va sinash** (kod tayyor, serverga
-   chiqarilmagan). Ketma-ketlik 6-bo'limda.
+1. **Operator login'ini telefonda sinash.** Server tomoni ishlayapti:
+   panel'dan operator sinxronlanmoqda (`/debug/operators` → `lastSync.ok:true`),
+   `POST https://stocker.uz/pack/api/auth/login` javob beradi. Qolgani —
+   APK'ni o'rnatib, haqiqiy hisob bilan kirib skan qilish.
 
-2. **HTTPS tasdiqlanmadi.**
-   ```bash
-   curl -sI https://uzum.fikrlovchi.uz/ | head -3
-   curl -s https://uzum.fikrlovchi.uz/pack/health
-   ```
-   nginx konfigi qo'yilgan va certbot ishlatilgan, lekin natija tekshirilmadi.
-   Ishlagach `PUBLIC_BASE_URL` ni ikkala `.env` ga qaytarish kerak
-   (uzumpdfs'dan `sed -i` bilan olib tashlangan edi).
+   > **Tuzoq:** panel API kaliti mos kelmasa `lastSync.error` da
+   > `panel HTTP 401 — API kalit noto'g'ri` chiqadi. Yechim — kalitni qayta
+   > yasash: `node scripts/seed-project.js stocker "..." --regenerate-key`,
+   > so'ng `.env` dagi `PANEL_API_KEY` ni **almashtirish** (qo'shish emas —
+   > takroriy qatorlar chalkashtiradi).
+
+2. **`uzumpdfs` da `PUBLIC_BASE_URL`.** Stocker tomonida qo'yildi
+   (`https://stocker.uz/pack`), lekin uzumpdfs'dan `sed -i` bilan olib
+   tashlangan edi — u yerda ham kerak bo'lsa qaytarish kerak.
+
+   HTTPS holati (2026-08-05 da tashqaridan tekshirilgan):
+
+   | Manzil | Natija |
+   |---|---|
+   | `https://stocker.uz/` | 302 → `/login`, panel ochiladi |
+   | `https://stocker.uz/pack/health` | `ok:true`, 525 buyurtma tayyor |
+   | `https://stocker.uz/about` | 200, landing |
+   | `https://uzum.fikrlovchi.uz/pack/health` | `ok:true` — eski manzil ham ishlayveradi |
 
 3. **Dashboard paroli.** `uzumPDFs` ga `dotenv` qo'shilgandan keyin
    `DASHBOARD_PASSWORD` holati aniqlanmadi. Tekshirish:
@@ -272,12 +284,8 @@ Panel ildizda turgani muhim: u havolalarni ildizdan yasaydi, shuning uchun
 `/panel/` ostiga qo'yish uchun kerak bo'lgan `BASE_PATH` ishi **endi kerak
 emas** — muammo o'z-o'zidan yopildi.
 
-> **DNS holati (2026-08-05, 15:20):** `stocker.uz` hali tarqalmagan —
-> ommaviy DNS'larda (8.8.8.8, 1.1.1.1) hatto NS yozuvlari ham yo'q
-> (`DNS name does not exist`). `.uz` zonasida delegatsiya bir necha soat
-> olishi mumkin. Tekshirish: `dig +short stocker.uz` yoki
-> `nslookup stocker.uz 8.8.8.8`. Javob `64.226.69.129` bo'lgach, pastdagi
-> qadamlar bajariladi. Konfig va landing repo'da tayyor:
+> **Bajarildi 2026-08-05 da.** Pastdagi qadamlar tarixi uchun qoldirildi —
+> qayta o'rnatish yoki ikkinchi server ko'tarish kerak bo'lsa asqotadi. Konfig va landing repo'da tayyor:
 [deploy/nginx-stocker.uz.conf](deploy/nginx-stocker.uz.conf),
 [web/landing/index.html](web/landing/index.html).
 
