@@ -1,6 +1,7 @@
 package uz.fikrlovchi.stocker.ui
 
 import android.os.Build
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,11 +18,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import uz.fikrlovchi.stocker.BuildConfig
+import uz.fikrlovchi.stocker.R
 import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.Config
 
@@ -57,7 +59,14 @@ fun LoginScreen(
             .padding(horizontal = 24.dp)
             .padding(top = 64.dp, bottom = 32.dp)
     ) {
-        Text("Stocker", color = Palette.text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+        // Yozuvli logotip (brand/logo-text.png dan yasalgan, foni shaffof) —
+        // panel va desktop client'da ham xuddi shu joyda: yuqori chapda.
+        Image(
+            painter = painterResource(R.drawable.logo_wordmark),
+            contentDescription = "Stocker",
+            modifier = Modifier.height(38.dp),
+        )
+        Spacer(Modifier.height(6.dp))
         Text(
             "Yig'ish ilovasi — kirish  ·  v${BuildConfig.VERSION_NAME}",
             color = Palette.muted,

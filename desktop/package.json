@@ -1,13 +1,13 @@
 {
   "name": "stocker-print-client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Stocker yig'ish tizimi uchun Windows print client (ShK + BIG)",
   "main": "src/main.js",
   "type": "commonjs",
   "author": "fikrlovchi",
   "scripts": {
     "start": "electron .",
-    "icons": "node scripts/makeIcon.js",
+    "icons": "node ../brand/scripts/makeIcons.js",
     "build": "electron-builder --win --x64"
   },
   "license": "ISC",

@@ -147,6 +147,25 @@ function resize(img, size) {
   return { width: size, height: size, data: out };
 }
 
+// Kvadrat bo'lmagan manbani shaffof to'ldirish bilan kvadratga keltiradi.
+// Cho'zish EMAS: logotip nisbati o'zgarmasligi kerak.
+function toSquare(img) {
+  if (img.width === img.height) return img;
+  const side = Math.max(img.width, img.height);
+  const out = Buffer.alloc(side * side * 4);
+  const dx = Math.round((side - img.width) / 2);
+  const dy = Math.round((side - img.height) / 2);
+  for (let y = 0; y < img.height; y++) {
+    img.data.copy(
+      out,
+      ((y + dy) * side + dx) * 4,
+      y * img.width * 4,
+      (y + 1) * img.width * 4
+    );
+  }
+  return { width: side, height: side, data: out };
+}
+
 // Ikonkani shaffof kanvas markaziga joylaydi (adaptive ikonka uchun:
 // chetdagi ~27% kesilishi mumkin, shuning uchun logotip kichraytiriladi).
 function inset(img, canvasSize, ratio) {
@@ -163,6 +182,62 @@ function inset(img, canvasSize, ratio) {
     );
   }
   return { width: canvasSize, height: canvasSize, data: out };
+}
+
+// Qora fonni shaffofga aylantiradi (wordmark uchun: manba faylda fon qora,
+// lekin uni turli sathlarda ishlatish kerak). Chizmaning O'ZI tegilmaydi:
+// har piksel qora ustida ko'rinadigan rang deb qaraladi, alfa eng yorqin
+// kanaldan olinadi va rang shu alfaga qayta bo'linadi — natijada asl tus va
+// yumshoq chetlar saqlanadi.
+function unblack(img) {
+  const out = Buffer.alloc(img.data.length);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const r = img.data[i], g = img.data[i + 1], b = img.data[i + 2];
+    const a = Math.max(r, g, b);
+    out[i + 3] = Math.round(a * (img.data[i + 3] / 255));
+    if (a === 0) continue;
+    out[i] = Math.min(255, Math.round((r / a) * 255));
+    out[i + 1] = Math.min(255, Math.round((g / a) * 255));
+    out[i + 2] = Math.min(255, Math.round((b / a) * 255));
+  }
+  return { width: img.width, height: img.height, data: out };
+}
+
+// Kenglik bo'yicha kichraytirish (wordmark kvadrat emas).
+function resizeToWidth(img, width) {
+  const height = Math.max(1, Math.round((img.height / img.width) * width));
+  const out = Buffer.alloc(width * height * 4);
+  const sx = img.width / width;
+  const sy = img.height / height;
+
+  for (let y = 0; y < height; y++) {
+    const y0 = Math.floor(y * sy);
+    const y1 = Math.max(y0 + 1, Math.floor((y + 1) * sy));
+    for (let x = 0; x < width; x++) {
+      const x0 = Math.floor(x * sx);
+      const x1 = Math.max(x0 + 1, Math.floor((x + 1) * sx));
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let yy = y0; yy < y1 && yy < img.height; yy++) {
+        for (let xx = x0; xx < x1 && xx < img.width; xx++) {
+          const i = (yy * img.width + xx) * 4;
+          const alpha = img.data[i + 3] / 255;
+          r += img.data[i] * alpha;
+          g += img.data[i + 1] * alpha;
+          b += img.data[i + 2] * alpha;
+          a += img.data[i + 3];
+          n++;
+        }
+      }
+      const d = (y * width + x) * 4;
+      const av = a / n;
+      const k = av > 0 ? 255 / av : 0;
+      out[d] = Math.round((r / n) * k);
+      out[d + 1] = Math.round((g / n) * k);
+      out[d + 2] = Math.round((b / n) * k);
+      out[d + 3] = Math.round(av);
+    }
+  }
+  return { width, height, data: out };
 }
 
 /* ==================== PNG / ICO yozish ==================== */
@@ -232,7 +307,7 @@ function writeIco(pngBuf, size) {
 
 /* ==================== ishga tushirish ==================== */
 
-module.exports = { readPng, resize, inset, writePng, writeIco };
+module.exports = { readPng, resize, resizeToWidth, inset, toSquare, unblack, writePng, writeIco };
 
 // Sinov uchun boshqa fayldan chaqirilganda ishga tushmaydi.
 if (require.main !== module) return;
@@ -247,14 +322,18 @@ if (!fs.existsSync(SOURCE)) {
   process.exit(1);
 }
 
-const src = readPng(SOURCE);
-if (src.width !== src.height) {
-  console.warn(`⚠️  Manba kvadrat emas (${src.width}×${src.height}) — ikonkalar cho'ziladi.`);
+const original = readPng(SOURCE);
+if (original.width !== original.height) {
+  console.log(
+    `Manba kvadrat emas (${original.width}×${original.height}) — ` +
+      "shaffof to'ldirish bilan kvadratga keltirildi (cho'zilmadi)."
+  );
 }
-if (src.width < 512) {
-  console.warn(`⚠️  Manba kichik (${src.width}px) — 512px yoki kattaroq bo'lgani yaxshi.`);
+if (Math.max(original.width, original.height) < 512) {
+  console.warn(`⚠️  Manba kichik (${original.width}px) — 512px yoki kattaroq bo'lgani yaxshi.`);
 }
-console.log(`Manba: ${path.relative(ROOT, SOURCE)} (${src.width}×${src.height})`);
+const src = toSquare(original);
+console.log(`Manba: ${path.relative(ROOT, SOURCE)} → ${src.width}×${src.height}`);
 
 const write = (rel, buf) => {
   const file = path.join(ROOT, rel);
@@ -313,9 +392,27 @@ write(
   )
 );
 
+/* ---------- wordmark (yozuvli logotip) ---------- */
+
+const WORDMARK = path.join(ROOT, "brand", "logo-text.png");
+if (fs.existsSync(WORDMARK)) {
+  // Manba faylda fon qora — shaffof qilamiz, shunda bir xil fayl to'q va
+  // yorug' sathlarda ham ishlaydi.
+  const wm = unblack(readPng(WORDMARK));
+  console.log(`\nWordmark: brand/logo-text.png (${wm.width}×${wm.height}, fon shaffof qilindi)`);
+
+  // Interfeys sarlavhalarida ~24–40px balandlikda ko'rsatiladi; 2× zaxira bilan.
+  write("brand/generated/logo-wordmark.png", writePng(resizeToWidth(wm, 800)));
+  write("desktop/src/assets/wordmark.png", writePng(resizeToWidth(wm, 600)));
+  // nodpi: Android o'zi masshtablamaydi, o'lchamni Compose beradi.
+  write("android/app/src/main/res/drawable-nodpi/logo_wordmark.png", writePng(resizeToWidth(wm, 800)));
+} else {
+  console.warn("\n⚠️  brand/logo-text.png topilmadi — wordmark yasalmadi.");
+}
+
 console.log(
   "\nTayyor. Keyingi qadam:\n" +
-    "  1. android/app/src/main/res/drawable/ic_launcher_foreground.xml ni o'chirish\n" +
-    "     (endi mipmap PNG ishlatiladi, vektor qayta chizilgan variant kerak emas)\n" +
+    "  1. brand/generated/logo-wordmark.png ni panel repo'siga ko'chirish:\n" +
+    "     fikrlovchi_project_panel/public/logo-wordmark.png\n" +
     "  2. APK va desktop o'rnatgichini qayta yig'ish"
 );

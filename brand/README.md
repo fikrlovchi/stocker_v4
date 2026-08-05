@@ -46,16 +46,37 @@ Kirish fayli (git'da bo'lishi kerak):
 
 | Fayl | Nima | Talab |
 |---|---|---|
-| `brand/logo-icon.png` | kvadrat ikonka varianti (yashil fon + qora "S") | 8-bitli oddiy (non-interlaced) PNG, ≥512×512 |
+| `brand/logo-icon.png` | ikonka varianti (yashil fon + qora "S") | 8-bitli oddiy (non-interlaced) PNG, ≥512×512 |
+| `brand/logo-text.png` | yozuvli logotip (wordmark) | shu talablar; fon qora bo'lsa ham bo'ladi |
+
+Ikkisi ham joyida (761×802 va 1411×359). Ikonka kvadrat bo'lmagani uchun
+**shaffof to'ldirish** bilan kvadratga keltiriladi — cho'zilmaydi, nisbati
+saqlanadi. Wordmark foni esa shaffof qilinadi (`unblack`): har piksel qora
+ustidagi rang deb qaraladi, alfa eng yorqin kanaldan olinadi va rang shu
+alfaga qayta bo'linadi. Natijada to'q sathda **aynan asl ko'rinish**, lekin
+karta foni (#141414) ustida ham qora to'rtburchak chiqmaydi.
+
+> Wordmark faqat **to'q** sathlar uchun: kulrang harflar shaffoflik orqali
+> ifodalanadi, yorug' fonda ular oqarib ketadi. Brendda kunduzgi tema yo'q,
+> shuning uchun muammo emas.
 
 Skript yasaydi:
 
-* `desktop/src/assets/icon.ico` (256) va `tray.png` (32)
+* `desktop/src/assets/icon.ico` (256), `tray.png` (32) va `wordmark.png` (600)
 * `android/.../res/mipmap-*/ic_launcher.png` — logotip to'liq holda
 * `android/.../res/mipmap-*/ic_launcher_foreground.png` — adaptive ikonka
   uchun logotip 108dp kanvasning markazida, 72dp xavfsiz maydonda (launcher
   chetini qirqsa ham "S" butun qoladi)
 * `mipmap-anydpi-v26/ic_launcher.xml` — foreground shu PNG'ga ko'rsatiladi
+* `android/.../res/drawable-nodpi/logo_wordmark.png` — kirish ekranidagi wordmark
+* `brand/generated/logo-wordmark.png` — panel repo'siga ko'chirish uchun
+  (`fikrlovchi_project_panel/public/logo-wordmark.png`)
+
+Wordmark interfeyslarda bir xil joyda turadi — **yuqori chapda**: panel
+sarlavhasida (`topbar.ejs`), desktop client sarlavhasida va Android kirish
+ekranining tepasida. Skan ekranida ataylab yo'q: u yerda yuqori chap burchak
+operator ismi va ish joyi uchun kerak, ish paytida brend emas, kim nima
+yig'ayotgani muhim.
 
 Tashqi kutubxona yo'q: PNG o'qish/yozish va maydon bo'yicha kichraytirish
 skript ichida, faqat `zlib` bilan. Sabab — build mashinasiga `sharp`/`canvas`
@@ -72,16 +93,14 @@ Qo'llanishi:
 
 | Joy | Fayl |
 |---|---|
-| Android adaptive ikonka | `android/.../res/drawable/ic_launcher_foreground.xml` (vektor, shu belgidan) |
-| Desktop ilova/o'rnatgich | `desktop/src/assets/icon.ico` (`npm run icons` bilan yasaladi) |
-| Desktop tray | `desktop/src/assets/tray.png` |
+| stocker.uz landing | `web/landing/index.html` (inline SVG) |
+| Favicon (SVG kerak bo'lganda) | `stocker-mark.svg` |
 
-> ⚠️ Bu SVG'lar original logotipdan **qayta chizilgan** — hozircha
-> `brand/logo-icon.png` qo'yilmagani uchun ikonkalar shu chizmadan yasalgan.
-> Original fayl qo'yilib `makeIcons.js` ishga tushirilgach, ikonkalar
-> **aynan original** logotipdan yasaladi va bu qayta chizma faqat SVG kerak
-> bo'lgan joylar uchun (landing, hujjatlar) qoladi. Original vektor bo'lsa,
-> `stocker-logo.svg` / `stocker-wordmark.svg` nomi bilan qo'yish ham mumkin.
+> Bu SVG'lar original logotipdan **qayta chizilgan** va faqat vektor kerak
+> bo'lgan joylarda ishlatiladi (landing sahifasi, hujjatlar, favicon SVG).
+> Ilova ikonkalari esa **original rasm fayllardan** yasaladi — yuqoridagi
+> jadvalga qarang. Original vektor (SVG/AI) bo'lsa, `stocker-logo.svg` nomi
+> bilan qo'yilsa, landing ham unga o'tadi.
 
 ## Tipografika
 

@@ -11,12 +11,12 @@ android {
 
     defaultConfig {
         applicationId = "uz.fikrlovchi.stocker"
-        // minSdk 26: faqat adaptive ikonka ishlatiladi (PNG mipmap'lar yo'q).
-        // Android 8.0+ — barcha zamonaviy telefonlar.
+        // minSdk 26: adaptive ikonka (Android 8.0+) — barcha zamonaviy telefonlar.
+        // Ikonkalar brand/scripts/makeIcons.js bilan original logotipdan yasaladi.
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
     }
 
     buildTypes {
