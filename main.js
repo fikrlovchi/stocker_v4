@@ -48,7 +48,17 @@ function parseCookies(req) {
     return out;
 }
 
+// stocker.uz da bu servis `/pdf/` ostida turadi va kirish PANEL sessiyasi
+// bilan nginx `auth_request` orqali tekshiriladi (bitta dastur, bitta parol).
+// O'sha holatda o'z parolimizni yana so'rash ikkinchi kirish oynasi degani —
+// shuning uchun PANEL_AUTH=1 bo'lsa tekshiruv nginx'ga qoldiriladi.
+//
+// Xavfsizlik sharti: PANEL_AUTH=1 bo'lganda 4040-port tashqariga chiqmasligi
+// kerak — servis 127.0.0.1 da tinglaydi, ya'ni nginx'dan boshqa yo'l yo'q.
+const PANEL_AUTH = process.env.PANEL_AUTH === "1";
+
 function requireAuth(req, res, next) {
+    if (PANEL_AUTH) return next();
     if (parseCookies(req).uauth === AUTH_TOKEN) return next();
     if (req.method === "GET" && (req.headers.accept || "").includes("text/html")) {
         return res.redirect("/login");
@@ -56,7 +66,11 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ status: "error", message: "auth kerak" });
 }
 
+// Brend fayllari (stocker_v4/brand/ dan ko'chirilgan) — tokensiz beriladi,
+// ular kirish sahifasida ham kerak.
 app.get("/logo.svg", (req, res) => res.sendFile(path.join(publicDir, "logo.svg")));
+app.get("/logo-icon.png", (req, res) => res.sendFile(path.join(publicDir, "logo-icon.png")));
+app.get("/logo-wordmark.png", (req, res) => res.sendFile(path.join(publicDir, "logo-wordmark.png")));
 app.get("/login", (req, res) => res.sendFile(path.join(publicDir, "login.html")));
 app.post("/login", (req, res) => {
     if ((req.body?.password || "") === DASHBOARD_PASSWORD) {
@@ -582,6 +596,15 @@ app.get("/history", requireAuth, (req, res) => res.json(loadHistory()));
 const HOST = process.env.HOST || "0.0.0.0";
 app.listen(4040, HOST, () => {
     console.log(`Server running on ${HOST}:4040`);
+    // PANEL_AUTH kirish tekshiruvini nginx'ga topshiradi. Agar servis shu
+    // holatda tashqi interfeysda tinglasa, dashboard butunlay parolsiz
+    // ochilib qoladi — shuning uchun baland ovozda ogohlantiramiz.
+    if (PANEL_AUTH && HOST !== "127.0.0.1" && HOST !== "localhost") {
+        console.warn(
+            `⚠️  PANEL_AUTH=1, lekin HOST=${HOST} — dashboard tashqaridan PAROLSIZ ochiladi! ` +
+            "HOST=127.0.0.1 qilib qo'ying (nginx orqali kirish saqlanadi)."
+        );
+    }
 });
 
 

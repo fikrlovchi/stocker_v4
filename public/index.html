@@ -3,34 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Uzum PDF Dashboard</title>
-<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<title>Yorliqlar — Stocker</title>
+<link rel="icon" type="image/png" href="logo-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: light dark; --bg:#0f172a; --card:#1e293b; --line:#334155;
-    --txt:#e2e8f0; --mut:#94a3b8; --accent:#38bdf8; --accent2:#2ecc8f;
-    --grad:linear-gradient(135deg,#2ecc8f,#38bdf8); }
+  /* Stocker brend palitrasi — stocker_v4/brand/README.md */
+  :root { color-scheme: dark; --bg:#0a0a0a; --card:#141414; --line:#3a3a3a;
+    --txt:#e6e6e6; --mut:#6b6b6b; --accent:#00ff8c; --accent2:#00cc6a;
+    --on-accent:#0a0a0a; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    background:var(--bg); color:var(--txt); }
-  header { display:flex; align-items:center; justify-content:space-between;
-    padding:14px 20px; border-bottom:1px solid var(--line);
-    background:linear-gradient(180deg, rgba(46,204,143,.05), transparent); }
-  header .brand { display:flex; align-items:center; gap:10px; }
-  header .brand img { width:28px; height:28px; display:block; }
-  header h1 { font-size:17px; margin:0; font-family:"Montserrat",system-ui,sans-serif; }
-  header a { color:var(--mut); font-size:13px; text-decoration:none; }
+  body { margin:0; font-family:"Montserrat",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    background:var(--bg); color:var(--txt); min-height:100vh;
+    background-image:
+      radial-gradient(760px 420px at 82% -8%, rgba(0,255,140,.13), transparent 70%),
+      radial-gradient(560px 380px at 4% 104%, rgba(0,204,106,.08), transparent 72%);
+    background-attachment:fixed; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:14px 24px; border-bottom:1px solid var(--line);
+    background:rgba(10,10,10,.72); backdrop-filter:blur(8px); position:sticky; top:0; z-index:10; }
+  header .brand { display:flex; align-items:center; gap:12px; text-decoration:none; }
+  header .brand .icon { width:30px; height:30px; border-radius:8px; display:block; }
+  /* Wordmark balandlik bo'yicha — nisbati saqlanadi (panel topbar bilan bir xil). */
+  header .brand .wordmark { height:26px; width:auto; display:block; }
+  header .brand .sub { font-size:13px; color:var(--mut); letter-spacing:.06em; text-transform:uppercase; }
+  header nav { display:flex; gap:8px; align-items:center; }
+  header nav a { color:var(--mut); font-size:14px; font-weight:500; text-decoration:none;
+    padding:7px 14px; border-radius:999px; }
+  header nav a:hover { color:var(--txt); background:#1a1a1a; }
   .wrap { max-width:1200px; margin:0 auto; padding:20px; }
-  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:18px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 22px; margin-bottom:18px;
+    box-shadow:0 12px 32px rgba(0,0,0,.35); }
   label { font-size:13px; color:var(--mut); display:block; margin-bottom:6px; }
   textarea { width:100%; height:150px; resize:vertical; padding:12px; border-radius:10px;
     border:1px solid var(--line); background:var(--bg); color:var(--txt);
     font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }
   .count { font-size:12px; color:var(--mut); margin-top:8px; }
-  button.run { width:100%; margin-top:14px; padding:13px; border:0; border-radius:10px; color:#0f172a;
-    font-size:15px; font-weight:700; cursor:pointer; background:var(--grad); }
-  button.run:hover { filter:brightness(1.08); }
+  /* Yashil tugmada qora matn — oq o'qilmaydi. */
+  button.run { width:100%; margin-top:14px; padding:13px; border:0; border-radius:999px; color:var(--on-accent);
+    font-size:15px; font-weight:700; cursor:pointer; background:var(--accent); }
+  button.run:hover { background:var(--accent2); }
   button.run:disabled { opacity:.5; cursor:not-allowed; }
   details { margin-top:14px; border:1px solid var(--line); border-radius:10px; padding:10px 14px; }
   summary { cursor:pointer; font-size:14px; color:var(--txt); }
@@ -45,20 +57,28 @@
   .spin { display:inline-block; width:13px; height:13px; border:2px solid var(--mut);
     border-top-color:transparent; border-radius:50%; animation:s .7s linear infinite; vertical-align:-2px; margin-right:7px; }
   @keyframes s { to{ transform:rotate(360deg); } }
-  .ok { color:#4ade80; } .bad { color:#f87171; } .wait { color:var(--mut); }
-  .pane a { color:#818cf8; font-size:13px; }
+  .ok { color:var(--accent); } .bad { color:#ff3b30; } .wait { color:var(--mut); }
+  .pane a { color:var(--accent); font-size:13px; }
   iframe { width:100%; height:440px; border:1px solid var(--line); border-radius:10px; margin-top:10px; background:#fff; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); }
   th { color:var(--mut); font-weight:600; }
-  td a { color:#818cf8; text-decoration:none; }
+  td a { color:var(--accent); text-decoration:none; }
   .muted { color:var(--mut); }
 </style>
 </head>
 <body>
   <header>
-    <div class="brand"><img src="/logo.svg" alt=""><h1>Uzum PDF Dashboard</h1></div>
-    <a href="/logout">Chiqish</a>
+    <!-- Brend panel topbar'i bilan bir xil: ikonka + yozuvli logotip, yuqori chapda. -->
+    <a class="brand" href="/" title="Stocker">
+      <img src="logo-icon.png" class="icon" alt="">
+      <img src="logo-wordmark.png" class="wordmark" alt="Stocker">
+      <span class="sub">Yorliqlar</span>
+    </a>
+    <nav>
+      <a href="/">Loyihalar</a>
+      <a href="/variables">O'zgaruvchilar</a>
+    </nav>
   </header>
   <div class="wrap">
     <div class="panel">
@@ -167,7 +187,7 @@
     rendered = { shk:'', big:'' };
     renderPane('shk', null); renderPane('big', null);
     try{
-      const r = await fetch('/process', { method:'POST', headers:{'Content-Type':'application/json'},
+      const r = await fetch('process', { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ orderIds: ids, pdfConfig: buildConfig() }) });
       if(r.status===401){ location.href='/login'; return; }
       const { batchId, message } = await r.json();
@@ -177,7 +197,7 @@
   }
 
   async function pollBatch(batchId){
-    const r = await fetch('/batch/'+batchId);
+    const r = await fetch('batch/'+batchId);
     if(r.status===401){ location.href='/login'; return; }
     const b = await r.json();
     renderPane('shk', b.shk);
@@ -189,7 +209,7 @@
 
   async function loadHistory(){
     try{
-      const r = await fetch('/history');
+      const r = await fetch('history');
       if(r.status===401){ location.href='/login'; return; }
       const h = await r.json();
       const link = f => f && f.url ? '<a href="'+f.url+'" target="_blank">'+f.fileName+'</a>' : '<span class="muted">—</span>';
@@ -203,7 +223,7 @@
   async function doPreview(){
     const st = $('previewStatus'); st.textContent = ' — yangilanmoqda...';
     try{
-      const r = await fetch('/preview', { method:'POST', headers:{'Content-Type':'application/json'},
+      const r = await fetch('preview', { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ pdfConfig: buildConfig() }) });
       if(r.status===401){ location.href='/login'; return; }
       if(!r.ok){ const j = await r.json().catch(()=>({})); throw new Error(j.message||('HTTP '+r.status)); }
