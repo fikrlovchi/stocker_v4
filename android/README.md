@@ -141,7 +141,7 @@ mipmap'lar kerak emas.
 
 | Maydon | Qiymat |
 |---|---|
-| Server manzili | `https://uzum.fikrlovchi.uz/pack` |
+| Server manzili | `https://stocker.uz/pack` |
 | Login | panel'da berilgan login, masalan `operator1` |
 | Parol | panel'da berilgan parol |
 

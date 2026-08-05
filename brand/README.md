@@ -33,7 +33,35 @@ ataylab boshqa tonlarda:
 | Xato (boshqa tovar / topilmadi) | `#FF3B30` qizil | |
 | Ogohlantirish | `#FFB020` sariq | |
 
-## Belgi (mark)
+## Logotip fayllari va ikonkalar
+
+**Qoida: logotip o'zgartirilmaydi** — faqat o'lchami kichraytiriladi. Shuning
+uchun ikonkalar qo'lda chizilmaydi, original fayldan generatsiya qilinadi:
+
+```bash
+node brand/scripts/makeIcons.js
+```
+
+Kirish fayli (git'da bo'lishi kerak):
+
+| Fayl | Nima | Talab |
+|---|---|---|
+| `brand/logo-icon.png` | kvadrat ikonka varianti (yashil fon + qora "S") | 8-bitli oddiy (non-interlaced) PNG, ≥512×512 |
+
+Skript yasaydi:
+
+* `desktop/src/assets/icon.ico` (256) va `tray.png` (32)
+* `android/.../res/mipmap-*/ic_launcher.png` — logotip to'liq holda
+* `android/.../res/mipmap-*/ic_launcher_foreground.png` — adaptive ikonka
+  uchun logotip 108dp kanvasning markazida, 72dp xavfsiz maydonda (launcher
+  chetini qirqsa ham "S" butun qoladi)
+* `mipmap-anydpi-v26/ic_launcher.xml` — foreground shu PNG'ga ko'rsatiladi
+
+Tashqi kutubxona yo'q: PNG o'qish/yozish va maydon bo'yicha kichraytirish
+skript ichida, faqat `zlib` bilan. Sabab — build mashinasiga `sharp`/`canvas`
+o'rnatish shart bo'lmasin.
+
+## Belgi (mark) — vaqtinchalik qayta chizilgan variant
 
 `stocker-mark.svg` — yashil kvadrat ichida qora **S**: yo'nalish chizig'i
 (ombor → tizim → marketplace) ko'rinishida, uchlari dumaloq va nuqta bilan
@@ -48,10 +76,12 @@ Qo'llanishi:
 | Desktop ilova/o'rnatgich | `desktop/src/assets/icon.ico` (`npm run icons` bilan yasaladi) |
 | Desktop tray | `desktop/src/assets/tray.png` |
 
-> Bu SVG'lar original logotipdan **qayta chizilgan** (bizga faqat rasm
-> ko'rinishi berilgan). Original vektor fayllar bo'lsa, shu papkaga
-> `stocker-logo.svg` / `stocker-wordmark.svg` nomi bilan qo'ying va
-> ikonkalarni ulardan qayta yasash mumkin — o'shanda bu izoh olib tashlanadi.
+> ⚠️ Bu SVG'lar original logotipdan **qayta chizilgan** — hozircha
+> `brand/logo-icon.png` qo'yilmagani uchun ikonkalar shu chizmadan yasalgan.
+> Original fayl qo'yilib `makeIcons.js` ishga tushirilgach, ikonkalar
+> **aynan original** logotipdan yasaladi va bu qayta chizma faqat SVG kerak
+> bo'lgan joylar uchun (landing, hujjatlar) qoladi. Original vektor bo'lsa,
+> `stocker-logo.svg` / `stocker-wordmark.svg` nomi bilan qo'yish ham mumkin.
 
 ## Tipografika
 

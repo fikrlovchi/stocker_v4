@@ -69,7 +69,7 @@ fun LoginScreen(
             label = "Server manzili",
             value = serverUrl,
             onValueChange = { serverUrl = it },
-            placeholder = "https://uzum.fikrlovchi.uz/pack",
+            placeholder = "https://stocker.uz/pack",
         )
         Field(
             label = "Login",

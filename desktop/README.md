@@ -56,7 +56,7 @@ npm start
 
 | Maydon | Qiymat |
 |---|---|
-| Server manzili | `https://uzum.fikrlovchi.uz/pack` (nginx sozlangunicha `http://SERVER_IP:4044`) |
+| Server manzili | `https://stocker.uz/pack` (nginx sozlangunicha `http://SERVER_IP:4044`) |
 | Kalit | serverdagi `SERVICE_TOKEN` (8-fazada har ish joyiga alohida token beriladi) |
 | Ish joyi kodi | `Ombor-1` — serverdagi `stations` jadvaliga shu nom bilan yoziladi |
 | ShK / BIG printeri | Windows printerlar ro'yxatidan |

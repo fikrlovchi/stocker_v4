@@ -264,8 +264,20 @@ Panel'da stocker loyihasi **hali ro'yxatdan o'tmagan** (`projects` da faqat
 
 ### 6.2 stocker.uz ga o'tish
 
-Qaror: **bitta domen, yo'llar bo'yicha** — `stocker.uz` landing,
-`stocker.uz/pack/` yig'ish API'si. Konfig va landing repo'da tayyor:
+Qaror: **bitta domen, yo'llar bo'yicha** — `stocker.uz` ildizida **admin
+panel** (keyinchalik to'liq dastur), `stocker.uz/pack/` yig'ish API'si,
+`stocker.uz/about` tanishtiruv sahifasi.
+
+Panel ildizda turgani muhim: u havolalarni ildizdan yasaydi, shuning uchun
+`/panel/` ostiga qo'yish uchun kerak bo'lgan `BASE_PATH` ishi **endi kerak
+emas** — muammo o'z-o'zidan yopildi.
+
+> **DNS holati (2026-08-05, 15:20):** `stocker.uz` hali tarqalmagan —
+> ommaviy DNS'larda (8.8.8.8, 1.1.1.1) hatto NS yozuvlari ham yo'q
+> (`DNS name does not exist`). `.uz` zonasida delegatsiya bir necha soat
+> olishi mumkin. Tekshirish: `dig +short stocker.uz` yoki
+> `nslookup stocker.uz 8.8.8.8`. Javob `64.226.69.129` bo'lgach, pastdagi
+> qadamlar bajariladi. Konfig va landing repo'da tayyor:
 [deploy/nginx-stocker.uz.conf](deploy/nginx-stocker.uz.conf),
 [web/landing/index.html](web/landing/index.html).
 
@@ -284,15 +296,18 @@ Qaror: **bitta domen, yo'llar bo'yicha** — `stocker.uz` landing,
    sudo certbot --nginx -d stocker.uz -d www.stocker.uz --redirect
    ```
 5. Ishlashini tasdiqlash: `curl -s https://stocker.uz/pack/health`
-6. Shundan keyin ilovalardagi standart manzilni `https://stocker.uz/pack` ga
-   o'zgartirish kerak (Android `Config.kt`, desktop sozlamalari) — hozircha
-   `uzum.fikrlovchi.uz/pack` turadi, chunki DNS hali yo'q.
+6. Ilovalardagi standart manzil allaqachon `https://stocker.uz/pack`
+   (Android `Config.kt`, desktop va ikkala README). Eski o'rnatishlarda
+   saqlangan manzil qoladi — kirish ekranidan qo'lda o'zgartiriladi.
+7. APK'ni domen orqali tarqatish uchun:
+   ```bash
+   sudo cp /root/stocker/stocker-0.4.0.apk /var/www/stocker/stocker.apk
+   ```
+   (fayl repo'da emas — APK git'ga tushmaydi, uni qo'lda yuklaysiz)
 
-> **`/panel/` ataylab ulanmagan.** fikrlovchi-panel havolalarni ildizdan
-> yasaydi (`/login`, `/projects/...`, `/style.css`), shuning uchun uni
-> `/panel/` ostiga shundoq proxy qilsak birinchi havolada 404 bo'ladi.
-> Panel'ga `BASE_PATH` qo'shish kerak (sukut bo'yicha bo'sh — `fikrlovchi.uz`
-> o'zgarishsiz qoladi). Shu paytgacha admin panel eski manzilda.
+Panel ikkala domenda ham ishlashda davom etadi (`fikrlovchi.uz` va
+`stocker.uz`) — bitta jarayon, ikkita nginx server bloki. Sessiya cookie'si
+domenga bog'liq, shuning uchun ikki domenda alohida kirish talab qilinadi.
 
 ### 6.3 Ish joylari kartasi — PLAN 6.5
 

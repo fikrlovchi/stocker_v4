@@ -13,7 +13,7 @@ import android.content.SharedPreferences
  * bermasin.
  */
 data class Config(
-    val serverUrl: String = "https://uzum.fikrlovchi.uz/pack",
+    val serverUrl: String = "https://stocker.uz/pack",
     /** Operator tokeni (`POST /api/auth/login` dan). */
     val authToken: String = "",
     /** Operator logini — sessiyalar shu nom bilan bog'lanadi. */
