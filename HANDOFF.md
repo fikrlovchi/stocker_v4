@@ -18,10 +18,11 @@ Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
 | 4 · Skan mantiqi (sessiya, lock, avto-tanlash) | ✅ | qisman UNIQUE indeks bilan lock |
 | 5 · Print quvuri (WS, navbat, ACK, retry) | ✅ | idempotent, PDF proxy orqali |
 | 6 · Electron desktop client | ✅ | + qog'oz yo'nalishi sozlamasi |
-| 7 · Android native (Kotlin + Compose) | ✅ | **v0.4.0** (brend palitrasi), tugmalar va chiroq sinovdan o'tdi |
+| 7 · Android native (Kotlin + Compose) | ✅ | **v0.5.0** (original logotip + wordmark), tugmalar va chiroq sinovdan o'tdi |
 | 8a · Operator login (PLAN 6.4) | ✅ | panel karta + stocker kesh/login + Android kirish ekrani, **serverda sinalmadi** |
-| 8c · Brend (logo, palitra) | ✅ | `brand/`, Android v0.4.0 + desktop v0.2.0 ga qo'llandi |
-| 8d · stocker.uz domeni | ✅ | DNS + nginx + TLS ishlayapti: `/` panel, `/pack/` API, `/about` landing |
+| 8c · Brend (logo, palitra) | ✅ | `brand/`, Android v0.5.0 + desktop v0.3.0 |
+| 8d · stocker.uz domeni | ✅ | DNS + nginx + TLS: `/` panel, `/pack/` API, `/pdf/` yorliqlar, `/about` landing |
+| 8e · Brend interfeyslarda | ✅ | original logotip, wordmark uch joyda, panel+uzumPDFs yangi uslub |
 | **8b · Ish joylari kartasi (PLAN 6.5)** | ⏳ | **keyingi ish** — enrollment kod, station tokeni |
 | 9 · MoySklad "Собран" + `uzum_packing` + Telegram | ⏳ | |
 | 10 · Deploy yakuni (TLS, backlog tozalash) | ⏳ | qisman bajarilgan |
@@ -68,11 +69,9 @@ Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
    | `https://stocker.uz/about` | 200, landing |
    | `https://uzum.fikrlovchi.uz/pack/health` | `ok:true` — eski manzil ham ishlayveradi |
 
-3. **Dashboard paroli.** `uzumPDFs` ga `dotenv` qo'shilgandan keyin
-   `DASHBOARD_PASSWORD` holati aniqlanmadi. Tekshirish:
-   ```bash
-   pm2 logs uzumpdfs --lines 40 --nostream | grep -i -E "DASHBOARD|changeme"
-   ```
+3. **`uzumPDFs` dashboard paroli endi ishlatilmaydi** — `PANEL_AUTH=1` bilan
+   kirish panel sessiyasidan tekshiriladi (6.3). `DASHBOARD_PASSWORD` faqat
+   servis to'g'ridan-to'g'ri 4040-portda ochilganda kerak bo'ladi.
 
 4. **BIG printer.** Gainsha GS-2408 ulanganmi? Oldingi sinov `GP-5830 Series`
    da bo'lgan — u 58 mm chek printeri, 101.6 mm yorliq unga jismonan sig'maydi.
@@ -317,7 +316,52 @@ Panel ikkala domenda ham ishlashda davom etadi (`fikrlovchi.uz` va
 `stocker.uz`) — bitta jarayon, ikkita nginx server bloki. Sessiya cookie'si
 domenga bog'liq, shuning uchun ikki domenda alohida kirish talab qilinadi.
 
-### 6.3 Ish joylari kartasi — PLAN 6.5
+### 6.3 uzumPDFs'ni stocker.uz/pdf/ ga ko'chirish (kod tayyor)
+
+Qaror: **bitta ko'rinish + bitta login**, jarayonlar alohida qoladi — yorliq
+quvuri (`/internal/shk-item`) tegilmagani uchun chop etish xavf ostida emas.
+Kirish nginx `auth_request` orqali PANEL sessiyasidan tekshiriladi.
+
+1. Uch repo'ni yangilash:
+   ```bash
+   cd /root/uzumpdfs && git pull && cd /root/fikrlovchi-panel && git pull && cd /root/stocker && git pull
+   ```
+2. `uzumpdfs/.env` ga uch qator (borini almashtiring, qo'shmang):
+   ```bash
+   cd /root/uzumpdfs && sed -i '/^PANEL_AUTH=/d;/^HOST=/d;/^PUBLIC_BASE_URL=/d' .env && printf 'PANEL_AUTH=1
+HOST=127.0.0.1
+PUBLIC_BASE_URL=https://stocker.uz/pdf
+' >> .env && pm2 restart uzumpdfs
+   ```
+   `HOST=127.0.0.1` **majburiy**: `PANEL_AUTH=1` bilan servis o'z parolini
+   so'ramaydi, shuning uchun 4040-port tashqariga chiqmasligi kerak. Servis
+   ishga tushganda buni o'zi tekshirib ogohlantiradi.
+3. Panel'ni restart (yangi `/internal/session-check` va navigatsiya):
+   ```bash
+   sudo systemctl restart fikrlovchi-panel
+   ```
+4. nginx konfigini yangilash. **Diqqat:** serverdagi faylga certbot 443
+   blokini qo'shgan — git'dagi nusxa ustiga tushsa TLS yo'qoladi. Shuning
+   uchun nusxalab, darhol certbot'ni qayta yurgizamiz (u TLS blokini
+   qaytadan yozadi):
+   ```bash
+   sudo cp /root/stocker/deploy/nginx-stocker.uz.conf /etc/nginx/sites-available/stocker.uz && sudo nginx -t && sudo certbot --nginx -d stocker.uz -d www.stocker.uz --redirect
+   ```
+5. Tekshirish: `https://stocker.uz/pdf/` — panel sessiyasi bilan darhol
+   ochilishi kerak (ikkinchi parol so'ralmasin). Panel'dan chiqib turib
+   `/pdf/` ni ochsangiz — `/login` ga qaytarishi kerak.
+
+**fikrlovchi.uz'dan voz kechish** — hammasi tasdiqlangandan keyin:
+
+```bash
+sudo rm -f /etc/nginx/sites-enabled/fikrlovchi.uz /etc/nginx/sites-enabled/buyo.fikrlovchi.uz && sudo nginx -t && sudo systemctl reload nginx
+```
+
+`uzum.fikrlovchi.uz` ni **darhol o'chirmaslikni** tavsiya qilaman: eski
+telefonlarda va desktop client'da saqlangan manzil hali o'sha bo'lishi mumkin.
+Hamma qurilma `stocker.uz/pack` ga o'tganini ko'rgach o'chiriladi.
+
+### 6.4 Ish joylari kartasi — PLAN 6.5
 
 1. **Migratsiya `008_stocker_stations.sql`** + **"Ish joylari" kartasi** —
    bir martalik enrollment kod, printerlar, onlayn holat, tokenni bekor qilish.
