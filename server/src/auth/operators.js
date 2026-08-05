@@ -38,6 +38,11 @@ function panelConfigured() {
   return Boolean(usersUrl() && env.panel.apiKey && env.panel.slug);
 }
 
+// Oxirgi sinxron natijasi — `/debug/operators` shuni ko'rsatadi. Ro'yxat bo'sh
+// bo'lsa sababini shu yerdan bilish kerak: PANEL_* sozlanmaganmi, panel
+// javob bermadimi, yoki panel'da haqiqatan operator yo'qmi.
+let lastSync = { at: null, ok: false, error: "hali urinilmagan", count: null };
+
 const upsertOperator = db.prepare(`
   INSERT INTO operators (login, display_name, password_hash, is_active, synced_at)
   VALUES (@login, @displayName, @passwordHash, @isActive, @syncedAt)
@@ -81,7 +86,15 @@ export const applyPanelUsers = db.transaction((users) => {
 });
 
 export async function syncOperators() {
-  if (!panelConfigured()) return { skipped: "panel sozlanmagan" };
+  if (!panelConfigured()) {
+    const missing = [
+      env.panel.ingestUrl || env.panel.usersUrl ? null : "PANEL_INGEST_URL",
+      env.panel.apiKey ? null : "PANEL_API_KEY",
+      env.panel.slug ? null : "PANEL_PROJECT_SLUG",
+    ].filter(Boolean);
+    lastSync = { at: nowIso(), ok: false, error: `sozlanmagan: ${missing.join(", ")}`, count: null };
+    return { skipped: lastSync.error };
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
@@ -93,7 +106,12 @@ export async function syncOperators() {
       },
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`panel HTTP ${res.status}`);
+    // 401 — kalit yoki slug noto'g'ri; 404 — manzil xato (nginx'ga tushib
+    // ketgan bo'lishi mumkin). Xabarga javob boshini ham qo'shamiz.
+    if (!res.ok) {
+      const hint = (await res.text().catch(() => "")).slice(0, 120);
+      throw new Error(`panel HTTP ${res.status}${hint ? ` — ${hint}` : ""}`);
+    }
 
     const body = await res.json();
     const users = Array.isArray(body?.users) ? body.users : [];
@@ -102,6 +120,7 @@ export async function syncOperators() {
     }
 
     const result = applyPanelUsers(users);
+    lastSync = { at: nowIso(), ok: true, error: null, count: result.total };
     if (result.removed || result.revoked) {
       logger.info(
         `Operatorlar sinxronlandi: ${result.total} ta` +
@@ -109,9 +128,18 @@ export async function syncOperators() {
           (result.revoked ? `, ${result.revoked} ta token bekor qilindi` : "")
       );
     }
+    // Panel javob berdi, lekin ro'yxat bo'sh — eng ko'p uchraydigan sabab:
+    // operator boshqa loyiha sahifasida qo'shilgan (API kalit loyihaga bog'liq).
+    if (result.total === 0) {
+      logger.warn(
+        `Panel "${env.panel.slug}" loyihasi uchun bitta ham operator qaytarmadi — ` +
+          "operatorlar aynan shu loyiha sahifasida qo'shilganini tekshiring."
+      );
+    }
     return result;
   } catch (e) {
     // Kesh saqlanib qoladi — panel yo'q bo'lgani login'ni to'xtatmaydi.
+    lastSync = { at: nowIso(), ok: false, error: e.message, count: null };
     logger.warn(`Operatorlarni panel'dan olish muvaffaqiyatsiz: ${e.message}`);
     return { error: e.message };
   } finally {
@@ -160,6 +188,19 @@ export function listOperators() {
     .prepare("SELECT login, display_name, is_active, synced_at FROM operators ORDER BY login")
     .all()
     .map((o) => ({ login: o.login, displayName: o.display_name, isActive: o.is_active === 1, syncedAt: o.synced_at }));
+}
+
+// Diagnostika: ro'yxat bo'sh bo'lsa nima aynan yetishmayotgani ko'rinsin.
+// Kalit qaytarilmaydi, faqat bor-yo'qligi.
+export function operatorSyncStatus() {
+  return {
+    lastSync,
+    panelConfigured: panelConfigured(),
+    usersUrl: usersUrl() || null,
+    projectSlug: env.panel.slug || null,
+    apiKeySet: Boolean(env.panel.apiKey),
+    tokenCount: db.prepare("SELECT COUNT(*) AS n FROM operator_tokens").get().n,
+  };
 }
 
 // Muvaffaqiyatda { token, login, displayName }, aks holda { error, retryAfterMs? }.

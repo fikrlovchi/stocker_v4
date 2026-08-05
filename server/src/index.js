@@ -27,6 +27,7 @@ import {
   startOperatorSync,
   syncOperators,
   listOperators,
+  operatorSyncStatus,
   pruneExpiredTokens,
 } from "./auth/operators.js";
 
@@ -141,8 +142,9 @@ debug.get("/barcode/:code", (req, res) => {
 
 debug.get("/ambiguous", (req, res) => res.json({ barcodes: findAmbiguousBarcodes(50) }));
 
-// Operator keshi: kim kirishga haqli va ro'yxat qachon yangilangan.
-debug.get("/operators", (req, res) => res.json({ operators: listOperators() }));
+// Operator keshi: kim kirishga haqli, ro'yxat qachon yangilangan va bo'sh
+// bo'lsa — nega (PANEL_* sozlanmagan / panel javobi / panel'da yo'q).
+debug.get("/operators", (req, res) => res.json({ operators: listOperators(), ...operatorSyncStatus() }));
 
 // Panel'dan darhol qayta tortish (60 soniyani kutmasdan).
 debug.post("/sync-operators", async (req, res) => res.json(await syncOperators()));
