@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Stocker brend palitrasi (brand/README.md). Compose o'z ranglarini
+     Theme.kt dan oladi; bu yerdagilar faqat ilova ochilishidagi fon,
+     status bar va adaptive ikonka uchun. -->
 <resources>
-    <color name="bg">#0F172A</color>
-    <color name="ic_launcher_background">#0F172A</color>
+    <color name="bg">#0A0A0A</color>
+    <!-- Ikonka foni yashil, belgisi qora — logotip shundoq. -->
+    <color name="ic_launcher_background">#00FF8C</color>
 </resources>

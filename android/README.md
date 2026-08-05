@@ -158,13 +158,20 @@ navbatda kutib qoladi va chop etilmaydi.
 
 ## Natija ranglari
 
+Brend palitrasi `brand/README.md` da. Yashil (`#00FF8C`) eng ko'p uchraydigan
+holatga berilgan; "buyurtma ochildi" esa firuzada, chunki ikki yashilni bir
+metrdan farqlash qiyin.
+
 | Rang | Ma'nosi |
 |---|---|
-| 🔵 ko'k | buyurtma ochildi |
-| 🟢 yashil | tovar qabul qilindi |
-| 🟣 binafsha | buyurtma to'liq yig'ildi, BIG chop etishga ketdi |
-| 🔴 qizil | boshqa buyurtmaning tovari / barcode topilmadi |
-| 🟠 sariq | to'liq skanerlangan / bo'sh buyurtma yo'q |
+| 🟢 yashil `#00FF8C` | tovar qabul qilindi |
+| 🩵 firuza `#22D3EE` | buyurtma ochildi |
+| 🟣 binafsha `#A855F7` | buyurtma to'liq yig'ildi, BIG chop etishga ketdi |
+| 🔴 qizil `#FF3B30` | boshqa buyurtmaning tovari / barcode topilmadi |
+| 🟠 sariq `#FFB020` | to'liq skanerlangan / bo'sh buyurtma yo'q |
+
+Rangli fon ustidagi matn `onColor()` bilan tanlanadi (yorqin fonda qora,
+to'qda oq) — yorqin yashil ustida oq matn o'qilmaydi.
 
 ## Tuzilishi
 

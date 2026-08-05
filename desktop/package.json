@@ -1,6 +1,6 @@
 {
   "name": "stocker-print-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Stocker yig'ish tizimi uchun Windows print client (ShK + BIG)",
   "main": "src/main.js",
   "type": "commonjs",

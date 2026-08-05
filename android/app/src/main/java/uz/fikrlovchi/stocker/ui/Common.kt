@@ -78,10 +78,11 @@ fun PrimaryButton(
         shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.buttonColors(containerColor = Palette.accent),
     ) {
+        // Yashil tugma ustida qora matn — oq matn brend yashilida o'qilmaydi.
         if (loading) {
-            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.height(20.dp))
+            CircularProgressIndicator(color = Palette.bg, strokeWidth = 2.dp, modifier = Modifier.height(20.dp))
         } else {
-            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Palette.bg)
         }
     }
 }

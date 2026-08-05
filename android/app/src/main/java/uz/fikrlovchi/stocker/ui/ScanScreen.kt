@@ -182,7 +182,7 @@ fun ScanScreen(
         if (offline) {
             Text(
                 "Serverga ulanib bo'lmayapti — qayta urinilmoqda",
-                color = Color.White,
+                color = onColor(Palette.warn),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.fillMaxWidth().background(Palette.warn).padding(vertical = 7.dp),
@@ -264,7 +264,7 @@ fun ScanScreen(
                     ) {
                         Text(
                             m.label,
-                            color = if (active) Color.White else Color(0xFFCBD5E1),
+                            color = if (active) onColor(Palette.accent) else Palette.text,
                             fontSize = 13.sp,
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                         )
@@ -282,10 +282,13 @@ fun ScanScreen(
 
         /* ---------- Natija banneri ---------- */
         banner?.let { b ->
+            // Matn rangi fonga qarab tanlanadi: yorqin yashil/firuza/sariq
+            // ustida oq matn o'qilmaydi.
+            val fg = onColor(b.color)
             Column(Modifier.fillMaxWidth().background(b.color).padding(horizontal = 18.dp, vertical = 16.dp)) {
-                Text(b.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                Text(b.title, color = fg, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 if (b.message.isNotBlank()) {
-                    Text(b.message, color = Color(0xEBFFFFFF), fontSize = 15.sp)
+                    Text(b.message, color = fg.copy(alpha = 0.92f), fontSize = 15.sp)
                 }
             }
         }

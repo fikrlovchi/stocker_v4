@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Shtrix-kodga o'xshash belgi. Vektor — PNG mipmap'lar kerak emas
-     (adaptive ikonka, minSdk 26). -->
+<!-- Stocker belgisi: "S" yo'nalish chizig'i, uchlari dumaloq nuqta bilan
+     (ombor → tizim → marketplace). Manba: brand/stocker-mark.svg.
+     Vektor — PNG mipmap'lar kerak emas (adaptive ikonka, minSdk 26).
+     Adaptive ikonkada chetdagi ~18dp kesilishi mumkin, shuning uchun belgi
+     markazdagi maydondan chiqmaydi. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <group android:translateX="0" android:translateY="0">
-        <path android:fillColor="#FFFFFF" android:pathData="M32,34h5v40h-5z" />
-        <path android:fillColor="#FFFFFF" android:pathData="M40,34h3v40h-3z" />
-        <path android:fillColor="#FFFFFF" android:pathData="M46,34h6v40h-6z" />
-        <path android:fillColor="#FFFFFF" android:pathData="M55,34h3v40h-3z" />
-        <path android:fillColor="#FFFFFF" android:pathData="M61,34h8v40h-8z" />
-        <path android:fillColor="#FFFFFF" android:pathData="M72,34h4v40h-4z" />
-    </group>
+    <path
+        android:pathData="M70,34 H46 A10,10 0 0,0 46,54 H62 A10,10 0 0,1 62,74 H38"
+        android:strokeColor="#0A0A0A"
+        android:strokeWidth="8"
+        android:strokeLineCap="round" />
+
+    <path android:fillColor="#0A0A0A" android:pathData="M70,28 a6,6 0 1,0 0,12 a6,6 0 1,0 0,-12z" />
+    <path android:fillColor="#0A0A0A" android:pathData="M38,68 a6,6 0 1,0 0,12 a6,6 0 1,0 0,-12z" />
+    <path android:fillColor="#0A0A0A" android:pathData="M62,49 a5,5 0 1,0 0,10 a5,5 0 1,0 0,-10z" />
 </vector>

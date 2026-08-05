@@ -1,13 +1,17 @@
+/* Stocker brend palitrasi — brand/README.md */
 :root {
-  --bg: #0f172a;
-  --panel: #1e293b;
-  --line: #334155;
-  --text: #e2e8f0;
-  --muted: #94a3b8;
-  --ok: #22c55e;
-  --warn: #f59e0b;
-  --err: #ef4444;
-  --accent: #3b82f6;
+  --bg: #0a0a0a;
+  --panel: #141414;
+  --line: #3a3a3a;
+  --text: #e6e6e6;
+  --muted: #6b6b6b;
+  --ok: #00ff8c;
+  --accent: #00ff8c;
+  --accent-2: #00cc6a;
+  --warn: #ffb020;
+  --err: #ff3b30;
+  /* Yashil/sariq fon ustidagi matn — oq o'qilmaydi. */
+  --on-accent: #0a0a0a;
 }
 
 * { box-sizing: border-box; }
@@ -38,11 +42,11 @@ header {
   font-size: 12px;
   background: var(--line);
 }
-.badge.connected { background: rgba(34, 197, 94, 0.18); color: var(--ok); }
-.badge.connecting { background: rgba(245, 158, 11, 0.18); color: var(--warn); }
+.badge.connected { background: rgba(0, 255, 140, 0.16); color: var(--ok); }
+.badge.connecting { background: rgba(255, 176, 32, 0.16); color: var(--warn); }
 .badge.disconnected,
 .badge.error,
-.badge.unconfigured { background: rgba(239, 68, 68, 0.18); color: var(--err); }
+.badge.unconfigured { background: rgba(255, 59, 48, 0.16); color: var(--err); }
 
 .tabs { display: flex; gap: 4px; padding: 10px 20px 0; border-bottom: 1px solid var(--line); }
 .tab {
@@ -96,7 +100,7 @@ button {
   color: var(--text);
 }
 button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 button.ghost { background: none; }
 
 .actions { display: flex; align-items: center; gap: 10px; }

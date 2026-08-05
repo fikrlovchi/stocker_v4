@@ -3,8 +3,8 @@
 Yangi sessiyada ishni davom ettirish uchun. Loyihaning **dizayni**
 [PLAN.md](PLAN.md) da, bu yerda **holat, topilgan tuzoqlar va ochiq savollar**.
 
-Oxirgi commit'lar: `stocker_v4@bd37b6a` · `uzumpdfs@1ba725f` ·
-`fikrlovchi_project_panel@0bae7ea` — ikkalasi ham **push qilinmagan**
+Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
+`fikrlovchi_project_panel@087b84a` — ikkalasi ham push qilingan.
 
 ---
 
@@ -18,8 +18,10 @@ Oxirgi commit'lar: `stocker_v4@bd37b6a` · `uzumpdfs@1ba725f` ·
 | 4 · Skan mantiqi (sessiya, lock, avto-tanlash) | ✅ | qisman UNIQUE indeks bilan lock |
 | 5 · Print quvuri (WS, navbat, ACK, retry) | ✅ | idempotent, PDF proxy orqali |
 | 6 · Electron desktop client | ✅ | + qog'oz yo'nalishi sozlamasi |
-| 7 · Android native (Kotlin + Compose) | ✅ | **v0.3.0**, tugmalar va chiroq sinovdan o'tdi |
-| 8a · Operator login (PLAN 6.4) | ✅ | panel karta + stocker kesh/login + Android kirish ekrani, **deploy qilinmagan** |
+| 7 · Android native (Kotlin + Compose) | ✅ | **v0.4.0** (brend palitrasi), tugmalar va chiroq sinovdan o'tdi |
+| 8a · Operator login (PLAN 6.4) | ✅ | panel karta + stocker kesh/login + Android kirish ekrani, **serverda sinalmadi** |
+| 8c · Brend (logo, palitra) | ✅ | `brand/`, Android v0.4.0 + desktop v0.2.0 ga qo'llandi |
+| **8d · stocker.uz domeni** | ⏳ | nginx konfigi va landing tayyor, **DNS va deploy qolgan** |
 | **8b · Ish joylari kartasi (PLAN 6.5)** | ⏳ | **keyingi ish** — enrollment kod, station tokeni |
 | 9 · MoySklad "Собран" + `uzum_packing` + Telegram | ⏳ | |
 | 10 · Deploy yakuni (TLS, backlog tozalash) | ⏳ | qisman bajarilgan |
@@ -178,11 +180,16 @@ cd /root/uzumpdfs && node scripts/shkForOrder.js <orderId>  # haqiqiy yorliq
 `cmd.exe` da chain `&&` bilan (PowerShell'dagi `;` emas). Studio yopiq bo'lsin.
 
 ```bash
-cd C:\Users\User\Desktop\Buyo\Server\Stocker\stocker_v4\android && gradlew.bat assembleRelease
+cd C:\Users\User\Desktop\Buyo\Server\Stocker\stocker_v4\android && set JAVA_HOME=C:\Program Files\Java\jdk-21.0.12&& gradlew.bat assembleRelease
 ```
 
+`JAVA_HOME` ni qo'lda berish **shart**: Studio o'z JBR'ini ishlatadi, buyruq
+satrida esa o'zgaruvchi bo'sh bo'lib build "JAVA_HOME is not set" bilan
+tushadi. `set` dan keyin bo'shliq yo'q — aks holda yo'l oxiriga bo'shliq
+qo'shilib ketadi. To'liq release build ~7 daqiqa.
+
 APK: `app\build\outputs\apk\release\app-release.apk`.
-Yuborishdan oldin versiya bilan nomlash tavsiya etiladi (`stocker-0.2.0.apk`) —
+Yuborishdan oldin versiya bilan nomlash tavsiya etiladi (`stocker-0.4.0.apk`) —
 eski yuklab olingan fayl bilan chalkashmasin.
 
 ### Desktop client
@@ -255,7 +262,39 @@ Panel'da stocker loyihasi **hali ro'yxatdan o'tmagan** (`projects` da faqat
 6. Telefonga **v0.3.0** APK (`android/app/build/outputs/apk/release/stocker-0.3.0.apk`)
    — kirish ekranida server manzili, `operator1` va uning paroli.
 
-### 6.2 Ish joylari kartasi — PLAN 6.5
+### 6.2 stocker.uz ga o'tish
+
+Qaror: **bitta domen, yo'llar bo'yicha** — `stocker.uz` landing,
+`stocker.uz/pack/` yig'ish API'si. Konfig va landing repo'da tayyor:
+[deploy/nginx-stocker.uz.conf](deploy/nginx-stocker.uz.conf),
+[web/landing/index.html](web/landing/index.html).
+
+1. **DNS** (registratorda): `stocker.uz` va `www.stocker.uz` uchun A yozuv →
+   `64.226.69.129`. Tekshirish: `dig +short stocker.uz`
+2. Landing'ni joylash:
+   ```bash
+   sudo mkdir -p /var/www/stocker && sudo cp /root/stocker/web/landing/index.html /var/www/stocker/
+   ```
+3. nginx:
+   ```bash
+   sudo cp /root/stocker/deploy/nginx-stocker.uz.conf /etc/nginx/sites-available/stocker.uz && sudo ln -sf /etc/nginx/sites-available/stocker.uz /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx
+   ```
+4. TLS:
+   ```bash
+   sudo certbot --nginx -d stocker.uz -d www.stocker.uz --redirect
+   ```
+5. Ishlashini tasdiqlash: `curl -s https://stocker.uz/pack/health`
+6. Shundan keyin ilovalardagi standart manzilni `https://stocker.uz/pack` ga
+   o'zgartirish kerak (Android `Config.kt`, desktop sozlamalari) — hozircha
+   `uzum.fikrlovchi.uz/pack` turadi, chunki DNS hali yo'q.
+
+> **`/panel/` ataylab ulanmagan.** fikrlovchi-panel havolalarni ildizdan
+> yasaydi (`/login`, `/projects/...`, `/style.css`), shuning uchun uni
+> `/panel/` ostiga shundoq proxy qilsak birinchi havolada 404 bo'ladi.
+> Panel'ga `BASE_PATH` qo'shish kerak (sukut bo'yicha bo'sh — `fikrlovchi.uz`
+> o'zgarishsiz qoladi). Shu paytgacha admin panel eski manzilda.
+
+### 6.3 Ish joylari kartasi — PLAN 6.5
 
 1. **Migratsiya `008_stocker_stations.sql`** + **"Ish joylari" kartasi** —
    bir martalik enrollment kod, printerlar, onlayn holat, tokenni bekor qilish.

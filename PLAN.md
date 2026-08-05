@@ -520,3 +520,47 @@ kutubxona. Jadvallar: `orders`, `items`, `barcodes`, `mc_barcodes`, `sessions`,
 | `I` ustuni bo'sh (XLOOKUP `#N/A`) | Faqat Uzum barcode'i bilan topiladi; `skuAlerts.js` allaqachon xabar beradi |
 | Sheets kvotasi | O'qish bitta `batchGet`; yozuvlar to'plamlanadi. uzumOrderToMC bilan umumiy kvota |
 | Panel daemon boshqaruvi | 6.1-banddagi kichik tuzatish; ishlamasa `systemctl` bilan qo'lda |
+
+---
+
+## 15. Ekotizim yo'nalishi (2026-08-05 da tanlangan)
+
+Stocker faqat Uzum + bitta ombor uchun yozilgan edi. Brend va domen
+(`stocker.uz`) bilan birga yo'nalish ham belgilandi: **ombor va marketplace'lar
+orasidagi jarayonlar platformasi**. Hozir funksional refaktoring qilinmaydi —
+lekin keyingi ikki qadam ma'lum, shuning uchun yangi kod ularga qarshi
+yozilmasligi kerak:
+
+### 15.1 Yangi marketplace'lar
+
+Bugungi holat: buyurtma manbasi Google Sheets (`uzum_order`) va Uzum API'siga
+**qattiq bog'langan** — `cache/readSheets.js`, `cache/eligibility.js` ichida
+Uzum ustunlari (`Q`, `T`, `U`, `V`) nomma-nom yozilgan.
+
+Kelgusi chegara: **buyurtma manbasi = plagin**. Har manba bitta shartnomani
+bajaradi — "yig'ishga tayyor buyurtmalar ro'yxati" va "buyurtma yig'ildi"
+signali. Yig'ish mantiqi (sessiya, lock, skan holat mashinasi, print quvuri)
+manbadan mustaqil, unga tegilmaydi.
+
+Amaliy qoida: **yangi Uzumga xos maydonni `scan/` yoki `print/` ga
+qo'shmaslik** — u `cache/` (manba qatlami) ichida qolishi kerak.
+
+### 15.2 Ko'p kompaniya (multi-tenant)
+
+Bugungi holat: bitta SQLite, bitta MoySklad tokeni, operatorlar bitta panel
+loyihasiga bog'langan. `project_users` allaqachon **loyihaga** bog'langan
+(faqat stocker uchun emas) — bu to'g'ri yo'nalishdagi birinchi qadam.
+
+Kelgusi chegara: har jadvalda `tenant_id` va har tenant uchun alohida
+sozlamalar to'plami (MoySklad tokeni, Sheets, printerlar, operatorlar).
+Migratsiya paytida mavjud ma'lumot `tenant_id = 1` bo'ladi.
+
+Amaliy qoida: **yangi jadval qo'shganda "bu tenant'ga tegishlimi?" deb
+so'rash** — tegishli bo'lsa boshidan `tenant_id` ustuni bilan yaratish
+arzonroq, keyin qo'shishdan.
+
+### 15.3 Nima hozir qilinmaydi
+
+Refaktoring **hozir emas**: 8b (ish joylari) va 9-faza (MoySklad "Собран",
+`uzum_packing`, Telegram) tugab, tizim ishlab turgandan keyin. Ishlamayotgan
+umumlashtirish — ishlab turgan xususiy yechimdan yomonroq.

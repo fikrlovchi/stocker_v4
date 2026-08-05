@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stocker — ombor va marketplace avtomatlashtirish ekotizimi</title>
+<meta name="description" content="Ombor va marketplace'lar orasidagi barcha jarayonlarni avtomatlashtirish ekotizimi." />
+<!-- Belgi inline SVG: tashqi fayl yuklanmaydi, sahifa bitta so'rovda ochiladi. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 108 108'%3E%3Crect width='108' height='108' rx='24' fill='%2300FF8C'/%3E%3Cpath d='M70 34H46a10 10 0 0 0 0 20h16a10 10 0 0 1 0 20H38' fill='none' stroke='%230A0A0A' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --green: #00ff8c;
+    --green-2: #00cc6a;
+    --bg: #0a0a0a;
+    --text: #e6e6e6;
+    --muted: #6b6b6b;
+    --line: #3a3a3a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 72px 24px 96px; }
+  header { display: flex; align-items: center; gap: 14px; }
+  header svg { width: 44px; height: 44px; }
+  .name { font-size: 26px; font-weight: 600; letter-spacing: 0.04em; }
+  h1 {
+    margin: 56px 0 0;
+    font-size: clamp(30px, 6vw, 52px);
+    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  h1 em { color: var(--green); font-style: normal; }
+  .lead { margin-top: 20px; color: var(--muted); font-size: 18px; max-width: 60ch; }
+
+  /* Oqim: ombor → tizim → marketplace */
+  .flow {
+    display: flex; align-items: center; justify-content: center;
+    gap: clamp(12px, 4vw, 40px);
+    margin: 64px 0;
+    padding: 32px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  .flow svg { width: 56px; height: 56px; stroke: var(--green); fill: none; stroke-width: 1.6; }
+  .flow .dash { flex: 0 1 90px; height: 1px; background: repeating-linear-gradient(90deg, var(--line) 0 8px, transparent 8px 16px); }
+  .flow figure { margin: 0; text-align: center; }
+  .flow figcaption { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+  .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .card h2 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .card .tag { display: inline-block; margin-top: 12px; font-size: 12px; color: var(--green-2); }
+
+  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  a { color: var(--green); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <svg viewBox="0 0 108 108" aria-hidden="true">
+      <rect width="108" height="108" rx="24" fill="#00FF8C" />
+      <path d="M70 34H46a10 10 0 0 0 0 20h16a10 10 0 0 1 0 20H38" fill="none" stroke="#0A0A0A" stroke-width="8" stroke-linecap="round" />
+      <circle cx="70" cy="34" r="6" fill="#0A0A0A" />
+      <circle cx="38" cy="74" r="6" fill="#0A0A0A" />
+      <circle cx="62" cy="54" r="5" fill="#0A0A0A" />
+    </svg>
+    <span class="name">stocker</span>
+  </header>
+
+  <h1>Ombor va marketplace'lar orasidagi barcha jarayonlarni <em>avtomatlashtirish</em></h1>
+  <p class="lead">
+    Buyurtma marketplace'dan tushadi, ombordagi operator tovarni skanerlaydi,
+    yorliqlar o'zi chiqadi, qoldiq va holat marketplace'ga qaytadi — qo'lda
+    ko'chirish va Excel yo'q.
+  </p>
+
+  <div class="flow">
+    <figure>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5V20H3V9.5Z"/><path d="M8 20v-6h8v6"/><path d="M10 14h4"/></svg>
+      <figcaption>Ombor</figcaption>
+    </figure>
+    <div class="dash"></div>
+    <figure>
+      <svg viewBox="0 0 108 108" aria-hidden="true" style="stroke:#00ff8c">
+        <path d="M70 34H46a10 10 0 0 0 0 20h16a10 10 0 0 1 0 20H38" stroke-width="7" stroke-linecap="round"/>
+        <circle cx="70" cy="34" r="5" fill="#00ff8c" stroke="none"/>
+        <circle cx="38" cy="74" r="5" fill="#00ff8c" stroke="none"/>
+      </svg>
+      <figcaption>Stocker</figcaption>
+    </figure>
+    <div class="dash"></div>
+    <figure>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.6 11h10L20 7H6"/><circle cx="9.5" cy="19" r="1.6"/><circle cx="17" cy="19" r="1.6"/></svg>
+      <figcaption>Marketplace</figcaption>
+    </figure>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h2>Yig'ish (packing)</h2>
+      <p>Telefon barcode'ni skanerlaydi, buyurtma o'zi ochiladi, har birlik uchun ShK yorlig'i va buyurtma tugaganda BIG yorlig'i termo printerdan chiqadi.</p>
+      <span class="tag">ishlab turibdi · Uzum</span>
+    </div>
+    <div class="card">
+      <h2>Qoldiq va holat sinxroni</h2>
+      <p>MoySklad bilan ikki tomonlama: buyurtma holati, qoldiq, bekor qilinganlar — hammasi avtomatik.</p>
+      <span class="tag">ishlab turibdi</span>
+    </div>
+    <div class="card">
+      <h2>Yangi marketplace'lar</h2>
+      <p>Buyurtma manbasi plagin sifatida ajratiladi — yangi platforma qo'shish yig'ish mantiqiga tegmaydi.</p>
+      <span class="tag">rejada</span>
+    </div>
+    <div class="card">
+      <h2>Ko'p kompaniya (multi-tenant)</h2>
+      <p>Har kompaniya o'z ma'lumotlari, operatorlari va kalitlari bilan — bitta o'rnatishda.</p>
+      <span class="tag">rejada</span>
+    </div>
+  </div>
+
+  <footer>
+    Ombor operatorlari uchun ilova: <a href="/stocker.apk">Android APK</a> ·
+    Admin panel: <a href="https://fikrlovchi.uz">fikrlovchi.uz</a>
+  </footer>
+
+</div>
+</body>
+</html>

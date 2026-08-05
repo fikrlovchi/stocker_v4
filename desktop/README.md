@@ -78,7 +78,7 @@ npm run build
 ```
 
 `dist/` papkasida NSIS o'rnatgich paydo bo'ladi —
-**`dist/Stocker Print Setup 0.1.0.exe`** (~86 MB, ichida Electron ham bor).
+**`dist/Stocker Print Setup 0.2.0.exe`** (~86 MB, ichida Electron ham bor).
 O'rnatilgandan keyin PowerShell umuman kerak emas — ilova Start menyusidan
 ochiladi va Windows bilan birga tray'da ishga tushadi.
 
@@ -116,6 +116,11 @@ Remove-Item "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign" -Recurse -For
 ```
 
 ### Ikonkalar
+
+Ikonka va tray belgisi `brand/stocker-mark.svg` dan qayta chizilgan: yashil
+dumaloq kvadrat, ichida qora "S". `scripts/makeIcon.js` uni piksel darajasida
+o'zi yasaydi (tashqi rasm kutubxonasi yo'q) — chegaralar bir piksel
+yumshatiladi, aks holda 32×32 tray ikonkasi tishli chiqadi.
 
 ```powershell
 npm run icons

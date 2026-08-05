@@ -86,7 +86,7 @@ fun PairScreen(
         ) {
             Text(
                 "Ish joyini ulash",
-                color = Color.White,
+                color = Palette.text,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -95,7 +95,7 @@ fun PairScreen(
             Text(
                 "Kompyuterdagi Stocker Print ilovasida \"Telefonni ulash\" " +
                     "tabini oching va QR'ni skanerlang.",
-                color = Color(0xFFCBD5E1),
+                color = Palette.muted,
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center,
             )
@@ -109,7 +109,7 @@ fun PairScreen(
 
             error?.let {
                 Spacer(Modifier.height(24.dp))
-                Text(it, color = Color(0xFFFCA5A5), fontSize = 15.sp, textAlign = TextAlign.Center)
+                Text(it, color = Palette.err, fontSize = 15.sp, textAlign = TextAlign.Center)
             }
 
             Spacer(Modifier.weight(1f))
@@ -117,8 +117,8 @@ fun PairScreen(
                 text = "Ish joyisiz davom etish",
                 onClick = onSkip,
                 modifier = Modifier.fillMaxWidth(),
-                borderColor = Color(0xFF64748B),
-                textColor = Color(0xFFCBD5E1),
+                borderColor = Palette.line,
+                textColor = Palette.text,
             )
         }
     }

@@ -9,36 +9,92 @@ const fs = require("node:fs");
 const path = require("node:path");
 const zlib = require("node:zlib");
 
-const BG = [17, 24, 39, 255]; // to'q ko'k-kulrang
-const FG = [255, 255, 255, 255];
+// Brend palitrasi (brand/README.md): yashil kvadrat, ichida qora "S" belgisi.
+const BG = [0, 255, 140, 255];  // Primary Green #00FF8C
+const FG = [10, 10, 10, 255];   // Background #0A0A0A
 
-// Shtrix-kodga o'xshash vertikal chiziqlar (nisbiy kengliklar)
-const BARS = [2, 1, 1, 2, 1, 3, 1, 1, 2, 2, 1, 1, 3];
+// Belgi geometriyasi brand/stocker-mark.svg bilan bir xil koordinatalarda
+// (108×108) yozilgan, keyin ikonka o'lchamiga masshtablanadi.
+const VB = 108;
+const STROKE = 8;          // chiziq qalinligi
+const CORNER = 24;         // kvadrat burchak radiusi
+const DOTS = [
+  [70, 34, 6],             // yuqori o'ng uch
+  [38, 74, 6],             // pastki chap uch
+  [62, 54, 5],             // o'rta tugun
+];
+
+// "S" yo'li: yuqori gorizontal → chap yarim doira → o'rta gorizontal →
+// o'ng yarim doira → pastki gorizontal. Doiralar ko'p qismli siniq chiziq
+// bilan yaqinlashtiriladi — masofa hisobi shu bilan sodda va ishonchli.
+function markPath() {
+  const pts = [[70, 34], [46, 34]];
+  const arc = (cx, cy, r, from, to) => {
+    const steps = 24;
+    for (let i = 1; i <= steps; i++) {
+      const a = from + ((to - from) * i) / steps;
+      pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+    }
+  };
+  arc(46, 44, 10, -Math.PI / 2, -Math.PI * 1.5); // chap yarim doira
+  pts.push([62, 54]);
+  arc(62, 64, 10, -Math.PI / 2, Math.PI / 2);    // o'ng yarim doira
+  pts.push([38, 74]);
+  return pts;
+}
+
+const PATH = markPath();
+
+function distToSegment(px, py, [ax, ay], [bx, by]) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+// Belgi ichidami: chiziqdan STROKE/2 masofada yoki nuqtalar ichida.
+function markDistance(x, y) {
+  let d = Infinity;
+  for (let i = 0; i < PATH.length - 1; i++) {
+    d = Math.min(d, distToSegment(x, y, PATH[i], PATH[i + 1]) - STROKE / 2);
+  }
+  for (const [cx, cy, r] of DOTS) {
+    d = Math.min(d, Math.hypot(x - cx, y - cy) - r);
+  }
+  return d;
+}
+
+// Dumaloq burchakli kvadratning ichki/tashqi masofasi.
+function squareDistance(x, y) {
+  const half = VB / 2 - CORNER;
+  const qx = Math.max(Math.abs(x - VB / 2) - half, 0);
+  const qy = Math.max(Math.abs(y - VB / 2) - half, 0);
+  return Math.hypot(qx, qy) - CORNER;
+}
 
 function pixels(size) {
   const buf = Buffer.alloc(size * size * 4);
-  const put = (x, y, c) => {
-    const i = (y * size + x) * 4;
-    buf[i] = c[0]; buf[i + 1] = c[1]; buf[i + 2] = c[2]; buf[i + 3] = c[3];
-  };
+  const k = VB / size;                 // piksel → 108 birlik
+  const aa = k;                        // bir pikselga teng yumshatish oynasi
+  // Masofadan qoplama: chegara atrofida bitta piksel yumshatiladi, aks holda
+  // 32×32 tray ikonkasida chetlari tishli chiqadi.
+  const coverage = (d) => Math.max(0, Math.min(1, 0.5 - d / aa));
 
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) put(x, y, BG);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const ux = (x + 0.5) * k;
+      const uy = (y + 0.5) * k;
+      const bgA = coverage(squareDistance(ux, uy));
+      const fgA = coverage(markDistance(ux, uy)) * bgA;
 
-  const unit = Math.max(1, Math.round(size / 32));
-  const total = BARS.reduce((a, b) => a + b, 0) * unit;
-  const top = Math.round(size * 0.19);
-  const bottom = size - top;
-
-  let x = Math.floor((size - total) / 2);
-  BARS.forEach((w, i) => {
-    const px = w * unit;
-    if (i % 2 === 0) {
-      for (let dx = 0; dx < px && x + dx < size; dx++) {
-        for (let y = top; y < bottom; y++) put(x + dx, y, FG);
+      const i = (y * size + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        buf[i + c] = Math.round(BG[c] * (1 - fgA) + FG[c] * fgA);
       }
+      buf[i + 3] = Math.round(255 * bgA);
     }
-    x += px;
-  });
+  }
   return buf;
 }
 
