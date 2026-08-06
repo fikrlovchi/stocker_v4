@@ -13,6 +13,7 @@ import bcrypt from "bcryptjs";
 import { config, env } from "../config.js";
 import { db } from "../db/index.js";
 import logger from "../logger.js";
+import { getUserByLogin, getPasswordHash, hasFlag, hasUsers, touchLogin } from "./users.js";
 
 const AUTH = config.auth;
 
@@ -86,6 +87,13 @@ export const applyPanelUsers = db.transaction((users) => {
 });
 
 export async function syncOperators() {
+  // 2-bosqichdan keyin foydalanuvchilar shu bazaning `users` jadvalida —
+  // panel'dan tortish kerak emas (panel ham shu faylni ishlatadi).
+  if (hasUsers()) {
+    lastSync = { at: nowIso(), ok: true, error: null, count: null, source: "users" };
+    return { skipped: "users jadvali ishlatilyapti" };
+  }
+
   if (!panelConfigured()) {
     const missing = [
       env.panel.ingestUrl || env.panel.usersUrl ? null : "PANEL_INGEST_URL",
@@ -183,6 +191,35 @@ export function getOperator(login) {
   return db.prepare("SELECT * FROM operators WHERE login = ?").get(String(login || "").trim().toLowerCase());
 }
 
+// Kirishga haqli hisobni topadi. Ustuvorlik `users` jadvalida (yagona model,
+// 2-bosqich); u bo'sh bo'lsa — panel'dan sinxronlangan eski `operators`
+// keshi. Shu bilan ko'chirish paytida ham login uzilmaydi.
+//
+// `users` dagi hisob mobil ilovaga faqat `mobile` bayrog'i bilan kira oladi.
+function lookupAccount(login) {
+  const user = getUserByLogin(login);
+  if (user) {
+    return {
+      login: user.login,
+      displayName: user.displayName,
+      passwordHash: getPasswordHash(user.login),
+      // Bayroqsiz hisob (masalan faqat veb-panel uchun) telefondan kira olmaydi.
+      isActive: user.isActive && hasFlag(user, "mobile"),
+      source: "users",
+    };
+  }
+
+  const legacy = getOperator(login);
+  if (!legacy) return null;
+  return {
+    login: legacy.login,
+    displayName: legacy.display_name,
+    passwordHash: legacy.password_hash,
+    isActive: legacy.is_active === 1,
+    source: "operators",
+  };
+}
+
 export function listOperators() {
   return db
     .prepare("SELECT login, display_name, is_active, synced_at FROM operators ORDER BY login")
@@ -208,19 +245,20 @@ export function login({ login: rawLogin, password, device, ip }) {
   const lock = lockedUntil(ip || "?");
   if (lock) return { error: "Ko'p urinish — birozdan keyin qayta kiring", retryAfterMs: lock - Date.now() };
 
-  const operator = getOperator(rawLogin);
-  const hash = operator?.password_hash || "";
+  const account = lookupAccount(rawLogin);
+  const hash = account?.passwordHash || "";
   // Login topilmasa ham bcrypt chaqiriladi: javob vaqti bo'yicha login bor-yo'qligi
   // bilinmasin.
   const ok = bcrypt.compareSync(String(password || ""), hash || DUMMY_HASH);
 
-  if (!operator || !ok) {
+  if (!account || !ok) {
     recordFailure(ip || "?");
     return { error: "Login yoki parol noto'g'ri" };
   }
-  if (operator.is_active !== 1) {
+  if (!account.isActive) {
     return { error: "Hisob faolsizlantirilgan" };
   }
+  const operator = { login: account.login, display_name: account.displayName };
 
   failures.delete(ip || "?");
 
@@ -229,6 +267,7 @@ export function login({ login: rawLogin, password, device, ip }) {
     "INSERT INTO operator_tokens (token_hash, login, device, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)"
   ).run(sha256(token), operator.login, device ? String(device).slice(0, 120) : null, nowIso(), nowIso());
 
+  if (account.source === "users") touchLogin(account.login);
   logger.info(`Operator kirdi: ${operator.login} (${operator.display_name})${device ? ` — ${device}` : ""}`);
   return { token, login: operator.login, displayName: operator.display_name };
 }
@@ -249,11 +288,11 @@ export function resolveToken(token) {
     return null;
   }
 
-  const operator = getOperator(row.login);
-  if (!operator || operator.is_active !== 1) return null;
+  const account = lookupAccount(row.login);
+  if (!account || !account.isActive) return null;
 
   db.prepare("UPDATE operator_tokens SET last_seen_at = ? WHERE token_hash = ?").run(nowIso(), row.token_hash);
-  return { login: operator.login, displayName: operator.display_name };
+  return { login: account.login, displayName: account.displayName };
 }
 
 function bearer(req) {

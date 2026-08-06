@@ -523,6 +523,85 @@ check("prune: eski tokenlar o'chadi", auth.pruneExpiredTokens() >= 0, true);
 
 db.exec("DELETE FROM operator_tokens; DELETE FROM operators");
 
+/* ---------- 11. Foydalanuvchilar va ruxsatlar (konsolidatsiya) ---------- */
+
+const users = await import("../auth/users.js");
+const { SECTION_KEYS } = await import("../auth/sections.js");
+
+const admin = users.createUser({
+  login: "admin", displayName: "Administrator", password: "parol1", isSuperadmin: true,
+});
+const packer = users.createUser({
+  login: "packer1", displayName: "Yig'uvchi", password: "parol1",
+  sections: ["packing"], flags: ["mobile"],
+});
+const viewer = users.createUser({
+  login: "viewer1", displayName: "Kuzatuvchi", password: "parol1", sections: ["labels"],
+});
+
+check("users: superadmin barcha bo'limni oladi", admin.sections.sort(), [...SECTION_KEYS].sort());
+check("users: superadminda mobile bayrog'i o'zi bor", users.hasFlag(admin, "mobile"), true);
+check("users: oddiy foydalanuvchi faqat berilganini", packer.sections, ["packing"]);
+check("users: ruxsat bermagan bo'lim", users.can(packer, "labels"), false);
+check("users: bergan bo'lim", users.can(packer, "packing"), true);
+check("users: mobil bayrog'i yo'q", users.hasFlag(viewer, "mobile"), false);
+
+check(
+  "users: noma'lum bo'lim rad etiladi",
+  (() => { try { users.setSections(packer.id, ["yoq"]); return "o'tdi"; } catch (e) { return "rad"; } })(),
+  "rad"
+);
+check(
+  "users: superadminni faolsizlantirib bo'lmaydi",
+  (() => { try { users.setActive(admin.id, false); return "o'tdi"; } catch { return "rad"; } })(),
+  "rad"
+);
+check(
+  "users: superadminni o'chirib bo'lmaydi",
+  (() => { try { users.removeUser(admin.id); return "o'tdi"; } catch { return "rad"; } })(),
+  "rad"
+);
+
+// Login endi `users` dan: mobil bayrog'i borlar kiradi, yo'qlar kirmaydi.
+check("login: users jadvalidagi operator", auth.login({ login: "packer1", password: "parol1", ip: "5.1.1.1" }).displayName, "Yig'uvchi");
+check("login: mobil bayrog'isiz hisob", auth.login({ login: "viewer1", password: "parol1", ip: "5.1.1.2" }).error, "Hisob faolsizlantirilgan");
+check("login: superadmin ham kira oladi", Boolean(auth.login({ login: "admin", password: "parol1", ip: "5.1.1.3" }).token), true);
+
+const packerToken = auth.login({ login: "packer1", password: "parol1", ip: "5.1.1.4" }).token;
+users.setActive(packer.id, false);
+check("token: faolsizlantirilgach yaroqsiz", auth.resolveToken(packerToken), null);
+users.setActive(packer.id, true);
+
+// Eski `project_users` dan ko'chirish (panel bazasi birlashtirilgandan keyin).
+db.exec(`CREATE TABLE IF NOT EXISTS project_users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, login TEXT, display_name TEXT,
+  password_hash TEXT, is_active INTEGER DEFAULT 1, created_at TEXT)`);
+db.prepare("INSERT INTO project_users (project_id, login, display_name, password_hash, is_active) VALUES (1,?,?,?,1)")
+  .run("eski1", "Eski Operator", bcrypt.hashSync("parol1", 10));
+
+const imported = users.importLegacyUsers({ adminLogin: "root", adminPasswordHash: bcrypt.hashSync("parol1", 10) });
+check("import: operator ko'chdi", imported.operators, 1);
+check("import: superadmin yaratildi", imported.admin, 1);
+check("import: ko'chgan operator yig'ish bo'limini oldi", users.getUserByLogin("eski1").sections, ["packing"]);
+check("import: ko'chgan operator mobil bayrog'ini oldi", users.getUserByLogin("eski1").flags, ["mobile"]);
+check("import: eski parol ishlaydi", Boolean(auth.login({ login: "eski1", password: "parol1", ip: "5.2.2.1" }).token), true);
+
+const again = users.importLegacyUsers({ adminLogin: "root", adminPasswordHash: "x" });
+check("import: takroriy chaqiruv yangi yozuv yasamaydi", [again.operators, again.admin, again.skipped], [0, 0, 1]);
+
+// Partiyalar jadvali (skan doirasi) — sxema o'rnida.
+db.prepare("INSERT INTO batches (name, created_by) VALUES (?, ?)").run("5-avgust", "admin");
+const batchId = db.prepare("SELECT id FROM batches WHERE name = ?").get("5-avgust").id;
+db.prepare("INSERT INTO batch_orders (batch_id, order_id, shop_id) VALUES (?, ?, ?)").run(batchId, "OK1", "shop-1");
+db.prepare("INSERT INTO batch_orders (batch_id, order_id, shop_id, status) VALUES (?, ?, ?, 'packed')").run(batchId, "OK2", "shop-1");
+check(
+  "partiya: do'kon bo'yicha progress",
+  db.prepare("SELECT COUNT(*) AS total, SUM(status='packed') AS packed FROM batch_orders WHERE batch_id = ? AND shop_id = ?").get(batchId, "shop-1"),
+  { total: 2, packed: 1 }
+);
+
+db.exec("DELETE FROM batch_orders; DELETE FROM batches; DELETE FROM user_flags; DELETE FROM user_permissions; DELETE FROM users; DROP TABLE project_users; DELETE FROM operator_tokens");
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

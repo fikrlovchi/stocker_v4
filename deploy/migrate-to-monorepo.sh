@@ -90,7 +90,10 @@ fail=0
 check() {
   local name="$1" url="$2" want="$3"
   local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' "$url" || echo 000)
+  # `|| echo 000` YOZILMAYDI: curl xato bo'lsa ham '000' chop etadi va ikki
+  # marta chiqib '000000' bo'lib ketardi.
+  code=$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null)
+  [ -n "$code" ] || code=000
   if [ "$code" = "$want" ]; then
     printf '  ✅ %-28s %s\n' "$name" "$code"
   else

@@ -51,7 +51,33 @@ Jarayonlar hozircha alohida: `stocker-server` (4044) · `fikrlovchi-panel`
 > Eski GitHub repolari (`fikrlovchi_project_panel`, `uzumpdfs`) o'chirilmaydi —
 > arxiv sifatida qoladi, lekin **ishlanmaydi**. Barcha o'zgarish `stocker_v4` da.
 
-### 2-bosqich — bitta baza va foydalanuvchilar ⏳
+### 2-bosqich — bitta baza va foydalanuvchilar ✅ kod tayyor (2026-08-06)
+
+Bajarildi:
+
+* **Umumiy baza** — `data/stocker.db` (repo ildizida). `server/src/config.js`
+  va `panel/src/db/index.js` shu faylga qaraydi. Panel'ning migratsiya hisobi
+  `panel_schema_migrations` ga ko'chdi: umumiy bazada server'ning o'z
+  `schema_migrations` i bor va ustunlari boshqacha (`name` ↔ `filename`).
+* **Birlashtirish skripti** — [`deploy/merge-databases.js`](../deploy/merge-databases.js).
+  Manba fayllarga tegmaydi, jadval nomlari to'qnashuvini oldindan tekshiradi,
+  har jadval bo'yicha qatorlar sonini solishtiradi. Haqiqiy panel bazasida
+  sinaldi: 15 jadval, hammasi mos, migratsiya hisobi 7/7 ko'chdi.
+* **Foydalanuvchilar** — `006_users.sql` (`users`, `user_permissions`,
+  `user_flags`) + [`server/src/auth/users.js`](../server/src/auth/users.js).
+* **Partiyalar** — `007_batches.sql` (`batches`, `batch_orders`).
+* **Login** endi `users` dan o'qiydi (mobil ilovaga faqat `mobile` bayrog'i
+  bilan); `users` bo'sh bo'lsa eski `operators` keshi ishlaydi — ko'chirish
+  paytida kirish uzilmaydi.
+* `importLegacyUsers()` — `project_users` va panel admini (`.env` dagi hash)
+  `users` ga ko'chadi. Takroriy chaqirilsa yangi yozuv yasamaydi.
+* selfTest: 118 → **138** tekshiruv.
+
+Qolgan (3-bosqich bilan birga): panel UI'sining "Operatorlar" kartasi o'rniga
+**Foydalanuvchilar** va **Ruxsatlar** bo'limlari; partiyalarni boshqarish
+ekrani.
+
+### 2-bosqich rejasi (asl matn) ⏳
 
 1. `panel/data/panel.db` va `server/data/stocker.db` **bitta** `data/stocker.db`
    ga birlashadi (migratsiya skripti bilan, jadval nomlari to'qnashmaydi).

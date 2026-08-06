@@ -14,7 +14,10 @@ export const config = JSON.parse(fs.readFileSync(path.join(ROOT, "config.json"),
 export const env = {
   moyskladToken: process.env.MOYSKLAD_TOKEN || "",
   oauthFile: process.env.OAUTH_FILE || path.join(ROOT, "oauth.json"),
-  dbFile: process.env.DB_FILE || path.join(ROOT, "data", "stocker.db"),
+  // Baza REPO ILDIZIDA: panel ham, yig'ish serveri ham bitta faylni
+  // ishlatadi (konsolidatsiya 2-bosqichi). Eski joyi `server/data/` edi —
+  // deploy/merge-databases.js ko'chiradi.
+  dbFile: process.env.DB_FILE || path.join(ROOT, "..", "data", "stocker.db"),
   serviceToken: process.env.SERVICE_TOKEN || "",
   host: process.env.HOST || config.server.host,
   port: Number(process.env.PORT) || config.server.port,
