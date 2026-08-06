@@ -384,15 +384,21 @@ function scanInSession(session, barcode, operator, { justOpened = false } = {}) 
   if (updated.progress.remaining === 0) {
     db.transaction(() => {
       db.prepare("UPDATE sessions SET status = 'done', finished_at = ? WHERE id = ?").run(nowIso(), session.id);
-      prints.push(
-        addPrintJob({
-          sessionId: session.id,
-          orderId: session.orderId,
-          target: "big",
-          copies: 1,
-          stationId: session.stationId,
-        })
-      );
+      // BIG yorlig'i endi OPERATOR bosganda chiqadi (mobil ilovadagi "Print"
+      // tugmasi): yig'ilgan buyurtma darhol printerga ketmasin, operator
+      // qopni tayyorlab bo'lgach o'zi yuborsin. Eski xatti-harakat kerak
+      // bo'lsa — config.packing.autoBigPrint = true.
+      if (PK.autoBigPrint) {
+        prints.push(
+          addPrintJob({
+            sessionId: session.id,
+            orderId: session.orderId,
+            target: "big",
+            copies: 1,
+            stationId: session.stationId,
+          })
+        );
+      }
     })();
     dispatchTo(session.stationId);
     // Partiyada bo'lsa "yig'ildi" deb belgilanadi — do'kon progressi
@@ -415,6 +421,40 @@ function scanInSession(session, barcode, operator, { justOpened = false } = {}) 
     session: updated,
     print: prints,
   };
+}
+
+/* ==================== BIG yorlig'ini chiqarish ==================== */
+
+// Mobil ilovadagi "Print" tugmasi. Faqat hamma tovar skanerlangan (status
+// 'done') sessiya uchun ishlaydi.
+//
+// Idempotent: bir sessiya uchun BIG job allaqachon bo'lsa, YANGISI
+// yaratilmaydi — mavjudi qayta yuboriladi. Tugma ikki marta bosilsa ham
+// ikkita yorliq chiqmaydi.
+export function printBig(sessionId, operator) {
+  const session = getSession(sessionId);
+  if (!session) return { error: "Sessiya topilmadi" };
+  if (session.operator !== operator) return { error: "Bu sessiya boshqa operatorniki" };
+  if (session.status !== "done") {
+    return { error: "Avval buyurtmadagi barcha tovarlar skanerlanishi kerak", code: "not_complete" };
+  }
+
+  const existing = listJobs({ sessionId }).filter((j) => j.target === "big");
+  if (existing.length) {
+    dispatchTo(session.stationId);
+    return { ok: true, reused: true, jobs: existing };
+  }
+
+  const job = addPrintJob({
+    sessionId: session.id,
+    orderId: session.orderId,
+    target: "big",
+    copies: 1,
+    stationId: session.stationId,
+  });
+  dispatchTo(session.stationId);
+  logger.info(`BIG yorlig'i so'raldi: ${session.orderId} (${operator})`);
+  return { ok: true, reused: false, jobs: [job] };
 }
 
 /* ==================== bekor qilish ==================== */

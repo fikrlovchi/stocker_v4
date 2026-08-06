@@ -286,7 +286,7 @@ const { config } = await import("../config.js");
 // Testda MoySklad'ga chiqmaymiz (token yo'q) — yakuniy holat tekshiruvini o'chiramiz.
 config.packing.maxMoyskladChecks = 0;
 
-const { scan, getActiveSession, cancelSession, expireStaleSessions, sessionJobs } =
+const { scan, printBig, getActiveSession, cancelSession, expireStaleSessions, sessionJobs } =
   await import("../scan/sessions.js");
 
 // Asosiy fixture'larni tiklaymiz (6-bo'lim keshni o'zgartirgan edi).
@@ -315,13 +315,23 @@ check("skan: 2/3", [r.result, r.session.progress.scanned], ["ok", 2]);
 r = await scan({ barcode: "1000222953348", operator: "aziz" });
 check("skan: oxirgi birlik -> buyurtma yig'ildi", r.result, "order_complete");
 check("skan: progress 3/3", r.session.progress.remaining, 0);
-check(
-  "skan: yakunda BIG niyati",
-  r.print.map((p) => p.target),
-  ["shk", "big"]
-);
+// BIG endi AVTOMATIK chiqmaydi — operator "Print" tugmasini bosishi kerak
+// (config.packing.autoBigPrint = false).
+check("skan: yakunda faqat ShK", r.print.map((p) => p.target), ["shk"]);
 
 const completedSessionId = r.session.id;
+check(
+  "print: BIG hali yasalmagan",
+  sessionJobs(completedSessionId).filter((i) => i.target === "big").length,
+  0
+);
+
+const printed = printBig(completedSessionId, "aziz");
+check("print: BIG yasaldi", [printed.ok, printed.reused], [true, false]);
+const printedAgain = printBig(completedSessionId, "aziz");
+check("print: takror bosilsa yangi yasalmaydi", printedAgain.reused, true);
+check("print: boshqa operator bosa olmaydi", printBig(completedSessionId, "vali").error, "Bu sessiya boshqa operatorniki");
+
 const jobs = sessionJobs(completedSessionId);
 check("navbat: 3 ta ShK", jobs.filter((i) => i.target === "shk").length, 3);
 check("navbat: BIG bitta", jobs.filter((i) => i.target === "big").length, 1);
@@ -619,6 +629,7 @@ check(
 );
 check("partiya: operator tarixi", B.packedByOperator("aziz").map((r) => r.orderId), ["OK1"]);
 
+
 // Yopilgan partiya skan doirasidan chiqadi.
 B.closeBatch(second.batch.id);
 B.closeBatch(made.batch.id);
@@ -645,6 +656,23 @@ check("skan: partiyadan tashqaridagi buyurtma chiqmaydi", outOfBatch.result, "un
 
 const inBatch = await scan({ barcode: "1000111953348", operator: "aziz" });
 check("skan: partiyadagi buyurtma ochiladi", inBatch.result, "order_opened");
+
+// Buyurtmani oxirigacha yig'amiz — tarix va partiya belgisi shundan keladi.
+await scan({ barcode: "1000222953348", operator: "aziz" });
+const finished = await scan({ barcode: "1000222953348", operator: "aziz" });
+check("skan: partiyadagi buyurtma yig'ildi", finished.result, "order_complete");
+check("partiya: yig'ilgach 'packed' bo'ldi",
+  B.batchOrders(made.batch.id).find((o) => o.orderId === "OK1").status, "packed");
+
+// Mobil ilovadagi "men nima yig'dim": sessiyalardan, tarkibi bilan.
+const { packedHistory } = await import("../packing/history.js");
+const hist = packedHistory("aziz");
+check("tarix: yig'ilgan buyurtma ro'yxatda", hist.map((h) => h.orderId), ["OK1"]);
+check("tarix: tarkibi bor", hist[0].items.length, 2);
+check("tarix: hamma tovar to'liq skanerlangan", hist[0].items.every((i) => i.scanned === i.needed), true);
+check("tarix: partiya nomi ko'rinadi", hist[0].batch, "5-avgust");
+check("tarix: boshqa operatorda bo'sh", packedHistory("boshqa").length, 0);
+
 resetSessions();
 
 B.removeBatch(made.batch.id);

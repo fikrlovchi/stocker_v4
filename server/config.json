@@ -57,6 +57,7 @@
   "packing": {
     "sessionTtlMinutes": 15,
     "shkCopies": 2,
+    "autoBigPrint": false,
     "maxMoyskladChecks": 3,
     "blockOnMoyskladError": false
   },

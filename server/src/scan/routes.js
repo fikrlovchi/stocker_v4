@@ -6,8 +6,11 @@
 // so'rovlar (desktop client, diagnostika, selfTest) uchun eski tartib qoladi.
 // Station tokeni 6.5 bandda qo'shiladi.
 import express from "express";
+import { openBatch, batchShops } from "../packing/batches.js";
+import { packedHistory } from "../packing/history.js";
 import {
   scan,
+  printBig,
   getActiveSession,
   getLastSession,
   getSession,
@@ -86,6 +89,37 @@ export function scanRouter() {
   router.get("/jobs", (req, res) => {
     if (!req.query.sessionId) return res.status(400).json({ error: "sessionId kerak" });
     res.json({ jobs: sessionJobs(String(req.query.sessionId)) });
+  });
+
+  /* ---------- mobil ilova: do'konlar, Print, tarix ---------- */
+
+  // Ochiq partiyadagi do'konlar va ularda nechta buyurtma qolgani.
+  // Telefon ekranining yuqori chap burchagi shu ro'yxatdan to'ladi.
+  router.get("/shops", (req, res) => {
+    const batch = openBatch();
+    if (!batch) return res.json({ batch: null, shops: [] });
+    res.json({ batch: { id: batch.id, name: batch.name, total: batch.total, packed: batch.packed },
+               shops: batchShops(batch.id) });
+  });
+
+  // "Print" tugmasi: BIG yorlig'ini chiqarish. Sessiya to'liq skanerlangan
+  // bo'lishi shart; ikki marta bosilsa ikkinchi yorliq yasalmaydi.
+  router.post("/session/print", (req, res) => {
+    const operator = who(req, req.body?.operator);
+    const sessionId = req.body?.sessionId || getActiveSession(String(operator))?.id
+      || getLastSession(String(operator))?.id;
+    if (!sessionId) return res.status(404).json({ error: "Sessiya topilmadi" });
+
+    const result = printBig(String(sessionId), String(operator));
+    if (result.error) return res.status(result.code === "not_complete" ? 409 : 400).json(result);
+    res.json(result);
+  });
+
+  // "Men nima yig'dim" — sana, buyurtma va tarkibi bilan.
+  router.get("/my-packed", (req, res) => {
+    const operator = who(req, req.query.operator);
+    if (!operator) return res.status(400).json({ error: "operator kerak" });
+    res.json({ orders: packedHistory(String(operator), Math.min(Number(req.query.limit) || 50, 200)) });
   });
 
   router.get("/result-codes", (req, res) => res.json(RESULT));
