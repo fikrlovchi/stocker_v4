@@ -65,10 +65,14 @@ data class ScanResponse(
 @Serializable
 data class Shop(
     val shopId: String,
+    /** Do'kon nomi (panel katalogidan). Bo'sh bo'lsa ID ko'rsatiladi. */
+    val name: String? = null,
     val total: Int = 0,
     val packed: Int = 0,
     val pending: Int = 0,
-)
+) {
+    val title: String get() = name?.takeIf { it.isNotBlank() } ?: shopId
+}
 
 @Serializable
 data class BatchInfo(

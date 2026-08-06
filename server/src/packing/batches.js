@@ -9,6 +9,7 @@
 // ro'yxat kiritilmagan kuni ish to'xtab qolmaydi.
 import { db } from "../db/index.js";
 import logger from "../logger.js";
+import { shopName } from "./shops.js";
 
 const nowIso = () => new Date().toISOString();
 
@@ -77,7 +78,14 @@ export function batchShops(batchId) {
        ORDER BY total DESC`
     )
     .all(batchId)
-    .map((r) => ({ shopId: r.shopId, total: r.total, packed: r.packed || 0, pending: r.total - (r.packed || 0) }));
+    // Ekranda ID emas, do'kon NOMI ko'rinadi (uzum_shops jadvalidan).
+    .map((r) => ({
+      shopId: r.shopId,
+      name: shopName(r.shopId),
+      total: r.total,
+      packed: r.packed || 0,
+      pending: r.total - (r.packed || 0),
+    }));
 }
 
 export function batchOrders(batchId, { shopId = null, status = null } = {}) {
@@ -103,7 +111,12 @@ export function batchOrders(batchId, { shopId = null, status = null } = {}) {
        ORDER BY bo.status, bo.order_id`
     )
     .all(params)
-    .map((r) => ({ ...r, eligible: r.eligible === 1, inCache: r.itemCount !== null }));
+    .map((r) => ({
+      ...r,
+      shopName: shopName(r.shopId),
+      eligible: r.eligible === 1,
+      inCache: r.itemCount !== null,
+    }));
 }
 
 /* ==================== yozish ==================== */
@@ -232,5 +245,6 @@ export function packedByOperator(operator, { limit = 100 } = {}) {
        WHERE bo.packed_by = ? AND bo.status = 'packed'
        ORDER BY bo.packed_at DESC LIMIT ?`
     )
-    .all(operator, limit);
+    .all(operator, limit)
+    .map((r) => ({ ...r, shopName: shopName(r.shopId) }));
 }

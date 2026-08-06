@@ -1,8 +1,8 @@
 // Loyihalar bo'limi — panel'dan ko'chirilgan (konsolidatsiya 3-bosqichi).
 //
 // Menyuda "Uzum order to MC" deb turadi, lekin ekran LOYIHAGA BOG'LANMAGAN:
-// `cancel-uzum-order` va `mc-stock-to-uzum` ham shu yerdan boshqariladi.
-// Aks holda panel o'chgach ular boshqaruvsiz qolardi.
+// `mc-stock-to-uzum` va `stocker` ham shu yerdan boshqariladi. Aks holda
+// panel o'chgach ular boshqaruvsiz qolardi.
 //
 // Ma'lumot bir xil bazada (2-bosqich birlashtirishi) — panel'dagi jadvallar
 // shundoq o'qiladi: projects, runs, log_events, project_env_bindings.
@@ -18,6 +18,9 @@ const SYSTEMCTL = "/usr/bin/systemctl";
 const EXEC_TIMEOUT_MS = 5000;
 
 // Systemd orqali boshqariladigan loyihalar — QATTIQ KODLANGAN ro'yxat.
+//
+// `cancel-uzum-order` (Uzum CANCELED → MoySklad) 2026-08-06 da olib tashlandi:
+// loyiha faol emas edi. O'chirish skripti: deploy/remove-cancel-uzum-order.sh
 // Bazadan olinmaydi: sessiya o'g'irlansa ham hujumchi ixtiyoriy unit'ni
 // boshqara olmasin (panel'dagi manageable-units.js bilan bir xil tamoyil).
 const UNITS = {
@@ -26,12 +29,6 @@ const UNITS = {
     timerUnit: "uzum-order.timer",
     timerUnitPath: "/etc/systemd/system/uzum-order.timer",
     envPath: "/root/stocker/uzum-order-to-mc/.env",
-  },
-  "cancel-uzum-order": {
-    serviceUnit: "cancel-uzum-order.service",
-    timerUnit: "cancel-uzum-order.timer",
-    timerUnitPath: "/etc/systemd/system/cancel-uzum-order.timer",
-    envPath: "/root/cancelUzumOrder/.env",
   },
   "mc-stock-to-uzum": {
     serviceUnit: "mc-stock.service",

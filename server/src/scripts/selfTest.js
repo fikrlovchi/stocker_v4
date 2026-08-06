@@ -625,8 +625,19 @@ check("partiya: takror belgilash o'zgartirmaydi", B.markPacked("OK1", "aziz"), f
 check(
   "partiya: do'kon progressi",
   B.batchShops(made.batch.id).find((s) => s.shopId === "9001"),
-  { shopId: "9001", total: 2, packed: 1, pending: 1 }
+  // `uzum_shops` jadvali bu bazada yo'q — nom o'rniga ID qaytadi.
+  { shopId: "9001", name: "9001", total: 2, packed: 1, pending: 1 }
 );
+
+// Do'kon nomi: jadval bo'lsa nom, bo'lmasa ID.
+db.exec("CREATE TABLE IF NOT EXISTS uzum_shops (id INTEGER PRIMARY KEY, cabinet_id INTEGER, name TEXT, shop_id TEXT)");
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (1, ?, ?)").run("Buyo Fashion", "9001");
+const { clearShopNameCache } = await import("../packing/shops.js");
+clearShopNameCache();
+check("do'kon nomi ko'rinadi", B.batchShops(made.batch.id).find((s) => s.shopId === "9001").name, "Buyo Fashion");
+check("nomsiz do'kon uchun ID qoladi", B.batchShops(made.batch.id).find((s) => s.shopId === "—")?.name, "—");
+db.exec("DROP TABLE uzum_shops");
+clearShopNameCache();
 check("partiya: operator tarixi", B.packedByOperator("aziz").map((r) => r.orderId), ["OK1"]);
 
 

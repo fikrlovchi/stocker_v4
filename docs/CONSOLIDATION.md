@@ -203,6 +203,20 @@ A5 maket (`createProductsPdf`). uzumPDFs'da `runGenerateSmall()` qo'shildi:
 buyurtmalar ro'yxatidagi har bir tovar uchun 40×30 yorliq yasab bitta PDF'ga
 yig'adi.
 
+**Do'kon nomlari ✅ (2026-08-06)** — mobil ilovada va admin panelda endi
+`shop_id` emas, do'kon NOMI ko'rinadi (`uzum_shops` jadvalidan, u panel
+katalogidan keladi). Nom topilmasa ID qoladi — ekranda bo'sh joy bo'lmasin.
+Nomlar 60 soniyalik keshda: har skan javobida jadvalga murojaat qilinmaydi,
+lekin panelda nom o'zgartirilsa bir daqiqada ko'rinadi.
+
+**"Uzum CANCELED → MoySklad" olib tashlandi ✅ (2026-08-06)** — loyiha faol
+emas edi. `server/src/web/projects.js` dagi boshqariladigan unit'lar
+ro'yxatidan chiqarildi; serverda
+[`deploy/remove-cancel-uzum-order.sh`](../deploy/remove-cancel-uzum-order.sh)
+timer va service'ni to'xtatib avtoyuklashdan chiqaradi, unit fayllari va
+papkani zaxiraga oladi (o'chirmaydi) va bazadagi yozuvlarini tozalaydi
+(avval baza nusxasi olinadi). GitHub repo'si **arxivlanadi**, o'chirilmaydi.
+
 Keyingi: o'zgaruvchilar katalogini ko'chirish → `panel/` ni o'chirish →
 4-bosqich (uchta Node jarayonini bittaga yig'ish).
 

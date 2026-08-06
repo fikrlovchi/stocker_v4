@@ -192,7 +192,7 @@ fun ScanScreen(
                     .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
                 Text(
-                    selectedShop?.shopId ?: (if (shops.isEmpty()) s.noBatch else s.chooseShop),
+                    selectedShop?.title ?: (if (shops.isEmpty()) s.noBatch else s.chooseShop),
                     color = p.text,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -469,7 +469,7 @@ fun ScanScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(shop.shopId, color = p.text, fontSize = 16.sp)
+                                Text(shop.title, color = p.text, fontSize = 16.sp)
                                 Text(
                                     "${shop.packed}/${shop.total}",
                                     color = if (shop.pending == 0) p.done else p.accent,

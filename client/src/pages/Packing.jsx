@@ -243,7 +243,7 @@ function BatchDetail({ data, shop, onShop, onRemoveOrder }) {
         <button className={shop ? "ghost" : ""} onClick={() => onShop(null)}>{t("packing.all")}</button>
         {shops.map((s) => (
           <button key={s.shopId} className={shop === s.shopId ? "" : "ghost"} onClick={() => onShop(s.shopId)}>
-            {s.shopId} · {s.packed}/{s.total}
+            {s.name || s.shopId} · {s.packed}/{s.total}
           </button>
         ))}
       </div>
@@ -268,7 +268,7 @@ function BatchDetail({ data, shop, onShop, onRemoveOrder }) {
                   <span className="badge off" style={{ marginLeft: 8 }}>{t("packing.notEligible")}</span>
                 )}
               </td>
-              <td>{o.shopId || "—"}</td>
+              <td>{o.shopName || o.shopId || "—"}</td>
               <td>
                 <span className={`badge ${o.status === "packed" ? "on" : "off"}`}>
                   {o.status === "packed" ? t("packing.statusPacked") : t("packing.statusPending")}
