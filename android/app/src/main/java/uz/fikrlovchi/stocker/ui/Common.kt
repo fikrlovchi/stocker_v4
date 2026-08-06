@@ -37,27 +37,28 @@ fun Field(
     secret: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
 ) {
+    val p = LocalPalette.current
     Column(Modifier.padding(top = 14.dp)) {
-        Text(label, color = Palette.muted, fontSize = 13.sp)
+        Text(label, color = p.muted, fontSize = 13.sp)
         Spacer(Modifier.height(6.dp))
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            placeholder = { Text(placeholder, color = Palette.muted, fontSize = 15.sp) },
+            placeholder = { Text(placeholder, color = p.muted, fontSize = 15.sp) },
             visualTransformation =
                 if (secret) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = keyboardType),
             shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Palette.text,
-                unfocusedTextColor = Palette.text,
-                focusedContainerColor = Palette.panel,
-                unfocusedContainerColor = Palette.panel,
-                focusedBorderColor = Palette.accent,
-                unfocusedBorderColor = Palette.line,
-                cursorColor = Palette.accent,
+                focusedTextColor = p.text,
+                unfocusedTextColor = p.text,
+                focusedContainerColor = p.panel,
+                unfocusedContainerColor = p.panel,
+                focusedBorderColor = p.accent,
+                unfocusedBorderColor = p.line,
+                cursorColor = p.accent,
             ),
         )
     }
@@ -70,19 +71,30 @@ fun PrimaryButton(
     modifier: Modifier = Modifier,
     loading: Boolean = false,
     enabled: Boolean = true,
+    height: Int = 52,
 ) {
+    val p = LocalPalette.current
     Button(
         onClick = onClick,
-        modifier = modifier.height(52.dp),
+        modifier = modifier.height(height.dp),
         enabled = enabled && !loading,
         shape = RoundedCornerShape(10.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Palette.accent),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = p.accent,
+            disabledContainerColor = p.line,
+        ),
     ) {
-        // Yashil tugma ustida qora matn — oq matn brend yashilida o'qilmaydi.
+        // Yashil tugma ustidagi matn rangi fon yorqinligiga qarab tanlanadi.
+        val fg = onColor(p.accent)
         if (loading) {
-            CircularProgressIndicator(color = Palette.bg, strokeWidth = 2.dp, modifier = Modifier.height(20.dp))
+            CircularProgressIndicator(color = fg, strokeWidth = 2.dp, modifier = Modifier.height(20.dp))
         } else {
-            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Palette.bg)
+            Text(
+                text,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) fg else p.muted,
+            )
         }
     }
 }
@@ -92,18 +104,47 @@ fun GhostButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    borderColor: Color = Palette.line,
-    textColor: Color = Palette.text,
+    borderColor: Color? = null,
+    textColor: Color? = null,
 ) {
+    val p = LocalPalette.current
     Box(
         modifier
             .height(48.dp)
             .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+            .border(1.dp, borderColor ?: p.line, RoundedCornerShape(10.dp))
             .background(Color.Transparent)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = textColor, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = textColor ?: p.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Kichik tanlov tugmasi: til, mavzu, do'kon, rejim. */
+@Composable
+fun Chip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val p = LocalPalette.current
+    Box(
+        modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) p.accent else Color.Transparent)
+            .border(1.dp, if (selected) p.accent else p.line, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            color = if (selected) onColor(p.accent) else p.text,
+            fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        )
     }
 }

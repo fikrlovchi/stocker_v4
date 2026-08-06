@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -34,15 +35,19 @@ import androidx.core.content.ContextCompat
 import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.Config
 import uz.fikrlovchi.stocker.data.ConfigStore
+import uz.fikrlovchi.stocker.ui.HistoryScreen
+import uz.fikrlovchi.stocker.ui.Lang
+import uz.fikrlovchi.stocker.ui.LocalPalette
+import uz.fikrlovchi.stocker.ui.LocalStrings
 import uz.fikrlovchi.stocker.ui.LoginScreen
-import uz.fikrlovchi.stocker.ui.Palette
 import uz.fikrlovchi.stocker.ui.PairScreen
 import uz.fikrlovchi.stocker.ui.PrimaryButton
 import uz.fikrlovchi.stocker.ui.ScanScreen
+import uz.fikrlovchi.stocker.ui.SettingsScreen
 import uz.fikrlovchi.stocker.ui.StockerTheme
 import uz.fikrlovchi.stocker.util.Feedback
 
-private enum class Screen { LOGIN, PAIR, SCAN }
+private enum class Screen { LOGIN, PAIR, SCAN, SETTINGS, HISTORY }
 
 class MainActivity : ComponentActivity() {
 
@@ -56,48 +61,39 @@ class MainActivity : ComponentActivity() {
         val feedback = Feedback(this)
 
         setContent {
-            StockerTheme {
-                var config by remember { mutableStateOf(store.load()) }
-                var screen by remember {
-                    mutableStateOf(
-                        when {
-                            !store.load().isConfigured -> Screen.LOGIN
-                            // Ish joyisiz yorliq chiqmaydi, shuning uchun
-                            // birinchi navbatda juftlashga yuboramiz.
-                            store.load().stationId.isBlank() -> Screen.PAIR
-                            else -> Screen.SCAN
-                        }
-                    )
-                }
+            var config by remember { mutableStateOf(store.load()) }
+            var screen by remember {
+                mutableStateOf(if (store.load().isConfigured) Screen.SCAN else Screen.LOGIN)
+            }
 
-                // Api har doim ENG YANGI config'ni o'qiydi (lambda orqali) —
-                // sozlama o'zgarganda yangi Api yasash kerak emas.
+            // Sozlama o'zgarganda darhol saqlanadi va butun interfeys yangi
+            // til/mavzuga o'tadi.
+            val update: (Config) -> Unit = { next ->
+                config = next
+                store.save(next)
+            }
+
+            StockerTheme(dark = config.darkTheme, lang = Lang.from(config.lang)) {
+                // Api har doim ENG YANGI config'ni o'qiydi (lambda orqali).
                 val api = remember { Api { config } }
+                val palette = LocalPalette.current
 
-                Box(Modifier.fillMaxSize().background(Palette.bg)) {
+                Box(Modifier.fillMaxSize().background(palette.bg)) {
                     when (screen) {
                         Screen.LOGIN -> LoginScreen(
                             initial = config,
                             onLoggedIn = { saved ->
-                                config = saved
-                                store.save(saved)
+                                update(saved)
                                 screen = if (saved.stationId.isBlank()) Screen.PAIR else Screen.SCAN
                             },
-                            // Allaqachon kirilgan bo'lsa (⚙ orqali kelingan) —
-                            // qaytish yo'li bo'lsin.
-                            onBack = if (config.isConfigured) ({ screen = Screen.SCAN }) else null,
+                            onPrefs = update,
                         )
 
                         Screen.PAIR -> RequireCamera {
                             PairScreen(
                                 feedback = feedback,
-                                onPaired = { stationId, serverUrl ->
-                                    val next = config.copy(
-                                        stationId = stationId,
-                                        serverUrl = serverUrl?.takeIf { it.isNotBlank() } ?: config.serverUrl,
-                                    )
-                                    config = next
-                                    store.save(next)
+                                onPaired = { stationId, _ ->
+                                    update(config.copy(stationId = stationId))
                                     screen = Screen.SCAN
                                 },
                                 onSkip = { screen = Screen.SCAN },
@@ -109,22 +105,31 @@ class MainActivity : ComponentActivity() {
                                 config = config,
                                 api = api,
                                 feedback = feedback,
-                                onScanModeChange = { m ->
-                                    val next = config.copy(scanMode = m.name)
-                                    config = next
-                                    store.save(next)
-                                },
-                                onOpenSettings = { screen = Screen.LOGIN },
-                                onOpenPair = { screen = Screen.PAIR },
-                                // Token kuygan (panel'da faolsizlantirilgan yoki
-                                // muddati o'tgan) — saqlangan tokenni tashlab,
-                                // kirish ekraniga qaytamiz.
+                                onScanModeChange = { update(config.copy(scanMode = it.name)) },
+                                onShopChange = { update(config.copy(shopId = it)) },
+                                onOpenSettings = { screen = Screen.SETTINGS },
+                                onOpenHistory = { screen = Screen.HISTORY },
+                                // Token kuygan (faolsizlantirilgan yoki muddati
+                                // o'tgan) — saqlangan tokenni tashlab, kirishga.
                                 onAuthExpired = {
                                     config = store.clearAuth()
                                     screen = Screen.LOGIN
                                 },
                             )
                         }
+
+                        Screen.SETTINGS -> SettingsScreen(
+                            config = config,
+                            onChange = update,
+                            onPairStation = { screen = Screen.PAIR },
+                            onLogout = {
+                                config = store.clearAuth()
+                                screen = Screen.LOGIN
+                            },
+                            onBack = { screen = Screen.SCAN },
+                        )
+
+                        Screen.HISTORY -> HistoryScreen(api = api, onBack = { screen = Screen.SCAN })
                     }
                 }
             }
@@ -139,6 +144,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun RequireCamera(content: @Composable () -> Unit) {
     val context = LocalContext.current
+    val p = LocalPalette.current
     var granted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -165,12 +171,12 @@ private fun RequireCamera(content: @Composable () -> Unit) {
 
     Column(
         Modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             "Kamera ruxsati kerak",
-            color = Palette.text,
+            color = p.text,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -179,7 +185,7 @@ private fun RequireCamera(content: @Composable () -> Unit) {
         Text(
             "Barcode skanerlash uchun. Ruxsat berilmasa ilova ishlamaydi — " +
                 "Sozlamalar → Ilovalar → Stocker orqali ham berish mumkin.",
-            color = Palette.muted,
+            color = p.muted,
             fontSize = 15.sp,
             textAlign = TextAlign.Center,
         )

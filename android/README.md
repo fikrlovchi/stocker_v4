@@ -70,10 +70,31 @@ Build davomida chiqadigan, e'tibor bermaslik kerak bo'lgan ogohlantirishlar:
 Telefonda: Sozlamalar → Xavfsizlik → **"Noma'lum manbalardan o'rnatish"**
 ruxsatini bering, so'ng APK'ni oching.
 
+## Ekranlar
+
+| Ekran | Nima bor |
+|---|---|
+| **Kirish** | login + parol, til (uz/ru) va mavzu (qora/oq) |
+| **Skan** | yuqorida do'kon tanlash va uning `2/22` progressi, o'rtada kamera, pastda buyurtma tarkibi va **PRINT** tugmasi |
+| **Sozlamalar** | hisob va chiqish, til, mavzu, ish joyi (QR bilan ulash) — hammasi bir joyda |
+| **Men yig'ganlarim** | sana, buyurtma raqami va tarkibi bilan tarix |
+
+**PRINT** tugmasi buyurtmadagi barcha tovarlar skanerlangandagina faollashadi:
+BIG yorlig'i endi avtomatik chiqmaydi, operator qopni tayyorlab bo'lgach o'zi
+yuboradi. Ikki marta bosilsa ikkinchi yorliq chiqmaydi (server idempotent).
+
+**Do'kon tanlash** ochiq partiyaga bog'liq: admin panelda (`stocker.uz/app/`
+→ Yig'ish) buyurtma ID'lari joylanadi, telefon esa faqat o'sha ro'yxatdagi
+buyurtmalarni ochadi. Partiya yo'q bo'lsa — eski xatti-harakat, keshdagi
+barcha mos buyurtmalar.
+
+**Barcode'ni qo'lda kiritish olib tashlandi.** Skaner ishlamasa muammo
+kamerada yoki yorug'likda; qo'lda terish esa xato kod kiritish yo'li edi.
+
 ## Oqim
 
 ```
-Kirish (server manzili, login, parol)
+Kirish (login, parol)
    ↓
 Ish joyini ulash — desktop ilovadagi QR'ni skanerlash
    ↓
@@ -141,9 +162,12 @@ mipmap'lar kerak emas.
 
 | Maydon | Qiymat |
 |---|---|
-| Server manzili | `https://stocker.uz/pack` |
 | Login | panel'da berilgan login, masalan `operator1` |
 | Parol | panel'da berilgan parol |
+
+Server manzili sozlamada **yo'q** — u bitta (`https://stocker.uz/pack`) va
+`data/Config.kt` da qattiq yozilgan. Sabab: noto'g'ri terilgan manzil ombordagi
+ishni to'xtatib qo'yishi mumkin edi, operator esa uni o'zgartirishi kerak emas.
 
 Login va parol **fikrlovchi-panel**da yaratiladi (loyiha sahifasi →
 "Operatorlar"). Ilova `POST /api/auth/login` orqali token oladi va uni

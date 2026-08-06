@@ -179,7 +179,20 @@ batch_orders(batch_id, order_id, shop_id, status)   -- status: pending | packed
   `packed / jami`.
 * Partiya yopilgach tarixda qoladi.
 
-### Mobil ilova (3-bosqich bilan birga)
+### Mobil ilova ✅ v0.6.0 (2026-08-06)
+
+Bajarildi: do'kon tanlash (yig'ilmagan soni bilan) · tanlangan do'kon
+bo'yicha `2/22` · **PRINT** tugmasi (faqat hamma tovar skanerlangach) ·
+qo'lda barcode kiritish olib tashlandi · server manzili maydoni olib
+tashlandi · uz/ru · qora va oq mavzu · yagona **Sozlamalar** ekrani (hisob,
+til, mavzu, ish joyi) · **Men yig'ganlarim** tarixi (sana, buyurtma, tarkibi).
+
+Server tomonidagi o'zgarish: BIG yorlig'i endi avtomatik chiqmaydi
+(`config.packing.autoBigPrint = false`) — operator "PRINT" bosganda
+`POST /api/session/print` chaqiriladi. Takror bosilsa yangi yorliq
+yasalmaydi.
+
+### Mobil ilova — dastlabki reja
 
 | O'zgarish | Izoh |
 |---|---|

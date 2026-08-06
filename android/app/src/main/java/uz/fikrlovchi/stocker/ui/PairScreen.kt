@@ -46,6 +46,8 @@ fun PairScreen(
     onPaired: (stationId: String, serverUrl: String?) -> Unit,
     onSkip: () -> Unit,
 ) {
+    val p = LocalPalette.current
+    val s = LocalStrings.current
     var error by remember { mutableStateOf<String?>(null) }
     // Noto'g'ri QR ketma-ket o'nlab marta o'qilmasin.
     var lastAttempt by remember { mutableLongStateOf(0L) }
@@ -86,7 +88,7 @@ fun PairScreen(
         ) {
             Text(
                 "Ish joyini ulash",
-                color = Palette.text,
+                color = p.text,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -95,7 +97,7 @@ fun PairScreen(
             Text(
                 "Kompyuterdagi Stocker Print ilovasida \"Telefonni ulash\" " +
                     "tabini oching va QR'ni skanerlang.",
-                color = Palette.muted,
+                color = p.muted,
                 fontSize = 15.sp,
                 textAlign = TextAlign.Center,
             )
@@ -104,12 +106,12 @@ fun PairScreen(
             Box(
                 Modifier
                     .size(250.dp)
-                    .border(3.dp, Palette.accent, RoundedCornerShape(18.dp))
+                    .border(3.dp, p.accent, RoundedCornerShape(18.dp))
             )
 
             error?.let {
                 Spacer(Modifier.height(24.dp))
-                Text(it, color = Palette.err, fontSize = 15.sp, textAlign = TextAlign.Center)
+                Text(it, color = p.err, fontSize = 15.sp, textAlign = TextAlign.Center)
             }
 
             Spacer(Modifier.weight(1f))
@@ -117,8 +119,8 @@ fun PairScreen(
                 text = "Ish joyisiz davom etish",
                 onClick = onSkip,
                 modifier = Modifier.fillMaxWidth(),
-                borderColor = Palette.line,
-                textColor = Palette.text,
+                borderColor = p.line,
+                textColor = p.text,
             )
         }
     }

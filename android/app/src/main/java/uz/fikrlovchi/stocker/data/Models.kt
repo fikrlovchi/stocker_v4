@@ -61,6 +61,59 @@ data class ScanResponse(
     val session: Session? = null,
 )
 
+/** `GET /api/shops` — ochiq partiyadagi do'konlar va qoldiq. */
+@Serializable
+data class Shop(
+    val shopId: String,
+    val total: Int = 0,
+    val packed: Int = 0,
+    val pending: Int = 0,
+)
+
+@Serializable
+data class BatchInfo(
+    val id: Int,
+    val name: String,
+    val total: Int = 0,
+    val packed: Int = 0,
+)
+
+@Serializable
+data class ShopsResponse(
+    val batch: BatchInfo? = null,
+    val shops: List<Shop> = emptyList(),
+)
+
+/** `GET /api/my-packed` — operator yig'gan buyurtmalar. */
+@Serializable
+data class PackedItem(
+    val itemId: String,
+    val title: String = "",
+    val needed: Int = 0,
+    val scanned: Int = 0,
+)
+
+@Serializable
+data class PackedOrder(
+    val orderId: String,
+    val stationId: String? = null,
+    val startedAt: String? = null,
+    val finishedAt: String? = null,
+    val batch: String? = null,
+    val items: List<PackedItem> = emptyList(),
+)
+
+@Serializable
+data class PackedResponse(val orders: List<PackedOrder> = emptyList())
+
+/** `POST /api/session/print` javobi. */
+@Serializable
+data class PrintResponse(
+    val ok: Boolean = false,
+    val reused: Boolean = false,
+    val jobs: List<PrintJob> = emptyList(),
+)
+
 /** `POST /api/auth/login` javobi. */
 @Serializable
 data class LoginResponse(

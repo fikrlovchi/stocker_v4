@@ -35,7 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -46,44 +46,52 @@ import uz.fikrlovchi.stocker.data.Config
 import uz.fikrlovchi.stocker.data.PrintJob
 import uz.fikrlovchi.stocker.data.ScanResult
 import uz.fikrlovchi.stocker.data.Session
+import uz.fikrlovchi.stocker.data.Shop
 import uz.fikrlovchi.stocker.scan.ScanMode
 import uz.fikrlovchi.stocker.scan.ScannerView
 import uz.fikrlovchi.stocker.util.Buzz
 import uz.fikrlovchi.stocker.util.Feedback
 
-/**
- * Kamera bir barcode'ni sekundiga o'nlab marta beradi — bir xil kodni shu
- * muddat ichida takror hisoblamaymiz. Busiz bitta tovar bir necha marta
- * skanerlangan bo'lib qolardi.
- */
-private const val SAME_CODE_COOLDOWN_MS = 2500L
+private const val SAME_CODE_COOLDOWN_MS = 1200L
 private const val BANNER_MS = 3500L
 
 private data class Banner(val color: Color, val title: String, val message: String)
 
+/**
+ * Asosiy ekran. Yuqorida — do'kon tanlash va uning progressi (2/22), o'rtada
+ * kamera, pastda buyurtma tarkibi va **PRINT** tugmasi.
+ *
+ * Barcode'ni qo'lda kiritish OLIB TASHLANDI: skaner ishlamasa muammo
+ * kamerada yoki yorug'likda, qo'lda terish esa xato kod kiritish yo'li edi.
+ */
 @Composable
 fun ScanScreen(
     config: Config,
     api: Api,
     feedback: Feedback,
     onScanModeChange: (ScanMode) -> Unit,
+    onShopChange: (String) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenPair: () -> Unit,
+    onOpenHistory: () -> Unit,
     onAuthExpired: () -> Unit,
 ) {
+    val p = LocalPalette.current
+    val s = LocalStrings.current
+
     var session by remember { mutableStateOf<Session?>(null) }
     var banner by remember { mutableStateOf<Banner?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var printing by remember { mutableStateOf(false) }
     var offline by remember { mutableStateOf(false) }
 
-    // Rejim sozlamalarda saqlanadi; chiroq esa sessiya davomida — smena
-    // oxirida yoqilgan holda qolib batareyani yeb qo'ymasin.
+    var shops by remember { mutableStateOf<List<Shop>>(emptyList()) }
+    var batchName by remember { mutableStateOf<String?>(null) }
+    var shopPicker by remember { mutableStateOf(false) }
+
     val mode = ScanMode.from(config.scanMode)
     var torchOn by remember { mutableStateOf(false) }
     var torchAvailable by remember { mutableStateOf(false) }
 
-    var manualOpen by remember { mutableStateOf(false) }
-    var manualValue by remember { mutableStateOf("") }
     var confirmCancel by remember { mutableStateOf(false) }
     var reprintJobs by remember { mutableStateOf<List<PrintJob>?>(null) }
 
@@ -94,7 +102,7 @@ fun ScanScreen(
     val scope = rememberCoroutineScope()
 
     fun showBanner(result: String, message: String?) {
-        val style = resultStyle(result)
+        val style = resultStyle(result, p, s)
         banner = Banner(style.color, style.title, message.orEmpty())
         bannerAt = System.currentTimeMillis()
         feedback.buzz(
@@ -107,6 +115,14 @@ fun ScanScreen(
         )
     }
 
+    fun fail(e: Throwable) {
+        val apiErr = e as? ApiException
+        offline = apiErr?.offline == true
+        if (apiErr?.authExpired == true) onAuthExpired()
+        banner = Banner(p.err, if (apiErr?.offline == true) "…" else "XATO", e.message.orEmpty())
+        bannerAt = System.currentTimeMillis()
+    }
+
     // Banner o'zi yo'qoladi.
     LaunchedEffect(bannerAt) {
         if (bannerAt == 0L) return@LaunchedEffect
@@ -114,8 +130,18 @@ fun ScanScreen(
         if (System.currentTimeMillis() - bannerAt >= BANNER_MS) banner = null
     }
 
-    // Sessiya SERVERDA saqlanadi — ilova yopilib ochilsa yoki telefon
-    // internetni yo'qotib qayta ulansa, yig'ish joyidan davom etadi.
+    suspend fun loadShops() {
+        runCatching { api.shops() }
+            .onSuccess {
+                shops = it.shops
+                batchName = it.batch?.name
+                offline = false
+            }
+            .onFailure { e -> if (e is ApiException && e.authExpired) onAuthExpired() }
+    }
+
+    // Sessiya SERVERDA saqlanadi — ilova yopilib ochilsa ham yig'ish joyidan
+    // davom etadi.
     LaunchedEffect(config.operator) {
         runCatching { api.session() }
             .onSuccess { session = it; offline = false }
@@ -124,6 +150,7 @@ fun ScanScreen(
                 else if (e is ApiException && e.authExpired) onAuthExpired()
                 else if (e is ApiException) offline = e.offline
             }
+        loadShops()
     }
 
     fun submit(barcode: String) {
@@ -136,70 +163,78 @@ fun ScanScreen(
                     offline = false
                     r.session?.let { session = it }
                     showBanner(r.result, r.message)
+                    // Buyurtma yig'ilgach do'kon hisobi o'zgaradi.
+                    if (r.result == ScanResult.ORDER_COMPLETE) loadShops()
                 }
-                .onFailure { e ->
-                    feedback.buzz(Buzz.ERROR)
-                    val apiErr = e as? ApiException
-                    offline = apiErr?.offline == true
-                    // Token kuygan bo'lsa skan qilishdan ma'no yo'q — login ekrani.
-                    if (apiErr?.authExpired == true) onAuthExpired()
-                    banner = Banner(
-                        Palette.err,
-                        if (apiErr?.offline == true) "ULANISH YO'Q" else "XATO",
-                        e.message.orEmpty(),
-                    )
-                    bannerAt = System.currentTimeMillis()
-                }
+                .onFailure { feedback.buzz(Buzz.ERROR); fail(it) }
             busy = false
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Palette.bg)) {
+    val current = session
+    val selectedShop = shops.firstOrNull { it.shopId == config.shopId }
+    val readyToPrint = current != null && current.progress.remaining == 0
 
-        /* ---------- Sarlavha ---------- */
+    Column(Modifier.fillMaxSize().background(p.bg)) {
+
+        /* ---------- Sarlavha: do'kon · progress · tugmalar ---------- */
         Row(
-            Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 52.dp, bottom = 12.dp),
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 48.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(config.displayName, color = Palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            // Chapda — do'kon tanlash (yig'ilmagan buyurtmalar soni bilan).
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { shopPicker = true }
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
                 Text(
-                    // Versiya shu yerda: qaysi build o'rnatilganini bir
-                    // qarashda bilish uchun (yangi APK haqiqatan o'rnatildimi).
-                    (if (config.stationId.isNotBlank()) "📍 ${config.stationId}" else "⚠ ish joyi ulanmagan") +
+                    selectedShop?.shopId ?: (if (shops.isEmpty()) s.noBatch else s.chooseShop),
+                    color = p.text,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    (if (config.stationId.isNotBlank()) "📍 ${config.stationId}" else "⚠ ${s.noStation}") +
                         "  ·  v${BuildConfig.VERSION_NAME}",
-                    color = if (config.stationId.isNotBlank()) Palette.muted else Palette.warn,
-                    fontSize = 13.sp,
+                    color = if (config.stationId.isNotBlank()) p.muted else p.warn,
+                    fontSize = 12.sp,
                 )
             }
+
+            // O'rtada — tanlangan do'kon bo'yicha "2/22".
+            selectedShop?.let { shop ->
+                Text(
+                    "${shop.packed}/${shop.total}",
+                    color = if (shop.pending == 0) p.done else p.accent,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                )
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GhostButton("QR", onOpenPair, Modifier.size(width = 62.dp, height = 44.dp))
-                GhostButton("⚙", onOpenSettings, Modifier.size(width = 56.dp, height = 44.dp))
+                GhostButton("🕘", onOpenHistory, Modifier.size(width = 52.dp, height = 44.dp))
+                GhostButton("⚙", onOpenSettings, Modifier.size(width = 52.dp, height = 44.dp))
             }
         }
 
         if (offline) {
             Text(
-                "Serverga ulanib bo'lmayapti — qayta urinilmoqda",
-                color = onColor(Palette.warn),
+                s.offline,
+                color = onColor(p.warn),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.fillMaxWidth().background(Palette.warn).padding(vertical = 7.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().background(p.warn).padding(vertical = 7.dp),
+                textAlign = TextAlign.Center,
             )
         }
 
         /* ---------- Kamera ---------- */
-        // clipToBounds: kamera view'i qutidan chiqib ketmasin (ScannerView
-        // izohiga qarang — SurfaceView bilan aynan shunday bo'lgan edi).
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(250.dp)
-                .clipToBounds()
-                .background(Color.Black)
-        ) {
+        Box(Modifier.fillMaxWidth().height(240.dp).clipToBounds().background(Color.Black)) {
             ScannerView(
                 modifier = Modifier.fillMaxSize(),
                 mode = mode,
@@ -215,19 +250,16 @@ fun ScanScreen(
                 },
             )
 
-            // Nishon: QR rejimida kvadrat, shtrix rejimida cho'ziq — operator
-            // kodni qanday tutish kerakligini ko'rsatadi.
             Box(
                 Modifier
                     .align(Alignment.Center)
                     .then(
-                        if (mode == ScanMode.QR) Modifier.size(160.dp)
-                        else Modifier.size(width = 230.dp, height = 130.dp)
+                        if (mode == ScanMode.QR) Modifier.size(150.dp)
+                        else Modifier.size(width = 220.dp, height = 120.dp)
                     )
                     .border(3.dp, Color(0xBFFFFFFF), RoundedCornerShape(14.dp))
             )
 
-            // Chiroq — yuqori o'ngda
             if (torchAvailable) {
                 Box(
                     Modifier
@@ -235,41 +267,39 @@ fun ScanScreen(
                         .padding(10.dp)
                         .size(44.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(if (torchOn) Palette.accent else Color(0x8C000000))
+                        .background(if (torchOn) p.accent else Color(0x8C000000))
                         .clickable { torchOn = !torchOn },
                     contentAlignment = Alignment.Center,
-                ) {
-                    Text("🔦", fontSize = 20.sp)
-                }
+                ) { Text("🔦", fontSize = 20.sp) }
             }
 
-            // Rejim tanlash — pastda
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 10.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0x8C000000))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    .background(Color(0x99000000))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                ScanMode.entries.forEach { m ->
-                    val active = m == mode
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (active) Palette.accent else Color.Transparent)
-                            .clickable { if (!active) onScanModeChange(m) }
-                            .padding(horizontal = 14.dp, vertical = 7.dp),
-                    ) {
-                        Text(
-                            m.label,
-                            color = if (active) onColor(Palette.accent) else Palette.text,
-                            fontSize = 13.sp,
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        )
+                listOf(ScanMode.BARCODE to s.modeBarcode, ScanMode.QR to s.modeQr, ScanMode.MIXED to s.modeMixed)
+                    .forEach { (m, label) ->
+                        val active = m == mode
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (active) p.accent else Color.Transparent)
+                                .clickable { if (!active) onScanModeChange(m) }
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
+                        ) {
+                            Text(
+                                label,
+                                color = if (active) onColor(p.accent) else Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
                     }
-                }
             }
 
             if (busy) {
@@ -282,31 +312,23 @@ fun ScanScreen(
 
         /* ---------- Natija banneri ---------- */
         banner?.let { b ->
-            // Matn rangi fonga qarab tanlanadi: yorqin yashil/firuza/sariq
-            // ustida oq matn o'qilmaydi.
             val fg = onColor(b.color)
-            Column(Modifier.fillMaxWidth().background(b.color).padding(horizontal = 18.dp, vertical = 16.dp)) {
+            Column(Modifier.fillMaxWidth().background(b.color).padding(horizontal = 18.dp, vertical = 14.dp)) {
                 Text(b.title, color = fg, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                if (b.message.isNotBlank()) {
-                    Text(b.message, color = fg.copy(alpha = 0.92f), fontSize = 15.sp)
-                }
+                if (b.message.isNotBlank()) Text(b.message, color = fg.copy(alpha = 0.92f), fontSize = 15.sp)
             }
         }
 
-        /* ---------- Sessiya ---------- */
-        // weight(1f): kamera va banner o'z balandligini oladi, qolgan joy
-        // aylantiriladigan qismga tegadi (fillMaxSize bo'lsa cheksiz
-        // balandlik so'rab layout buzilardi).
+        /* ---------- Buyurtma ---------- */
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            val s = session
-            if (s != null) {
+            if (current != null) {
                 Column(
                     Modifier
-                        .padding(16.dp)
+                        .padding(14.dp)
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Palette.panel)
-                        .border(1.dp, Palette.line, RoundedCornerShape(14.dp))
+                        .background(p.panel)
+                        .border(1.dp, p.line, RoundedCornerShape(14.dp))
                         .padding(16.dp)
                 ) {
                     Row(
@@ -314,139 +336,175 @@ fun ScanScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Bottom,
                     ) {
-                        Text(s.orderId, color = Palette.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        Text(current.orderId, color = p.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            "${s.progress.scanned} / ${s.progress.total}",
-                            color = if (s.isClosed) Palette.done else Palette.text,
+                            "${current.progress.scanned} / ${current.progress.total}",
+                            color = if (current.isClosed) p.done else p.text,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                         )
                     }
 
                     Spacer(Modifier.height(12.dp))
-                    Box(
-                        Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Palette.line)
-                    ) {
+                    Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(p.line)) {
                         Box(
                             Modifier
-                                .fillMaxWidth(s.percent / 100f)
+                                .fillMaxWidth(current.percent / 100f)
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(if (s.isClosed) Palette.done else Palette.ok)
+                                .background(if (current.isClosed) p.done else p.ok)
                         )
                     }
 
-                    s.items.forEach { item ->
-                        HorizontalDivider(color = Palette.line, modifier = Modifier.padding(top = 11.dp))
+                    current.items.forEach { item ->
+                        HorizontalDivider(color = p.line, modifier = Modifier.padding(top = 11.dp))
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(item.displayName, color = Palette.text, fontSize = 16.sp)
+                                Text(item.displayName, color = p.text, fontSize = 16.sp)
                                 if (!item.mcName.isNullOrBlank() && !item.skuTitle.isNullOrBlank()) {
-                                    Text(item.skuTitle, color = Palette.muted, fontSize = 12.sp)
+                                    Text(item.skuTitle, color = p.muted, fontSize = 12.sp)
                                 }
                             }
                             Text(
                                 "${item.scanned}/${item.needed}",
-                                color = if (item.remaining == 0) Palette.ok else Palette.muted,
+                                color = if (item.remaining == 0) p.ok else p.muted,
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         GhostButton(
-                            "Qayta chiqarish",
+                            s.reprint,
                             onClick = {
                                 scope.launch {
-                                    runCatching { api.jobs(s.id) }
+                                    runCatching { api.jobs(current.id) }
                                         .onSuccess { reprintJobs = it.jobs }
-                                        .onFailure { banner = Banner(Palette.err, "XATO", it.message.orEmpty()) }
+                                        .onFailure { fail(it) }
                                 }
                             },
                             modifier = Modifier.weight(1f),
                         )
-                        if (!s.isClosed) {
+                        if (!current.isClosed) {
                             GhostButton(
-                                "Bekor qilish",
+                                s.cancelSession,
                                 onClick = { confirmCancel = true },
                                 modifier = Modifier.weight(1f),
-                                borderColor = Palette.err,
-                                textColor = Palette.err,
+                                borderColor = p.err,
+                                textColor = p.err,
                             )
                         }
                     }
                 }
             } else {
                 Column(
-                    Modifier.fillMaxWidth().padding(vertical = 44.dp),
+                    Modifier.fillMaxWidth().padding(vertical = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("Tovarni skanerlang", color = Palette.text, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Buyurtma avtomatik topiladi", color = Palette.muted, fontSize = 15.sp)
+                    Text(s.chooseShop, color = p.muted, fontSize = 15.sp)
+                    batchName?.let { Text(it, color = p.text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold) }
                 }
             }
+            Spacer(Modifier.height(12.dp))
+        }
 
-            TextButton(onClick = { manualOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Barcode'ni qo'lda kiritish", color = Palette.muted, fontSize = 15.sp)
+        /* ---------- PRINT ---------- */
+        // Faqat buyurtmadagi hamma tovar skanerlangach faollashadi: yorliq
+        // yarim yig'ilgan qopga chiqib ketmasin.
+        Column(Modifier.padding(horizontal = 14.dp).padding(bottom = 20.dp)) {
+            PrimaryButton(
+                text = s.print,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = readyToPrint,
+                loading = printing,
+                height = 58,
+                onClick = {
+                    val id = current?.id ?: return@PrimaryButton
+                    printing = true
+                    scope.launch {
+                        runCatching { api.printBig(id) }
+                            .onSuccess {
+                                feedback.buzz(Buzz.DONE)
+                                banner = Banner(p.done, s.print, s.printSent)
+                                bannerAt = System.currentTimeMillis()
+                            }
+                            .onFailure { fail(it) }
+                        printing = false
+                    }
+                },
+            )
+            if (!readyToPrint) {
+                Text(
+                    s.printNotComplete,
+                    color = p.muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    textAlign = TextAlign.Center,
+                )
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 
     /* ---------- Dialoglar ---------- */
 
-    if (manualOpen) {
+    if (shopPicker) {
         AlertDialog(
-            onDismissRequest = { manualOpen = false },
-            containerColor = Palette.panel,
-            title = { Text("Barcode", color = Palette.text) },
+            onDismissRequest = { shopPicker = false },
+            containerColor = p.panel,
+            title = { Text(batchName ?: s.noBatch, color = p.text) },
             text = {
-                Field(
-                    label = "",
-                    value = manualValue,
-                    onValueChange = { manualValue = it },
-                    placeholder = "1000076067784",
-                    keyboardType = KeyboardType.Number,
-                )
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    if (shops.isEmpty()) Text(s.noBatch, color = p.muted, fontSize = 15.sp)
+                    shops.forEach { shop ->
+                        TextButton(
+                            onClick = {
+                                onShopChange(shop.shopId)
+                                shopPicker = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(shop.shopId, color = p.text, fontSize = 16.sp)
+                                Text(
+                                    "${shop.packed}/${shop.total}",
+                                    color = if (shop.pending == 0) p.done else p.accent,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
+                }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    val v = manualValue
-                    manualValue = ""
-                    manualOpen = false
-                    submit(v)
-                }) { Text("Yuborish", color = Palette.accent) }
-            },
-            dismissButton = {
-                TextButton(onClick = { manualOpen = false }) { Text("Yopish", color = Palette.muted) }
+                TextButton(onClick = { shopPicker = false }) { Text(s.back, color = p.muted) }
             },
         )
     }
 
     if (confirmCancel) {
-        val s = session
         AlertDialog(
             onDismissRequest = { confirmCancel = false },
-            containerColor = Palette.panel,
-            title = { Text("Sessiyani bekor qilish", color = Palette.text) },
-            text = { Text("${s?.orderId} yig'ishni to'xtatasizmi?", color = Palette.muted) },
+            containerColor = p.panel,
+            title = { Text(s.cancelSession, color = p.text) },
+            text = { Text("${current?.orderId} — ${s.cancelConfirm}", color = p.muted) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmCancel = false
                     scope.launch {
                         runCatching { api.cancelSession("operator bekor qildi") }
                             .onSuccess { session = null; banner = null }
-                            .onFailure { banner = Banner(Palette.err, "XATO", it.message.orEmpty()) }
+                            .onFailure { fail(it) }
                     }
-                }) { Text("Ha, bekor qilish", color = Palette.err) }
+                }) { Text(s.cancelSession, color = p.err) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmCancel = false }) { Text("Yo'q", color = Palette.muted) }
+                TextButton(onClick = { confirmCancel = false }) { Text(s.back, color = p.muted) }
             },
         )
     }
@@ -454,13 +512,11 @@ fun ScanScreen(
     reprintJobs?.let { jobs ->
         AlertDialog(
             onDismissRequest = { reprintJobs = null },
-            containerColor = Palette.panel,
-            title = { Text("Qaysi yorliq qayta chiqsin?", color = Palette.text) },
+            containerColor = p.panel,
+            title = { Text(s.reprint, color = p.text) },
             text = {
                 Column {
-                    if (jobs.isEmpty()) {
-                        Text("Bu sessiyada yorliq yo'q", color = Palette.muted, fontSize = 15.sp)
-                    }
+                    if (jobs.isEmpty()) Text("—", color = p.muted, fontSize = 15.sp)
                     jobs.forEach { job ->
                         TextButton(
                             onClick = {
@@ -469,19 +525,19 @@ fun ScanScreen(
                                     runCatching { api.reprint(job.id) }
                                         .onSuccess {
                                             feedback.buzz(Buzz.OK)
-                                            banner = Banner(Palette.accent, "YUBORILDI", "Yorliq qayta chop etishga ketdi")
+                                            banner = Banner(p.accent, s.reprint, s.printSent)
                                             bannerAt = System.currentTimeMillis()
                                         }
-                                        .onFailure { banner = Banner(Palette.err, "XATO", it.message.orEmpty()) }
+                                        .onFailure { fail(it) }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
-                                "${if (job.target == "big") "BIG" else "ShK"}" +
+                                (if (job.target == "big") "BIG" else "ShK") +
                                     (if (job.copies > 1) " ×${job.copies}" else "") +
                                     " · ${job.orderId} · ${job.status}",
-                                color = Palette.text,
+                                color = p.text,
                                 fontSize = 15.sp,
                             )
                         }
@@ -489,7 +545,7 @@ fun ScanScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { reprintJobs = null }) { Text("Yopish", color = Palette.muted) }
+                TextButton(onClick = { reprintJobs = null }) { Text(s.back, color = p.muted) }
             },
         )
     }

@@ -2,7 +2,9 @@ package uz.fikrlovchi.stocker.ui
 
 import android.os.Build
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,23 +30,21 @@ import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.Config
 
 /**
- * Kirish ekrani (8-faza): server manzili + operator login/paroli.
+ * Kirish ekrani: faqat login va parol.
  *
- * Operatorlar fikrlovchi-panel'da yaratiladi, stocker-server esa ro'yxatni
- * o'zida keshlab tekshiradi. Token telefonda saqlanadi — har smenada qayta
- * kiritish shart emas, lekin panel'da hisob faolsizlantirilsa token darhol
- * kuyadi va shu ekran qaytadi.
- *
- * Bu ekran sozlama ekrani ham: ⚙ tugmasidan kelinganda server manzilini
- * o'zgartirib, boshqa operator sifatida kirish mumkin.
+ * Server manzili maydoni ATAYLAB yo'q — u bitta va Config.kt da qattiq
+ * yozilgan. Til va mavzu shu ekranda ham almashtiriladi: operator ilovaga
+ * kirishdan oldin o'z tilini tanlay olsin.
  */
 @Composable
 fun LoginScreen(
     initial: Config,
     onLoggedIn: (Config) -> Unit,
-    onBack: (() -> Unit)? = null,
+    onPrefs: (Config) -> Unit,
 ) {
-    var serverUrl by remember { mutableStateOf(initial.serverUrl) }
+    val p = LocalPalette.current
+    val s = LocalStrings.current
+
     var login by remember { mutableStateOf(initial.operator) }
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -57,94 +57,76 @@ fun LoginScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
-            .padding(top = 64.dp, bottom = 32.dp)
+            .padding(top = 56.dp, bottom = 32.dp)
     ) {
-        // Yozuvli logotip (brand/logo-text.png dan yasalgan, foni shaffof) —
-        // panel va desktop client'da ham xuddi shu joyda: yuqori chapda.
         Image(
             painter = painterResource(R.drawable.logo_wordmark),
             contentDescription = "Stocker",
             modifier = Modifier.height(38.dp),
         )
         Spacer(Modifier.height(6.dp))
-        Text(
-            "Yig'ish ilovasi — kirish  ·  v${BuildConfig.VERSION_NAME}",
-            color = Palette.muted,
-            fontSize = 15.sp,
-        )
-        Spacer(Modifier.height(16.dp))
+        Text("${s.loginSub}  ·  v${BuildConfig.VERSION_NAME}", color = p.muted, fontSize = 15.sp)
 
-        Field(
-            label = "Server manzili",
-            value = serverUrl,
-            onValueChange = { serverUrl = it },
-            placeholder = "https://stocker.uz/pack",
-        )
-        Field(
-            label = "Login",
-            value = login,
-            onValueChange = { login = it },
-            placeholder = "masalan: operator1",
-        )
-        Field(
-            label = "Parol",
-            value = password,
-            onValueChange = { password = it },
-            placeholder = "panel'da berilgan parol",
-            secret = true,
-        )
+        Field(s.login, login, { login = it }, placeholder = "operator1")
+        Field(s.password, password, { password = it }, secret = true)
 
         error?.let {
             Spacer(Modifier.height(16.dp))
-            Text(it, color = Palette.err, fontSize = 15.sp)
+            Text(it, color = p.err, fontSize = 15.sp)
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
         PrimaryButton(
-            text = "Kirish",
+            text = s.signIn,
             modifier = Modifier.fillMaxWidth(),
             loading = busy,
             onClick = {
                 error = null
-                val url = serverUrl.trim()
                 val user = login.trim().lowercase()
-                if (url.isBlank() || user.isBlank() || password.isBlank()) {
-                    error = "Uchala maydon ham to'ldirilishi kerak"
+                if (user.isBlank() || password.isBlank()) {
+                    error = s.fillBoth
                     return@PrimaryButton
                 }
                 busy = true
                 scope.launch {
                     // Tokensiz Api: login so'rovi sarlavhasiz ketadi.
-                    val probe = Config(serverUrl = url)
+                    val probe = Config()
                     runCatching { Api { probe }.login(user, password, Build.MODEL ?: "android") }
                         .onSuccess { res ->
                             onLoggedIn(
                                 initial.copy(
-                                    serverUrl = url,
                                     authToken = res.token,
                                     operator = res.login,
                                     operatorName = res.displayName,
                                 )
                             )
                         }
-                        .onFailure { error = it.message ?: "Kirib bo'lmadi" }
+                        .onFailure { error = it.message ?: "?" }
                     busy = false
                 }
             },
         )
 
-        if (onBack != null) {
-            Spacer(Modifier.height(12.dp))
-            GhostButton("Bekor qilish", onBack, Modifier.fillMaxWidth())
+        // Til va mavzu — kirishdan oldin ham kerak bo'ladi.
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Lang.entries.forEach { lang ->
+                Chip(
+                    text = lang.label,
+                    selected = initial.lang == lang.code,
+                    onClick = { onPrefs(initial.copy(lang = lang.code)) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Chip(
+                text = if (initial.darkTheme) s.themeLight else s.themeDark,
+                selected = false,
+                onClick = { onPrefs(initial.copy(darkTheme = !initial.darkTheme)) },
+                modifier = Modifier.weight(1f),
+            )
         }
 
-        Spacer(Modifier.height(24.dp))
-        Text(
-            "Login va parolni panel beradi (loyiha sahifasi → Operatorlar). Ish joyi " +
-                "(printer) keyingi ekranda QR orqali ulanadi — ulanmasa yorliqlar navbatda " +
-                "kutib qoladi va chop etilmaydi.",
-            color = Palette.muted,
-            fontSize = 13.sp,
-        )
+        Spacer(Modifier.height(20.dp))
+        Text(s.loginHint, color = p.muted, fontSize = 13.sp)
     }
 }

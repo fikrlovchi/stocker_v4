@@ -117,6 +117,23 @@ class Api(private val config: () -> Config) {
         return json.decodeFromString(call("/api/scan", body))
     }
 
+    /** Ochiq partiyadagi do'konlar va ularda qolgan buyurtmalar soni. */
+    suspend fun shops(): ShopsResponse =
+        json.decodeFromString(call("/api/shops"))
+
+    /**
+     * BIG yorlig'ini chiqarish ("Print" tugmasi). Buyurtma to'liq
+     * skanerlanmagan bo'lsa server 409 qaytaradi.
+     */
+    suspend fun printBig(sessionId: String): PrintResponse {
+        val body = buildJsonObject { put("sessionId", sessionId) }
+        return json.decodeFromString(call("/api/session/print", body))
+    }
+
+    /** Operator yig'gan buyurtmalar tarixi. */
+    suspend fun myPacked(): PackedResponse =
+        json.decodeFromString(call("/api/my-packed?limit=50"))
+
     /** `last=1` — buyurtma yig'ilib bo'lgach ham oxirgi sessiya ko'rinadi
      *  (yorliqni qayta chiqarish uchun kerak). Operator tokendan aniqlanadi. */
     suspend fun session(): Session =
