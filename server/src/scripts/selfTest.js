@@ -600,6 +600,16 @@ check(
   { total: 2, packed: 1 }
 );
 
+// Veb doirasi (SPA): mobil bayrog'i shart emas, lekin hisob `users` da
+// bo'lishi kerak va token doirasi ajratilgan.
+const webLogin = auth.login({ login: "viewer1", password: "parol1", ip: "5.3.3.1", scope: "web" });
+check("web: mobil bayrog'isiz hisob veb'ga kiradi", Boolean(webLogin.token), true);
+check("web: token doirasi saqlanadi", auth.resolveToken(webLogin.token).scope, "web");
+check("web: sessiyada bo'limlar bor", auth.resolveToken(webLogin.token).sections, ["labels"]);
+
+const mobileToken = auth.login({ login: "packer1", password: "parol1", ip: "5.3.3.2" }).token;
+check("web: mobil token doirasi 'mobile'", auth.resolveToken(mobileToken).scope, "mobile");
+
 db.exec("DELETE FROM batch_orders; DELETE FROM batches; DELETE FROM user_flags; DELETE FROM user_permissions; DELETE FROM users; DROP TABLE project_users; DELETE FROM operator_tokens");
 
 /* ---------------- Yakun ---------------- */

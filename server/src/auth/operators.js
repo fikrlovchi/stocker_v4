@@ -196,7 +196,7 @@ export function getOperator(login) {
 // keshi. Shu bilan ko'chirish paytida ham login uzilmaydi.
 //
 // `users` dagi hisob mobil ilovaga faqat `mobile` bayrog'i bilan kira oladi.
-function lookupAccount(login) {
+function lookupAccount(login, scope = "mobile") {
   const user = getUserByLogin(login);
   if (user) {
     return {
@@ -204,10 +204,15 @@ function lookupAccount(login) {
       displayName: user.displayName,
       passwordHash: getPasswordHash(user.login),
       // Bayroqsiz hisob (masalan faqat veb-panel uchun) telefondan kira olmaydi.
-      isActive: user.isActive && hasFlag(user, "mobile"),
+      isActive: user.isActive && (scope === "web" || hasFlag(user, "mobile")),
       source: "users",
+      user,
     };
   }
+
+  // Veb interfeys faqat `users` bilan ishlaydi: eski keshdagi operatorda
+  // bo'lim ruxsatlari yo'q, ya'ni unga nima ko'rsatishni bilib bo'lmaydi.
+  if (scope === "web") return null;
 
   const legacy = getOperator(login);
   if (!legacy) return null;
@@ -241,11 +246,18 @@ export function operatorSyncStatus() {
 }
 
 // Muvaffaqiyatda { token, login, displayName }, aks holda { error, retryAfterMs? }.
-export function login({ login: rawLogin, password, device, ip }) {
+//
+// `scope`:
+//   "mobile" (standart) — telefon ilovasi; `mobile` bayrog'i talab qilinadi
+//   "web"              — veb interfeys; bayroq shart emas, lekin hisob
+//                        `users` jadvalida bo'lishi kerak (eski `operators`
+//                        keshidagilar veb'ga kira olmaydi — ularda ruxsat
+//                        tushunchasi yo'q)
+export function login({ login: rawLogin, password, device, ip, scope = "mobile" }) {
   const lock = lockedUntil(ip || "?");
   if (lock) return { error: "Ko'p urinish — birozdan keyin qayta kiring", retryAfterMs: lock - Date.now() };
 
-  const account = lookupAccount(rawLogin);
+  const account = lookupAccount(rawLogin, scope);
   const hash = account?.passwordHash || "";
   // Login topilmasa ham bcrypt chaqiriladi: javob vaqti bo'yicha login bor-yo'qligi
   // bilinmasin.
@@ -264,8 +276,8 @@ export function login({ login: rawLogin, password, device, ip }) {
 
   const token = randomBytes(32).toString("hex");
   db.prepare(
-    "INSERT INTO operator_tokens (token_hash, login, device, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)"
-  ).run(sha256(token), operator.login, device ? String(device).slice(0, 120) : null, nowIso(), nowIso());
+    "INSERT INTO operator_tokens (token_hash, login, device, created_at, last_seen_at, scope) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(sha256(token), operator.login, device ? String(device).slice(0, 120) : null, nowIso(), nowIso(), scope);
 
   if (account.source === "users") touchLogin(account.login);
   logger.info(`Operator kirdi: ${operator.login} (${operator.display_name})${device ? ` — ${device}` : ""}`);
@@ -288,11 +300,20 @@ export function resolveToken(token) {
     return null;
   }
 
-  const account = lookupAccount(row.login);
+  const account = lookupAccount(row.login, row.scope || "mobile");
   if (!account || !account.isActive) return null;
 
   db.prepare("UPDATE operator_tokens SET last_seen_at = ? WHERE token_hash = ?").run(nowIso(), row.token_hash);
-  return { login: account.login, displayName: account.displayName };
+  return {
+    login: account.login,
+    displayName: account.displayName,
+    scope: row.scope || "mobile",
+    // Veb interfeys menyuni shu ro'yxatga qarab quradi; server esa har
+    // so'rovda alohida tekshiradi (faqat menyuni yashirish yetarli emas).
+    isSuperadmin: account.user?.isSuperadmin === true,
+    sections: account.user?.sections || [],
+    flags: account.user?.flags || [],
+  };
 }
 
 function bearer(req) {
@@ -338,7 +359,7 @@ export function authRouter(express) {
     const { login: rawLogin, password, device } = req.body || {};
     if (!rawLogin || !password) return res.status(400).json({ error: "login va parol kerak" });
 
-    const result = login({ login: rawLogin, password, device, ip: req.ip });
+    const result = login({ login: rawLogin, password, device, ip: req.ip, scope: "mobile" });
     if (result.error) return res.status(401).json(result);
     res.json(result);
   });

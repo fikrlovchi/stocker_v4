@@ -21,6 +21,7 @@ import { expireStaleSessions } from "./scan/sessions.js";
 import { attachPrintHub, dispatchAll } from "./print/hub.js";
 import { jobPdfRouter, printAdminRouter } from "./print/routes.js";
 import { sweepStaleJobs, pruneOldJobs, stuckJobs } from "./print/jobs.js";
+import { webRouter } from "./web/routes.js";
 import {
   authRouter,
   requireOperatorOrService,
@@ -165,6 +166,9 @@ debug.post("/sync-barcodes", async (req, res) => {
 });
 
 app.use("/debug", debug);
+
+// Veb interfeys (React SPA) API'si — o'z kirishi va ruxsat tekshiruvi bilan.
+app.use("/web", webRouter());
 
 // Operator login/logout — token olishning o'zi tokensiz bo'lishi kerak.
 app.use("/api/auth", authRouter(express));
