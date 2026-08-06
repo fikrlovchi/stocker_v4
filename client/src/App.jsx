@@ -7,7 +7,7 @@ import Login from "./pages/Login";
 import Users from "./pages/Users";
 import Labels from "./pages/Labels";
 import Packing from "./pages/Packing";
-import Placeholder from "./pages/Placeholder";
+import Projects from "./pages/Projects";
 
 // Menyu — bo'lim kaliti bilan. Ko'rinishi foydalanuvchi ruxsatiga bog'liq;
 // server esa har so'rovda o'zi tekshiradi (menyu yashirish himoya emas).
@@ -25,8 +25,8 @@ function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <img className="icon" src="/app/logo-icon.png" alt="" />
-        <img className="wordmark" src="/app/logo-wordmark.png" alt="Stocker" />
+        <img className="icon" src="/logo-icon.png" alt="" />
+        <img className="wordmark" src="/logo-wordmark.png" alt="Stocker" />
       </div>
 
       {NAV.filter((n) => can(n.section)).map((n) => (
@@ -88,7 +88,7 @@ function Shell() {
             path="/orders-to-mc"
             element={
               <Guarded section="orders_to_mc">
-                <Placeholder titleKey="section.orders_to_mc" href="/projects/uzum-order-to-mc" />
+                <Projects />
               </Guarded>
             }
           />
@@ -139,9 +139,8 @@ export default function App() {
   if (!ready) return <div className="login-page muted">{t("app.loading")}</div>;
   if (!user) return <Login />;
 
-  // basename: SPA hozircha `/app/` da (vite.config.js izohiga qarang).
   return (
-    <BrowserRouter basename="/app">
+    <BrowserRouter>
       <Shell />
     </BrowserRouter>
   );

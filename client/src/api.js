@@ -75,6 +75,14 @@ export const api = {
   deleteBatch: (id) => call(`/batches/${id}`, { method: "DELETE" }),
   removeBatchOrder: (id, orderId) => call(`/batches/${id}/orders/${encodeURIComponent(orderId)}`, { method: "DELETE" }),
 
+  listProjects: () => call("/projects"),
+  getProject: (slug) => call(`/projects/${encodeURIComponent(slug)}`),
+  projectPause: (slug) => call(`/projects/${encodeURIComponent(slug)}/pause`, { method: "POST" }),
+  projectResume: (slug) => call(`/projects/${encodeURIComponent(slug)}/resume`, { method: "POST" }),
+  projectRunNow: (slug) => call(`/projects/${encodeURIComponent(slug)}/run-now`, { method: "POST" }),
+  projectInterval: (slug, seconds) =>
+    call(`/projects/${encodeURIComponent(slug)}/interval`, { method: "POST", body: { seconds } }),
+
   labelsProcess: (orderIds, pdfConfig) => call("/labels/process", { method: "POST", body: { orderIds, pdfConfig } }),
   labelsBatch: (id) => call(`/labels/batch/${encodeURIComponent(id)}`),
   labelsHistory: () => call("/labels/history"),

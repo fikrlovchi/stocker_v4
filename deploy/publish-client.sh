@@ -33,6 +33,6 @@ rm -rf "$DEST.old"
 chmod -R a+rX /var/www/stocker
 
 echo "▸ Tekshiruv"
-code=$(curl -s -o /dev/null -w '%{http_code}' https://stocker.uz/app/ || true)
-echo "   https://stocker.uz/app/ → ${code:-000}"
+code=$(curl -s -o /dev/null -w '%{http_code}' https://stocker.uz/ || true)
+echo "   https://stocker.uz/ → ${code:-000}"
 [ "$code" = "200" ] || echo "   ⚠️  200 emas: nginx konfigi yangilanganini tekshiring (deploy/nginx-stocker.uz.conf)"

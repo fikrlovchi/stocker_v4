@@ -157,7 +157,34 @@ va `<a href>` `Authorization` sarlavhasini yubora olmaydi.
 uzumPDFs kodiga tegilmadi — faqat ko'rinish ko'chdi. Eski `/pdf/` sahifasi
 zaxira sifatida ishlab turaveradi; ildiz SPA'ga o'tgach o'chiriladi.
 
-Keyingi: ildizni SPA'ga o'tkazish va `panel/` ni yo'q qilish, so'ng 4-bosqich.
+**Ildiz SPA'ga o'tdi ✅ (2026-08-06)** — `stocker.uz` ochilganda yangi ilova
+chiqadi. Eski `/app/` manzillari ildizga redirect qilinadi. EJS panel endi
+tashqariga chiqarilmaydi (nginx'da `/` uni proxy qilmaydi), lekin **hali
+o'chirilmagan**: o'zgaruvchilar katalogi (Sheets/Telegram/Uzum kabinetlari)
+SPA'ga ko'chmagan. Kerak bo'lsa SSH tunnel bilan ochiladi:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 root@64.226.69.129
+```
+
+**"Uzum order to MC" ✅** — `uzumOrderToMC` repo'si `uzum-order-to-mc/` bo'lib
+monorepoga ko'chdi (subtree, tarix saqlangan). SPA'da menyuda shu nom bilan
+turadi, lekin ekran loyihaga bog'lanmagan: yuqoridagi tanlovdan
+`cancel-uzum-order`, `mc-stock-to-uzum` va `stocker` ham ochiladi —
+panel o'chgach ular boshqaruvsiz qolmasin.
+
+Ichida: ishga tushishlar tarixi va loglar, boshqaruv (interval, to'xtatish/
+davom ettirish, hozir ishga tushirish/restart), muhit sozlamalari ro'yxati.
+systemd unit'lari **qattiq kodlangan ro'yxatdan** olinadi (bazadan emas) —
+sessiya o'g'irlansa ham ixtiyoriy unit boshqarilmasin.
+
+Serverda ko'chirish: [`deploy/migrate-uzum-order.sh`](../deploy/migrate-uzum-order.sh)
+— joriy tsikl tugashini kutadi, `.env`/`credentials`/`data`/`logs` ni
+ko'chiradi, systemd unit yo'llarini yangilaydi va xato bo'lsa qaytarish
+yo'lini chiqaradi.
+
+Keyingi: o'zgaruvchilar katalogini ko'chirish → `panel/` ni o'chirish →
+4-bosqich (uchta Node jarayonini bittaga yig'ish).
 
 ### 3-bosqich rejasi (asl matn) ⏳
 

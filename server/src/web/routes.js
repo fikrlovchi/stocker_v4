@@ -12,6 +12,7 @@ import { FLAGS, SECTIONS } from "../auth/sections.js";
 import * as users from "../auth/users.js";
 import * as batches from "../packing/batches.js";
 import { labelsRouter } from "./labels.js";
+import { projectsRouter } from "./projects.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -195,6 +196,10 @@ export function webRouter() {
     batches.removeOrderFromBatch(Number(req.params.id), req.params.orderId);
     res.json({ ok: true });
   });
+
+  /* ---------- loyihalar (Uzum order to MC va boshqalar) ---------- */
+
+  router.use("/projects", requireWeb, requireSection("orders_to_mc"), projectsRouter());
 
   /* ---------- yorliqlar (uzumPDFs) ---------- */
 

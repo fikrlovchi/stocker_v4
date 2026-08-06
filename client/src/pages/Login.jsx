@@ -26,7 +26,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <form className="card login-card" onSubmit={submit}>
-        <img className="wordmark" src="/app/logo-wordmark.png" alt="Stocker" />
+        <img className="wordmark" src="/logo-wordmark.png" alt="Stocker" />
         <div className="sub">{t("login.sub")}</div>
 
         <label htmlFor="login">{t("login.login")}</label>
