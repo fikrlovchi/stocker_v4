@@ -1,0 +1,350 @@
+require("dotenv").config();
+
+const config = require("../config.json");
+const { colLetterToIndex, formatDateTimeGMT5 } = require("./sheetsUtil");
+const { getSheetsClient } = require("./oauthSheets");
+const logger = require("./logger");
+const reporter = require("./reporter");
+const skuAlerts = require("./skuAlerts");
+const orderFetch = require("./orderFetch");
+const cancelSync = require("./cancelSync");
+const orderStatusSync = require("./orderStatusSync");
+const moysklad = require("./moysklad");
+const { isDryRun } = require("./dryRun");
+
+const ORD = Object.fromEntries(
+  Object.entries(config.columns.orders).map(([k, v]) => [k, colLetterToIndex(v)])
+);
+const DET = Object.fromEntries(
+  Object.entries(config.columns.details).map(([k, v]) => [k, colLetterToIndex(v)])
+);
+
+const MOYSKLAD_ORDER_URL = "https://api.moysklad.ru/api/remap/1.2/entity/customerorder";
+
+function cell(value) {
+  return value === undefined || value === null ? "" : value;
+}
+
+function toHref(raw, entityType) {
+  const value = cell(raw).toString().trim();
+  if (value.includes("https://")) return value.replace("online.moysklad.ru", "api.moysklad.ru");
+  return `https://api.moysklad.ru/api/remap/1.2/entity/${entityType}/${value}`;
+}
+
+// Detects XLOOKUP/VLOOKUP-style error text (e.g. "#N/A (Did not find value ...)")
+// that can end up in the product-ref cell when a SKU has no mapping yet.
+function isUsableRef(raw) {
+  const value = cell(raw).toString().trim();
+  if (!value) return false;
+  if (value.startsWith("#")) return false;
+  return true;
+}
+
+// XLOOKUP xato matnidan qidirilgan SKU'ni ajratib oladi, masalan:
+// "#N/A (Did not find value 'LIVANA-RS03020120107-ЧЕРН' in XLOOKUP evaluation.)"
+function extractSku(rawValue) {
+  const match = rawValue.match(/Did not find value '([^']+)'/);
+  return match ? match[1] : rawValue;
+}
+
+function buildPositions(details, orderId) {
+  const positions = [];
+  for (let j = 1; j < details.length; j++) {
+    const row = details[j];
+    if (cell(row[DET.orderId]).toString().trim() !== orderId.toString().trim()) continue;
+
+    if (!isUsableRef(row[DET.product])) {
+      const raw = cell(row[DET.product]).toString();
+      const err = new Error(`mahsulot ID/link topilmadi (detail qator ${j + 1}): "${raw}"`);
+      err.sku = extractSku(raw);
+      throw err;
+    }
+
+    let entityType = cell(row[DET.entityType]).toString().trim().toLowerCase() || "product";
+    const prodHref = toHref(row[DET.product], entityType);
+
+    // uzum_order_detail!L (priceIsTotal):
+    //  - TRUE  → qator UMUMIY summasi = E × F; miqdor = K. MoySklad'da alohida
+    //    "summa" maydoni yo'q (summani narx×miqdor deb o'zi hisoblaydi),
+    //    shuning uchun birlik narxni (E×F)/K qilib yuboramiz → ((E×F)/K)×K = E×F.
+    //  - FALSE → E = BIRLIK narxi; miqdor = K → MoySklad summani E×K deb
+    //    hisoblaydi.
+    const priceIsTotal = row[DET.priceIsTotal] === true || row[DET.priceIsTotal] === "TRUE";
+    let quantity = parseFloat(row[DET.quantity]);
+    if (!Number.isFinite(quantity) || quantity <= 0) quantity = 1;
+    const price = parseFloat(row[DET.price]);
+    const amount = parseFloat(row[DET.amount]);
+    let unitPrice;
+    if (priceIsTotal) {
+      const lineTotal = price * (Number.isFinite(amount) && amount > 0 ? amount : 1);
+      unitPrice = lineTotal / quantity;
+    } else {
+      unitPrice = price;
+    }
+
+    positions.push({
+      quantity,
+      price: unitPrice * 100,
+      reserve: entityType === "service" ? 0 : 1,
+      assortment: {
+        meta: { href: prodHref, type: entityType, mediaType: "application/json" },
+      },
+    });
+  }
+  return positions;
+}
+
+function buildPayload(order, orderId, trackingNumber, positions, mc) {
+  const orgHref = toHref(order[ORD.organization], "organization");
+  const channelHref = toHref(order[ORD.salesChannel], "saleschannel");
+  const deliveryPlannedMoment = formatDateTimeGMT5(order[ORD.date]);
+
+  return {
+    name: orderId.toString(),
+    externalCode: orderId.toString(),
+    shipmentAddress: cell(order[ORD.shipmentAddress]).toString(),
+    deliveryPlannedMoment,
+    organization: { meta: { href: orgHref, type: "organization", mediaType: "application/json" } },
+    agent: { meta: { href: mc.agentHref, type: "counterparty", mediaType: "application/json" } },
+    store: { meta: { href: mc.storeHref, type: "store", mediaType: "application/json" } },
+    salesChannel: { meta: { href: channelHref, type: "saleschannel", mediaType: "application/json" } },
+    attributes: [
+      {
+        meta: { href: mc.deliveryTypeAttr, type: "attributemetadata", mediaType: "application/json" },
+        value: { meta: { href: mc.deliveryValue, type: "customentity", mediaType: "application/json" }, name: "Uzum" },
+      },
+      {
+        meta: { href: mc.orderNumAttr, type: "attributemetadata", mediaType: "application/json" },
+        value: orderId.toString(),
+      },
+      {
+        meta: { href: mc.trackingAttr, type: "attributemetadata", mediaType: "application/json" },
+        value: trackingNumber,
+      },
+    ],
+    positions,
+  };
+}
+
+async function markRowSent(sheets, spreadsheetId, ordersSheetName, rowNumber, moySkladId) {
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: "RAW",
+      data: [
+        { range: `${ordersSheetName}!Q${rowNumber}`, values: [[1]] },
+        { range: `${ordersSheetName}!S${rowNumber}`, values: [[moySkladId]] },
+      ],
+    },
+  });
+}
+
+function deriveStatus(successCount, errorCount) {
+  if (errorCount === 0) return "success";
+  if (successCount === 0) return "error";
+  return "partial";
+}
+
+// link_product!B (SKU) -> !O ("Order import" TRUE/FALSE) xaritasi. Faqat
+// yangi buyurtma yaratish kerak bo'lganda bir marta o'qiladi (process keshi).
+let linkImportMap = null;
+async function loadLinkImportMap(sheets) {
+  if (linkImportMap) return linkImportMap;
+  linkImportMap = new Map();
+  try {
+    const { data } = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.spreadsheetId,
+      range: config.sheets.linkProducts,
+      valueRenderOption: "UNFORMATTED_VALUE",
+    });
+    const rows = data.values || [];
+    const keyIdx = colLetterToIndex(config.columns.linkProducts.sku);
+    const flagIdx = colLetterToIndex(config.columns.linkProducts.orderImport);
+    for (let r = 1; r < rows.length; r++) {
+      const k = rows[r][keyIdx];
+      if (k !== undefined && k !== null && k !== "") linkImportMap.set(String(k).trim(), rows[r][flagIdx]);
+    }
+  } catch (e) {
+    logger.error(`link_product o'qishda xato (import filtri o'tkazib yuborildi): ${e.message}`);
+  }
+  return linkImportMap;
+}
+
+// "Order import" = FALSE bo'lgan (import o'chirilgan) SKU'ni o'z ichiga olgan
+// buyurtma ID'lari to'plamini bir marta (detail bo'ylab bitta o'tishda) hisoblaydi.
+// Bunday buyurtmalar MoySklad'da YARATILMAYDI — lekin Uzum'da tasdiqlanadi
+// (orderStatusSync.handleNoImportOrders), tasdiqlangach topic'ga xabar beriladi.
+async function computeBlockedOrderIds(sheets, details) {
+  const importMap = await loadLinkImportMap(sheets);
+  const blocked = new Set();
+  for (let j = 1; j < details.length; j++) {
+    const row = details[j];
+    const sku = cell(row[DET.skuTitle]).toString().trim();
+    if (!sku) continue;
+    const flag = importMap.get(sku);
+    if (flag === false || String(flag).toUpperCase() === "FALSE") {
+      const oid = cell(row[DET.orderId]).toString().trim();
+      if (oid) blocked.add(oid);
+    }
+  }
+  return blocked;
+}
+
+async function createMoySkladOrders() {
+  const startedAt = new Date().toISOString();
+  let successCount = 0;
+  let errorCount = 0;
+
+  // Google Sheets'ga barcha o'qish/yozishlar uzbuyo@gmail.com (OAuth) nomidan
+  // amalga oshadi — service account (credentials.json) endi sheet uchun
+  // ishlatilmaydi.
+  const sheets = getSheetsClient();
+  const spreadsheetId = config.spreadsheetId;
+  const ordersSheetName = config.sheets.orders;
+  const detailsSheetName = config.sheets.details;
+
+  const token = process.env.MOYSKLAD_TOKEN;
+  if (!token) {
+    throw new Error("MOYSKLAD_TOKEN .env faylida topilmadi");
+  }
+
+  // Uzum'dan yangi (CREATED) buyurtmalarni sheetga qo'shadi (OAuth,
+  // uzbuyo@gmail.com) — shundan keyingi batchGet ularni ham o'qiydi, shu
+  // tsiklning o'zida qayta ishlanishi uchun.
+  await orderFetch.run();
+
+  const { data } = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId,
+    ranges: [ordersSheetName, detailsSheetName],
+    valueRenderOption: "UNFORMATTED_VALUE",
+  });
+
+  const orders = data.valueRanges[0].values || [];
+  const details = data.valueRanges[1].values || [];
+
+  // Import o'chirilgan (link_product!O=FALSE) buyurtmalar — MoySklad'da
+  // YARATILMAYDI, lekin Uzum'da tasdiqlanadi (handleNoImportOrders), tasdiqlangach
+  // topic'ga xabar beriladi. Shu yerda faqat yaratishdan chetlab o'tamiz.
+  const blockedOrderIds = await computeBlockedOrderIds(sheets, details);
+
+  for (let i = 1; i < orders.length; i++) {
+    const order = orders[i];
+    const orderId = order[ORD.orderId];
+    const status = order[ORD.status];
+    const cancelHandled = order[ORD.cancelHandled];
+    const trackingNumber = cell(order[ORD.trackingNumber]).toString();
+
+    if (status == 1 || !orderId || cancelHandled == 1) continue;
+    // Import o'chirilgan buyurtmani MoySklad'da yaratmaymiz (Uzum confirm +
+    // topic xabari handleNoImportOrders'da amalga oshadi).
+    if (blockedOrderIds.has(String(orderId))) continue;
+
+    let positions;
+    try {
+      positions = buildPositions(details, orderId);
+    } catch (e) {
+      logger.error(`Order ${orderId} o'tkazib yuborildi: ${e.message}`);
+      errorCount++;
+      if (e.sku) await skuAlerts.notifyIfNew(e.sku);
+      continue;
+    }
+    if (positions.length === 0) {
+      logger.info(`Order ${orderId} uchun pozitsiyalar topilmadi.`);
+      continue;
+    }
+
+    const payload = buildPayload(order, orderId, trackingNumber, positions, config.moysklad);
+
+    if (isDryRun()) {
+      logger.info(`[DRY_RUN] Order ${orderId} MoySklad'da yaratilardi (${positions.length} pozitsiya).`);
+      continue;
+    }
+
+    try {
+      const response = await fetch(MOYSKLAD_ORDER_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(payload),
+      });
+      const resText = await response.text();
+
+      if (response.status === 200 || response.status === 201) {
+        const moySkladId = JSON.parse(resText).id;
+        await markRowSent(sheets, spreadsheetId, ordersSheetName, i + 1, moySkladId);
+        // Shu tsiklning qolgan bosqichlari (tasdiqlash, holat o'rnatish) bu
+        // buyurtmani darhol ko'rishi uchun xotiradagi qatorni ham yangilaymiz.
+        order[ORD.status] = 1;
+        order[ORD.moySkladId] = moySkladId;
+        logger.info(`Order ${orderId} muvaffaqiyatli yaratildi (${moySkladId}).`);
+        successCount++;
+      } else if (resText.includes('"code" : 3006')) {
+        // Bu buyurtma avvalgi (masalan uzilib qolgan) tsiklda MoySklad'da
+        // allaqachon yaratilgan, lekin sheetga Q/S yozilmagan edi. Qayta
+        // yaratishga urinish o'rniga, mavjudini externalCode orqali topib,
+        // sheetni orqasidan to'ldiramiz.
+        const existing = await moysklad.findByExternalCode(orderId, token);
+        if (existing) {
+          await markRowSent(sheets, spreadsheetId, ordersSheetName, i + 1, existing.id);
+          order[ORD.status] = 1;
+          order[ORD.moySkladId] = existing.id;
+          logger.info(`Order ${orderId} MoySklad'da allaqachon bor edi (${existing.id}) — sheet to'ldirildi.`);
+          successCount++;
+        } else {
+          logger.error(`Order ${orderId} xatolik: ${resText}`);
+          errorCount++;
+        }
+      } else {
+        logger.error(`Order ${orderId} xatolik: ${resText}`);
+        errorCount++;
+      }
+    } catch (e) {
+      logger.error(`Order ${orderId} texnik xato: ${e.message}`);
+      errorCount++;
+    }
+  }
+
+  // Bekor qilish → oyna tugagach ko'tarish → yangi tasdiqlash+holat o'rnatish
+  // tartibida: bir xil tsiklda bekor qilingan buyurtma hech qachon keyingi
+  // bosqichlar tomonidan qayta "tasdiqlangan" holatga qaytarilmasin.
+  const cancelResult = await cancelSync.run({ sheets, orders, details });
+  errorCount += cancelResult.errorCount;
+
+  const promoteResult = await orderStatusSync.promoteHeldOrders({ sheets, orders, details, moyskladToken: token });
+  errorCount += promoteResult.errorCount;
+
+  const confirmResult = await orderStatusSync.confirmAndSetInitialState({ sheets, orders, details, moyskladToken: token });
+  errorCount += confirmResult.errorCount;
+
+  // Import o'chirilgan buyurtmalar: MoySklad'siz, Uzum'da tasdiqlash (oyna
+  // timing bilan) + tasdiqlangach topic'ga xabar.
+  const noImportResult = await orderStatusSync.handleNoImportOrders({ sheets, orders, details, blockedOrderIds });
+  errorCount += noImportResult.errorCount;
+
+  return { startedAt, successCount, errorCount };
+}
+
+createMoySkladOrders()
+  .then(async ({ startedAt, successCount, errorCount }) => {
+    logger.info("Ish yakunlandi.");
+    await reporter.reportRun({
+      startedAt,
+      status: deriveStatus(successCount, errorCount),
+      successCount,
+      errorCount,
+      summary: `${successCount} muvaffaqiyat, ${errorCount} xato`,
+    });
+  })
+  .catch(async (e) => {
+    logger.error(`Umumiy xato: ${e.stack || e.message}`);
+    process.exitCode = 1;
+    await reporter.reportRun({
+      startedAt: new Date().toISOString(),
+      status: "error",
+      successCount: 0,
+      errorCount: 1,
+      summary: e.message,
+    });
+  });

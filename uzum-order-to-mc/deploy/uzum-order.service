@@ -1,0 +1,10 @@
+[Unit]
+Description=Uzum -> MoySklad buyurtma sinxronizatsiyasi (bir martalik ishga tushirish)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/uzumOrderToMC
+ExecStart=/usr/bin/node /root/uzumOrderToMC/src/index.js
