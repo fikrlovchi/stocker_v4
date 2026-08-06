@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("stocker", {
   listPrinters: () => ipcRenderer.invoke("printers:list"),
   testPrint: (target) => ipcRenderer.invoke("printers:test", target),
   getState: () => ipcRenderer.invoke("state:get"),
+  clearJobs: () => ipcRenderer.invoke("jobs:clear"),
   reconnect: () => ipcRenderer.invoke("client:reconnect"),
   pairQr: () => ipcRenderer.invoke("pair:qr"),
 

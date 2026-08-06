@@ -246,6 +246,15 @@ ipcMain.handle("printers:test", async (e, target) => {
 
 ipcMain.handle("state:get", () => ({ status, logs: logLines, jobs: jobHistory }));
 
+// Navbat ro'yxatini tozalash. FAQAT ko'rinishni tozalaydi: chop etilgan
+// joblarning `printed.json` dagi izi qoladi, aks holda server ACK kelmagan
+// deb qayta yuborganda yorliq ikkinchi marta chiqib ketardi.
+ipcMain.handle("jobs:clear", () => {
+  jobHistory.length = 0;
+  send("jobs", jobHistory);
+  return true;
+});
+
 ipcMain.handle("client:reconnect", () => {
   client.reconnectNow();
   return true;

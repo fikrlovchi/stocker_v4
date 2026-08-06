@@ -14,23 +14,37 @@
         <span id="station-label" class="muted">—</span>
       </div>
       <div class="right">
+        <select id="lang" title="Til / Язык">
+          <option value="uz">O'zbekcha</option>
+          <option value="ru">Русский</option>
+        </select>
         <span id="status" class="badge">…</span>
-        <button id="reconnect" class="ghost">Qayta ulanish</button>
+        <button id="reconnect" class="ghost" data-i18n="reconnect">Qayta ulanish</button>
       </div>
     </header>
 
     <nav class="tabs">
-      <button class="tab active" data-tab="jobs">Navbat</button>
-      <button class="tab" data-tab="settings">Sozlamalar</button>
-      <button class="tab" data-tab="pair">Telefonni ulash</button>
-      <button class="tab" data-tab="logs">Loglar</button>
+      <button class="tab active" data-tab="jobs" data-i18n="tabJobs">Navbat</button>
+      <button class="tab" data-tab="settings" data-i18n="tabSettings">Sozlamalar</button>
+      <button class="tab" data-tab="pair" data-i18n="tabPair">Telefonni ulash</button>
+      <button class="tab" data-tab="logs" data-i18n="tabLogs">Loglar</button>
     </nav>
 
     <main>
       <section id="tab-jobs" class="panel active">
+        <div class="actions" style="margin-bottom:12px;">
+          <button id="clear-jobs" class="ghost" data-i18n="clearQueue">Navbatni tozalash</button>
+          <span class="muted" data-i18n="clearHint">Faqat ro'yxat tozalanadi — chop etilgan yorliqlar qayta chiqmaydi.</span>
+        </div>
         <table>
           <thead>
-            <tr><th>Vaqt</th><th>Tur</th><th>Buyurtma</th><th>Printer</th><th>Natija</th></tr>
+            <tr>
+              <th data-i18n="colTime">Vaqt</th>
+              <th data-i18n="colType">Tur</th>
+              <th data-i18n="colOrder">Buyurtma</th>
+              <th data-i18n="colPrinter">Printer</th>
+              <th data-i18n="colResult">Natija</th>
+            </tr>
           </thead>
           <tbody id="jobs-body">
             <tr><td colspan="5" class="muted">Hozircha chop etilgan yorliq yo'q</td></tr>

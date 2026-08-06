@@ -65,6 +65,13 @@ Har printer yonida **Sinov** tugmasi bor: server sinov sahifasini yasab
 beradi (`/print/test-page`), ya'ni bitta bosishda butun zanjir tekshiriladi —
 ulanish, token, PDF olish va chop etish.
 
+**Navbat** tabida "Navbatni tozalash" tugmasi bor: u faqat ro'yxatni
+tozalaydi. Chop etilgan joblarning `printed.json` dagi izi qoladi — aks holda
+server ACK kelmagan deb qayta yuborganda yorliq ikkinchi marta chiqib ketardi.
+
+Sarlavhadagi ro'yxatdan **til** tanlanadi (o'zbekcha / ruscha), tanlov
+saqlanadi.
+
 **Telefonni ulash** tabida QR chiqadi; operator smena boshida uni skanerlaydi
 va shundan keyin uning yorliqlari shu kompyuterdan chiqadi.
 
@@ -78,7 +85,7 @@ npm run build
 ```
 
 `dist/` papkasida NSIS o'rnatgich paydo bo'ladi —
-**`dist/Stocker Print Setup 0.2.0.exe`** (~86 MB, ichida Electron ham bor).
+**`dist/Stocker Print Setup 0.4.0.exe`** (~86 MB, ichida Electron ham bor).
 O'rnatilgandan keyin PowerShell umuman kerak emas — ilova Start menyusidan
 ochiladi va Windows bilan birga tray'da ishga tushadi.
 
@@ -117,17 +124,17 @@ Remove-Item "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign" -Recurse -For
 
 ### Ikonkalar
 
-Ikonka va tray belgisi `brand/stocker-mark.svg` dan qayta chizilgan: yashil
-dumaloq kvadrat, ichida qora "S". `scripts/makeIcon.js` uni piksel darajasida
-o'zi yasaydi (tashqi rasm kutubxonasi yo'q) — chegaralar bir piksel
-yumshatiladi, aks holda 32×32 tray ikonkasi tishli chiqadi.
+Ikonka, tray belgisi va sarlavhadagi wordmark **original logotipdan**
+yasaladi (`brand/logo-icon.png`, `brand/logo-text.png`) — chizmaga tegilmaydi,
+faqat o'lchami kichrayadi:
 
 ```powershell
 npm run icons
 ```
 
-`src/assets/tray.png` (32×32) va `src/assets/icon.ico` (256×256) kodda
-yasaladi — tashqi rasm yuklab olinmaydi.
+Bu `brand/scripts/makeIcons.js` ni chaqiradi va `src/assets/` ga `icon.ico`
+(256), `tray.png` (32), `wordmark.png` (600) yozadi. Tafsilotlar:
+`brand/README.md`.
 
 ## Tuzilishi
 

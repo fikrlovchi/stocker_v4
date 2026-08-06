@@ -31,6 +31,40 @@ function renderStatus(s) {
   if (s.message) el.title = s.message;
 }
 
+/* ==================== Til (uz/ru) ==================== */
+// Interfeys matnlari `data-i18n` atributi orqali almashadi. Tanlov
+// localStorage'da — ilova qayta ochilganda saqlanadi.
+const I18N = {
+  uz: {
+    reconnect: "Qayta ulanish",
+    tabJobs: "Navbat", tabSettings: "Sozlamalar", tabPair: "Telefonni ulash", tabLogs: "Loglar",
+    clearQueue: "Navbatni tozalash",
+    clearHint: "Faqat ro'yxat tozalanadi — chop etilgan yorliqlar qayta chiqmaydi.",
+    colTime: "Vaqt", colType: "Tur", colOrder: "Buyurtma", colPrinter: "Printer", colResult: "Natija",
+    emptyJobs: "Hozircha chop etilgan yorliq yo'q",
+    printed: "chop etildi", failed: "xato",
+  },
+  ru: {
+    reconnect: "Переподключить",
+    tabJobs: "Очередь", tabSettings: "Настройки", tabPair: "Подключить телефон", tabLogs: "Логи",
+    clearQueue: "Очистить очередь",
+    clearHint: "Очищается только список — напечатанные этикетки не выйдут повторно.",
+    colTime: "Время", colType: "Тип", colOrder: "Заказ", colPrinter: "Принтер", colResult: "Результат",
+    emptyJobs: "Пока нет напечатанных этикеток",
+    printed: "напечатано", failed: "ошибка",
+  },
+};
+
+let lang = localStorage.getItem("stocker.lang") || "uz";
+const T = (key) => (I18N[lang] && I18N[lang][key]) || I18N.uz[key] || key;
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = T(el.dataset.i18n);
+  });
+}
+
 function renderJobs(jobs) {
   const body = $("jobs-body");
   if (!jobs.length) {
@@ -40,11 +74,11 @@ function renderJobs(jobs) {
   body.innerHTML = jobs
     .map(
       (j) => `<tr>
-        <td class="muted">${new Date(j.at).toLocaleTimeString("uz-UZ")}</td>
+        <td class="muted">${new Date(j.at).toLocaleTimeString(lang === "ru" ? "ru-RU" : "uz-UZ")}</td>
         <td>${j.target === "big" ? "BIG" : "ShK"}${j.copies > 1 ? ` ×${j.copies}` : ""}</td>
         <td>${j.orderId}</td>
         <td class="muted">${j.printer || "—"}</td>
-        <td class="${j.ok ? "ok" : "err"}">${j.ok ? "chop etildi" : j.error || "xato"}</td>
+        <td class="${j.ok ? "ok" : "err"}">${j.ok ? T("printed") : j.error || T("failed")}</td>
       </tr>`
     )
     .join("");
@@ -143,7 +177,22 @@ window.stocker.onStatus(renderStatus);
 window.stocker.onJobs(renderJobs);
 window.stocker.onLog(addLog);
 
+// Til tanlash va navbatni tozalash.
+$("lang").value = lang;
+$("lang").addEventListener("change", (e) => {
+  lang = e.target.value;
+  localStorage.setItem("stocker.lang", lang);
+  applyLang();
+  window.stocker.getState().then((st) => renderJobs(st.jobs));
+});
+
+$("clear-jobs").addEventListener("click", async () => {
+  await window.stocker.clearJobs();
+  renderJobs([]);
+});
+
 (async () => {
+  applyLang();
   await loadConfig();
   const state = await window.stocker.getState();
   renderStatus(state.status);
