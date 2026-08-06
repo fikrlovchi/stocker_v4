@@ -1,0 +1,11 @@
+/node_modules
+/uploads
+history.json
+.DS_Store
+
+# 🔐 Maxfiy kalitlar — GitHubga YUKLANMAYDI
+credentials.json
+oauth.json
+*service-account*.json
+*.pem
+.env
