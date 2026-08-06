@@ -100,7 +100,13 @@ Superadmin hamma bo'limni ko'radi va ruxsat bera oladi. Mobil ilovaga faqat
 Tayyor:
 
 * `client/` — Vite + React + react-router + i18next (DMS v8 bilan bir xil
-  stek). `npm run build` → `client/dist`, nginx uni **`/app/`** da beradi.
+  stek). Chiqarish: `bash deploy/publish-client.sh` → `/var/www/stocker/app`,
+  nginx uni **`/app/`** da beradi.
+
+  > **Tuzoq:** natijani `/root/stocker/client/dist` dan bermang — `/root`
+  > 0700 bilan yopiq, nginx (www-data) o'qiy olmaydi va 403 beradi. Va
+  > `location /app/` `/app` (oxirida `/` yo'q) ga mos kelmaydi — redirect
+  > qo'shilgan, aks holda so'rov panelga tushib "Cannot GET /app" chiqadi.
 * Karkas: chap menyu (ruxsatga qarab), sarlavhada til (uz/ru) va mavzu
   (qora/oq) tanlash. Ranglar faqat CSS tokenlari orqali.
 * **Kirish** — `/web/auth/login`, token `localStorage` da.
