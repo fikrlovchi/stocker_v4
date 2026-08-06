@@ -1,0 +1,17 @@
+<header class="topbar">
+  <!-- Brend: ikonka + yozuvli logotip (brand/logo-text.png dan yasalgan,
+       foni shaffof). Matnli "Fikrlovchi Panel" o'rnini bosdi. -->
+  <a class="brand" href="/" title="Stocker">
+    <img src="/logo-icon.png" class="brand-icon" alt="" />
+    <img src="/logo-wordmark.png" class="brand-wordmark" alt="Stocker" />
+  </a>
+  <nav class="topnav">
+    <a href="/">Loyihalar</a>
+    <!-- uzumPDFs alohida servis, lekin bir xil sessiya va uslub bilan
+         shu domenning /pdf/ yo'lida turadi (nginx auth_request). -->
+    <a href="/pdf/">Yorliqlar</a>
+    <a href="/variables">O'zgaruvchilar</a>
+    <a href="/account">Sozlamalar</a>
+    <form method="post" action="/logout"><button class="logout-btn" type="submit">Chiqish</button></form>
+  </nav>
+</header>

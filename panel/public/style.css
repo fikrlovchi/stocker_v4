@@ -1,0 +1,269 @@
+/* Stocker brend uslubi — stocker_v4/brand/README.md.
+   To'q fon, yashil urg'u, yumaloq kartalar. Kunduzgi tema yo'q. */
+:root {
+  --bg: #0a0a0a;
+  --panel: #141414;
+  --panel-2: #1a1a1a;
+  --border: #3a3a3a;
+  --text: #e6e6e6;
+  --muted: #6b6b6b;
+  --accent: #00ff8c;
+  --accent-2: #00cc6a;
+  --on-accent: #0a0a0a;
+  --danger: #ff3b30;
+  --success: #00ff8c;
+  --warning: #ffb020;
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Montserrat", "Open Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  /* Yashil nur — layout namunasidagi kabi, fonni jonlantiradi. Faqat
+     dekorativ: hech qanday matn ustiga tushmaydi. */
+  background-image:
+    radial-gradient(760px 420px at 82% -8%, rgba(0, 255, 140, .13), transparent 70%),
+    radial-gradient(560px 380px at 4% 104%, rgba(0, 204, 106, .08), transparent 72%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+h1, h2, h3, strong { font-family: "Montserrat", -apple-system, "Segoe UI", sans-serif; }
+h2 { font-size: 22px; font-weight: 600; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-2); text-decoration: underline; }
+
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+
+/* ---------- Kirish ---------- */
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.login-form {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 0 0 1px rgba(0, 255, 140, .06), 0 24px 70px rgba(0, 0, 0, .55);
+}
+
+.login-wordmark { width: 190px; align-self: center; display: block; }
+.login-sub { margin: -4px 0 8px; text-align: center; color: var(--muted); font-size: 13px; }
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.login-form input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+}
+.login-form input:focus { outline: none; border-color: var(--accent); }
+
+.login-form button { margin-top: 8px; padding: 11px; }
+
+.error {
+  background: rgba(255, 59, 48, .12);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ---------- Sarlavha ---------- */
+
+header.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 10, 10, .72);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
+.brand:hover { text-decoration: none; }
+.brand-icon { width: 30px; height: 30px; border-radius: 8px; display: block; }
+/* Wordmark balandlik bo'yicha o'lchanadi — nisbati saqlanadi. */
+.brand-wordmark { height: 26px; width: auto; display: block; }
+
+.topnav { display: flex; gap: 8px; align-items: center; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 999px;
+  transition: background-color .15s, color .15s;
+}
+.topnav a:hover { color: var(--text); background: var(--panel-2); text-decoration: none; }
+
+main {
+  padding: 28px 24px 48px;
+  max-width: 1060px;
+  margin: 0 auto;
+}
+
+/* ---------- Kartalar ---------- */
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .02) inset, 0 12px 32px rgba(0, 0, 0, .35);
+  transition: border-color .15s;
+}
+.card:hover { border-color: rgba(0, 255, 140, .3); }
+.card > strong { display: block; font-size: 15px; margin-bottom: 4px; }
+
+.project-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.project-row .name { font-weight: 600; font-size: 15px; }
+.project-row .name a { color: var(--text); }
+.project-row .name a:hover { color: var(--accent); text-decoration: none; }
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge.ok { background: rgba(0, 255, 140, .14); color: var(--success); }
+.badge.error { background: rgba(255, 59, 48, .14); color: var(--danger); }
+.badge.paused { background: rgba(107, 107, 107, .2); color: var(--muted); }
+.badge.stale { background: rgba(255, 176, 32, .14); color: var(--warning); }
+
+.error-banner {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--danger);
+  background: rgba(255, 59, 48, .08);
+  border-left: 3px solid var(--danger);
+  padding: 7px 10px;
+  border-radius: 8px;
+}
+
+/* ---------- Jadval ---------- */
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(58, 58, 58, .6); }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+tbody tr:hover td { background: rgba(255, 255, 255, .02); }
+
+.log-line.ERROR { color: var(--danger); }
+.log-line.INFO { color: var(--muted); }
+
+/* ---------- Formalar ---------- */
+
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+.controls form { display: inline-flex; gap: 6px; align-items: center; }
+.controls input, .controls select,
+input[type=text], input[type=password], input[type=number], select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.controls input:focus, .controls select:focus,
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+.controls input[type=number] { width: 76px; }
+.controls select[multiple] { border-radius: 12px; padding: 6px; }
+
+button, .controls button {
+  background: var(--accent);
+  color: var(--on-accent);
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform .1s, background-color .15s;
+}
+button:hover, .controls button:hover { background: var(--accent-2); }
+button:active, .controls button:active { transform: scale(.97); }
+
+.pagination { margin-top: 12px; display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); }
+
+.logout-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.logout-btn:hover { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+
+.muted-inline { color: var(--muted); font-size: 12px; }
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  text-decoration: underline;
+  font-weight: 500;
+}
+.link-btn:hover { background: none; color: var(--danger); }
+
+/* ---------- O'zgaruvchilar daraxti ---------- */
+
+.variable-node {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 8px 0;
+}
+.variable-node summary { cursor: pointer; font-weight: 600; }
+.variable-node.nested { margin-left: 16px; background: rgba(255, 255, 255, .02); }
+.variable-body { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.variable-leaf {
+  font-size: 13px;
+  padding: 7px 10px;
+  border-left: 2px solid var(--border);
+  margin-left: 8px;
+}

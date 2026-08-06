@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8" />
+  <title>Stocker — boshqaruv</title>
+  <link rel="icon" type="image/png" href="/logo-icon.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <%- include('partials/topbar') %>
+  <main>
+    <% if (errorMessage) { %><p class="error"><%= errorMessage %></p><% } %>
+
+    <% if (projects.length === 0) { %>
+      <p>Hali loyihalar qo'shilmagan. Serverda <code>node scripts/seed-project.js &lt;slug&gt; &lt;nom&gt;</code> orqali qo'shing.</p>
+    <% } %>
+
+    <% projects.forEach(function (p) { %>
+      <div class="card">
+        <div class="project-row">
+          <div class="name"><a href="/projects/<%= p.slug %>"><%= p.display_name %></a></div>
+          <div>
+            <% if (p.is_paused) { %><span class="badge paused">to'xtatilgan</span><% } %>
+            <% if (p.stale) { %><span class="badge stale">eskirgan</span><% } %>
+            <% if (p.latestRun) { %>
+              <span class="badge <%= p.latestRun.status === 'success' ? 'ok' : 'error' %>"><%= p.latestRun.status %></span>
+            <% } %>
+          </div>
+        </div>
+        <% if (p.latestRun) { %>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">
+            Oxirgi ishga tushish: <%= formatTashkent(p.latestRun.started_at) %> — <%= p.latestRun.success_count %> muvaffaqiyat, <%= p.latestRun.error_count %> xato
+          </div>
+        <% } else { %>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Hali hisobot kelmagan</div>
+        <% } %>
+        <% if (p.latestError) { %>
+          <div class="error-banner"><%= p.latestError.message %></div>
+        <% } %>
+      </div>
+    <% }); %>
+  </main>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8" />
+  <title>O'zgaruvchilar — Stocker</title>
+  <link rel="icon" type="image/png" href="/logo-icon.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <%
+    function projectChipsHtml(list) {
+      if (!list || list.length === 0) {
+        return '<span class="muted-inline">Hech qaysi loyihaga ulanmagan</span>';
+      }
+      return list.map(function (p) {
+        return '<a href="/projects/' + p.slug + '">' + p.display_name + '</a>';
+      }).join(', ');
+    }
+  %>
+  <%- include('partials/topbar') %>
+  <main>
+    <p><a href="/">&larr; Loyihalar</a></p>
+    <h2>O'zgaruvchilar</h2>
+
+    <% if (actionMessage) { %><p style="color:var(--success);">Bajarildi: <%= actionMessage %></p><% } %>
+    <% if (errorMessage) { %><p class="error"><%= errorMessage %></p><% } %>
+
+    <div class="card">
+      <strong>Telegram botlar</strong>
+
+      <% telegramBots.forEach(function (bot) { %>
+        <details class="variable-node">
+          <summary><%= bot.name %> <span class="muted-inline">(<%= bot.botTokenMasked %>)</span></summary>
+          <div class="variable-body">
+            <div class="muted-inline">Bog'langan loyihalar: <%- projectChipsHtml(bot.linkedProjects) %></div>
+            <form method="post" action="/variables/telegram/bots/<%= bot.id %>/delete">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button type="submit" class="link-btn">Botni o'chirish</button>
+            </form>
+          </div>
+        </details>
+      <% }); %>
+
+      <form method="post" action="/variables/telegram/bots" class="controls">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="text" name="name" placeholder="Bot nomi" required />
+        <input type="text" name="botToken" placeholder="Bot token" required />
+        <button type="submit">+ Bot qo'shish</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <strong>Telegram chatlar</strong>
+
+      <% telegramChats.forEach(function (chat) { %>
+        <details class="variable-node">
+          <summary><%= chat.name %> <span class="muted-inline">(chat_id: <%= chat.chat_id %> · bot: <%= chat.bot.name %>)</span></summary>
+          <div class="variable-body">
+            <div class="muted-inline">Bog'langan loyihalar (topicsiz): <%- projectChipsHtml(chat.linkedProjects) %></div>
+
+            <% chat.topics.forEach(function (topic) { %>
+              <div class="variable-leaf">
+                <strong><%= topic.name %></strong> <span class="muted-inline">(topic_id: <%= topic.topic_id %>)</span>
+                — <%- projectChipsHtml(topic.linkedProjects) %>
+                <form method="post" action="/variables/telegram/topics/<%= topic.id %>/delete" style="display:inline;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button type="submit" class="link-btn">o'chirish</button>
+                </form>
+              </div>
+            <% }); %>
+
+            <form method="post" action="/variables/telegram/topics" class="controls">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="chatId" value="<%= chat.id %>" />
+              <input type="text" name="name" placeholder="Topic nomi" required />
+              <input type="text" name="topicId" placeholder="Topic ID" required />
+              <button type="submit">+ Topic qo'shish</button>
+            </form>
+
+            <form method="post" action="/variables/telegram/chats/<%= chat.id %>/delete">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button type="submit" class="link-btn">Chatni o'chirish</button>
+            </form>
+          </div>
+        </details>
+      <% }); %>
+
+      <form method="post" action="/variables/telegram/chats" class="controls">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <select name="botId" required>
+          <option value="">— Bot tanlang —</option>
+          <% telegramBots.forEach(function (bot) { %>
+            <option value="<%= bot.id %>"><%= bot.name %></option>
+          <% }); %>
+        </select>
+        <input type="text" name="name" placeholder="Chat nomi" required />
+        <input type="text" name="chatId" placeholder="Chat ID" required />
+        <button type="submit">+ Chat qo'shish</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <strong>Google Sheets</strong>
+
+      <% sheets.forEach(function (sheet) { %>
+        <details class="variable-node">
+          <summary><%= sheet.name %> <span class="muted-inline">(sheet_id: <%= sheet.sheet_id %>)</span></summary>
+          <div class="variable-body">
+            <div class="muted-inline">Bog'langan loyihalar: <%- projectChipsHtml(sheet.linkedProjects) %></div>
+
+            <% sheet.lists.forEach(function (list) { %>
+              <div class="variable-leaf">
+                <strong><%= list.name %></strong>
+                — <%- projectChipsHtml(list.linkedProjects) %>
+                <form method="post" action="/variables/sheets/lists/<%= list.id %>/delete" style="display:inline;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button type="submit" class="link-btn">o'chirish</button>
+                </form>
+              </div>
+            <% }); %>
+
+            <form method="post" action="/variables/sheets/lists" class="controls">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="sheetId" value="<%= sheet.id %>" />
+              <input type="text" name="name" placeholder="Varoq nomi (masalan: uzum_order)" required />
+              <button type="submit">+ List qo'shish</button>
+            </form>
+
+            <form method="post" action="/variables/sheets/<%= sheet.id %>/delete">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button type="submit" class="link-btn">Sheetni o'chirish</button>
+            </form>
+          </div>
+        </details>
+      <% }); %>
+
+      <form method="post" action="/variables/sheets" class="controls">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="text" name="name" placeholder="Sheet nomi" required />
+        <input type="text" name="sheetId" placeholder="Sheet ID" required />
+        <button type="submit">+ Sheet qo'shish</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <strong>Tokenlar</strong>
+      <div class="muted-inline">MoySklad, RetailCRM va shu kabi oddiy nom+token juftliklar uchun.</div>
+
+      <% tokens.forEach(function (token) { %>
+        <details class="variable-node">
+          <summary><%= token.name %> <span class="muted-inline">(<%= token.tokenMasked %>)</span></summary>
+          <div class="variable-body">
+            <div class="muted-inline">Bog'langan loyihalar: <%- projectChipsHtml(token.linkedProjects) %></div>
+            <form method="post" action="/variables/tokens/<%= token.id %>/delete">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <button type="submit" class="link-btn">Tokenni o'chirish</button>
+            </form>
+          </div>
+        </details>
+      <% }); %>
+
+      <form method="post" action="/variables/tokens" class="controls">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="text" name="name" placeholder="Nomi (masalan: MoySklad — asosiy)" required />
+        <input type="text" name="token" placeholder="Token" required />
+        <button type="submit">+ Token qo'shish</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <strong>Uzum kabinetlar</strong>
+
+      <% uzumCabinets.forEach(function (cabinet) { %>
+        <details class="variable-node">
+          <summary><%= cabinet.name %> <span class="muted-inline">(<%= cabinet.tokenMasked %>)</span></summary>
+          <div class="variable-body">
+            <div class="muted-inline">Bog'langan loyihalar (do'konsiz): <%- projectChipsHtml(cabinet.linkedProjects) %></div>
+
+            <% cabinet.shops.forEach(function (shop) { %>
+              <div class="variable-leaf">
+                <strong><%= shop.name %></strong> <span class="muted-inline">(shop_id: <%= shop.shop_id %>)</span>
+                — <%- projectChipsHtml(shop.linkedProjects) %>
+                <form method="post" action="/variables/uzum/shops/<%= shop.id %>/delete" style="display:inline;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button type="submit" class="link-btn">o'chirish</button>
+                </form>
+              </div>
+            <% }); %>
+
+            <form method="post" action="/variables/uzum/shops" class="controls">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="cabinetId" value="<%= cabinet.id %>" />
+              <input type="text" name="name" placeholder="Do'kon nomi" required />
+              <input type="text" name="shopId" placeholder="Shop ID" required />
+              <button type="submit">+ Do'kon qo'shish</button>
+            </form>
+
+            <div class="controls">
+              <form method="post" action="/variables/uzum/cabinets/<%= cabinet.id %>/sync-shops">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <button type="submit">Do'konlarni Uzum'dan yangilash</button>
+              </form>
+              <form method="post" action="/variables/uzum/cabinets/<%= cabinet.id %>/delete">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <button type="submit" class="link-btn">Kabinetni o'chirish</button>
+              </form>
+            </div>
+          </div>
+        </details>
+      <% }); %>
+
+      <form method="post" action="/variables/uzum/cabinets" class="controls">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="text" name="name" placeholder="Kabinet nomi" required />
+        <input type="text" name="token" placeholder="Kabinet token" required />
+        <button type="submit">+ Kabinet qo'shish</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

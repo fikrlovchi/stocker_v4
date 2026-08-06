@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8" />
+  <title>Kirish — Stocker</title>
+  <link rel="icon" type="image/png" href="/logo-icon.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body class="login-page">
+  <form class="login-form" method="post" action="/login">
+    <img src="/logo-wordmark.png" class="login-wordmark" alt="Stocker" />
+    <p class="login-sub">Ombor va marketplace boshqaruvi</p>
+    <% if (error) { %>
+      <p class="error"><%= error %></p>
+    <% } %>
+    <label>
+      Login
+      <input type="text" name="username" autocomplete="username" required autofocus />
+    </label>
+    <label>
+      Parol
+      <input type="password" name="password" autocomplete="current-password" required />
+    </label>
+    <button type="submit">Kirish</button>
+  </form>
+</body>
+</html>

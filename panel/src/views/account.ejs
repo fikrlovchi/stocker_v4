@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8" />
+  <title>Sozlamalar — Stocker</title>
+  <link rel="icon" type="image/png" href="/logo-icon.png" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <%- include('partials/topbar') %>
+  <main>
+    <p><a href="/">&larr; Loyihalar</a></p>
+    <h2>Sozlamalar</h2>
+
+    <% if (actionMessage) { %><p style="color:var(--success);">Bajarildi: <%= actionMessage %></p><% } %>
+    <% if (errorMessage) { %><p class="error"><%= errorMessage %></p><% } %>
+
+    <div class="card">
+      <strong>Parolni o'zgartirish</strong>
+      <form method="post" action="/account/password" class="controls" style="flex-direction:column;align-items:flex-start;gap:8px;">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <label>Joriy parol <input type="password" name="currentPassword" autocomplete="current-password" required /></label>
+        <label>Yangi parol <input type="password" name="newPassword" autocomplete="new-password" minlength="8" required /></label>
+        <label>Yangi parol (tasdiqlash) <input type="password" name="confirmPassword" autocomplete="new-password" minlength="8" required /></label>
+        <button type="submit">Parolni yangilash</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>
