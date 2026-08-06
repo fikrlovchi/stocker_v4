@@ -10,6 +10,7 @@ import express from "express";
 import { login, logout, resolveToken } from "../auth/operators.js";
 import { FLAGS, SECTIONS } from "../auth/sections.js";
 import * as users from "../auth/users.js";
+import * as batches from "../packing/batches.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -139,6 +140,59 @@ export function webRouter() {
     } catch (e) {
       res.status(400).json({ error: e.message });
     }
+  });
+
+  /* ---------- yig'ish: partiyalar ---------- */
+
+  const packing = [requireWeb, requireSection("packing")];
+
+  router.get("/batches", ...packing, (req, res) => {
+    res.json({ batches: batches.listBatches(), open: batches.openBatch() });
+  });
+
+  router.post("/batches", ...packing, (req, res) => {
+    const { name, orders } = req.body || {};
+    try {
+      const orderIds = batches.parseOrderIds(orders);
+      // Javobda faqat "yaratildi" emas, nima bo'lgani ham qaytadi: qaysi
+      // ID keshda topilmadi, qaysi biri boshqa partiyada qolib ketdi.
+      res.json(batches.createBatch({ name, orderIds, createdBy: req.user.login }));
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  router.get("/batches/:id", ...packing, (req, res) => {
+    const id = Number(req.params.id);
+    const batch = batches.getBatch(id);
+    if (!batch) return res.status(404).json({ error: "Partiya topilmadi" });
+    res.json({
+      batch,
+      shops: batches.batchShops(id),
+      orders: batches.batchOrders(id, { shopId: req.query.shop || null }),
+    });
+  });
+
+  router.post("/batches/:id/close", ...packing, (req, res) => {
+    res.json({ batch: batches.closeBatch(Number(req.params.id)) });
+  });
+
+  router.post("/batches/:id/reopen", ...packing, (req, res) => {
+    try {
+      res.json({ batch: batches.reopenBatch(Number(req.params.id)) });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  router.delete("/batches/:id", ...packing, (req, res) => {
+    batches.removeBatch(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  router.delete("/batches/:id/orders/:orderId", ...packing, (req, res) => {
+    batches.removeOrderFromBatch(Number(req.params.id), req.params.orderId);
+    res.json({ ok: true });
   });
 
   return router;

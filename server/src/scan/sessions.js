@@ -19,6 +19,7 @@ import logger from "../logger.js";
 import { normalizeBarcode } from "../util/sheetValues.js";
 import { getOrderStateHref } from "../moysklad/client.js";
 import { createJob, listJobs } from "../print/jobs.js";
+import { hasOpenBatch, isInOpenBatch, markPacked } from "../packing/batches.js";
 import { dispatchTo } from "../print/hub.js";
 
 const PK = config.packing;
@@ -154,7 +155,10 @@ export function expireStaleSessions() {
 // (uzum_packing varag'iga yozuv Sheets orqali kechikib boradi, shuning uchun
 // mahalliy baza ham tekshiriladi).
 function findCandidates(barcode) {
-  return db
+  // Ochiq partiya bo'lsa — skan doirasi shu ro'yxat bilan cheklanadi.
+  // Partiya yo'q bo'lsa eski xatti-harakat: keshdagi barcha mos buyurtmalar.
+  const scoped = hasOpenBatch();
+  const rows = db
     .prepare(
       `SELECT DISTINCT o.order_id, o.moysklad_id, o.item_count, o.unit_count, o.arrived_at_ms
        FROM item_barcodes b
@@ -168,6 +172,8 @@ function findCandidates(barcode) {
        ORDER BY o.item_count ASC, o.arrived_at_ms ASC`
     )
     .all(barcode);
+
+  return scoped ? rows.filter((r) => isInOpenBatch(r.order_id)) : rows;
 }
 
 // MoySklad'da bekor qilinmaganini yakuniy tekshirish. Kesh 60 soniyada bir
@@ -389,6 +395,9 @@ function scanInSession(session, barcode, operator, { justOpened = false } = {}) 
       );
     })();
     dispatchTo(session.stationId);
+    // Partiyada bo'lsa "yig'ildi" deb belgilanadi — do'kon progressi
+    // (mobil ilovadagi 2/22) shu yerdan hisoblanadi.
+    markPacked(session.orderId, operator);
     logger.info(`Buyurtma ${session.orderId} yig'ildi (${operator}, ${updated.progress.total} birlik).`);
     return {
       result: RESULT.ORDER_COMPLETE,

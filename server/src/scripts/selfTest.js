@@ -589,16 +589,67 @@ check("import: eski parol ishlaydi", Boolean(auth.login({ login: "eski1", passwo
 const again = users.importLegacyUsers({ adminLogin: "root", adminPasswordHash: "x" });
 check("import: takroriy chaqiruv yangi yozuv yasamaydi", [again.operators, again.admin, again.skipped], [0, 0, 1]);
 
-// Partiyalar jadvali (skan doirasi) — sxema o'rnida.
-db.prepare("INSERT INTO batches (name, created_by) VALUES (?, ?)").run("5-avgust", "admin");
-const batchId = db.prepare("SELECT id FROM batches WHERE name = ?").get("5-avgust").id;
-db.prepare("INSERT INTO batch_orders (batch_id, order_id, shop_id) VALUES (?, ?, ?)").run(batchId, "OK1", "shop-1");
-db.prepare("INSERT INTO batch_orders (batch_id, order_id, shop_id, status) VALUES (?, ?, ?, 'packed')").run(batchId, "OK2", "shop-1");
+/* ---------- 12. Partiyalar (skan doirasi) ---------- */
+
+const B = await import("../packing/batches.js");
+
+check("partiya: ID ro'yxatini o'qish", B.parseOrderIds("116649323, 118799194\n10-0118293012-1  116649323"),
+  ["116649323", "118799194", "10-0118293012-1"]);
+check("partiya: bo'sh matn", B.parseOrderIds("  \n , "), []);
+
+check("partiya: ochiq partiya yo'q", B.hasOpenBatch(), false);
+
+const made = B.createBatch({ name: "5-avgust", orderIds: ["OK1", "NOBC", "YOQ999"], createdBy: "admin" });
+check("partiya: qo'shildi", made.added.length, 3);
+check("partiya: keshda yo'q ID belgilandi", made.unknown, ["YOQ999"]);
+check("partiya: do'kon kesh'dan olindi", B.batchOrders(made.batch.id).find((o) => o.orderId === "OK1").shopId, "9001");
+check("partiya: ochiq partiya bor", B.hasOpenBatch(), true);
+
+// Bir buyurtma ikki ochiq partiyada bo'lmasligi kerak.
+const second = B.createBatch({ name: "takror", orderIds: ["OK1", "OK2"], createdBy: "admin" });
+check("partiya: takroriy buyurtma o'tkazib yuborildi", second.skipped.map((s) => s.orderId), ["OK1"]);
+check("partiya: yangi buyurtma qo'shildi", second.added, ["OK2"]);
+
+check("partiya: yig'ilgan deb belgilash", B.markPacked("OK1", "aziz"), true);
+check("partiya: takror belgilash o'zgartirmaydi", B.markPacked("OK1", "aziz"), false);
 check(
-  "partiya: do'kon bo'yicha progress",
-  db.prepare("SELECT COUNT(*) AS total, SUM(status='packed') AS packed FROM batch_orders WHERE batch_id = ? AND shop_id = ?").get(batchId, "shop-1"),
-  { total: 2, packed: 1 }
+  "partiya: do'kon progressi",
+  B.batchShops(made.batch.id).find((s) => s.shopId === "9001"),
+  { shopId: "9001", total: 2, packed: 1, pending: 1 }
 );
+check("partiya: operator tarixi", B.packedByOperator("aziz").map((r) => r.orderId), ["OK1"]);
+
+// Yopilgan partiya skan doirasidan chiqadi.
+B.closeBatch(second.batch.id);
+B.closeBatch(made.batch.id);
+check("partiya: yopilgach ochiq partiya qolmadi", B.hasOpenBatch(), false);
+check("partiya: yopilgani ro'yxatda qoladi", B.listBatches().length, 2);
+// Yopilgan partiyadagi buyurtmani yangi partiyaga olish mumkin; shundan
+// keyin eskisini qayta ochish TAQIQLANADI — aks holda bitta buyurtma ikki
+// ochiq ro'yxatda turib qolardi.
+const third = B.createBatch({ name: "ertaga", orderIds: ["OK1"], createdBy: "admin" });
+check("partiya: yopilganidan keyin buyurtma yangi partiyaga o'tdi", third.added, ["OK1"]);
+check(
+  "partiya: to'qnashuvda qayta ochilmaydi",
+  (() => { try { B.reopenBatch(made.batch.id); return "ochildi"; } catch { return "rad"; } })(),
+  "rad"
+);
+B.removeBatch(third.batch.id);
+check("partiya: to'qnashuv ketgach qayta ochiladi", B.reopenBatch(made.batch.id).isOpen, true);
+
+// Skan doirasi: ochiq partiyada bo'lmagan buyurtma topilmaydi.
+resetSessions();
+db.exec("DELETE FROM batch_orders WHERE order_id = 'NOBC'");
+const outOfBatch = await scan({ barcode: "5000000000005", operator: "aziz" });
+check("skan: partiyadan tashqaridagi buyurtma chiqmaydi", outOfBatch.result, "unknown_barcode");
+
+const inBatch = await scan({ barcode: "1000111953348", operator: "aziz" });
+check("skan: partiyadagi buyurtma ochiladi", inBatch.result, "order_opened");
+resetSessions();
+
+B.removeBatch(made.batch.id);
+B.removeBatch(second.batch.id);
+check("partiya: o'chirilgach buyurtmalari ham ketdi", db.prepare("SELECT COUNT(*) AS n FROM batch_orders").get().n, 0);
 
 // Veb doirasi (SPA): mobil bayrog'i shart emas, lekin hisob `users` da
 // bo'lishi kerak va token doirasi ajratilgan.

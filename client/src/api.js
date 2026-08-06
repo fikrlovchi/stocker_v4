@@ -42,6 +42,14 @@ export const api = {
   logout: () => call("/auth/logout", { method: "POST" }),
   me: () => call("/auth/me"),
 
+  listBatches: () => call("/batches"),
+  createBatch: (name, orders) => call("/batches", { method: "POST", body: { name, orders } }),
+  getBatch: (id, shop) => call(`/batches/${id}${shop ? `?shop=${encodeURIComponent(shop)}` : ""}`),
+  closeBatch: (id) => call(`/batches/${id}/close`, { method: "POST" }),
+  reopenBatch: (id) => call(`/batches/${id}/reopen`, { method: "POST" }),
+  deleteBatch: (id) => call(`/batches/${id}`, { method: "DELETE" }),
+  removeBatchOrder: (id, orderId) => call(`/batches/${id}/orders/${encodeURIComponent(orderId)}`, { method: "DELETE" }),
+
   listUsers: () => call("/users"),
   createUser: (payload) => call("/users", { method: "POST", body: payload }),
   updateUser: (id, payload) => call(`/users/${id}`, { method: "PATCH", body: payload }),

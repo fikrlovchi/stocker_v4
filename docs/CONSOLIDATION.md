@@ -120,8 +120,23 @@ Tayyor:
 Brauzerda tekshirildi: kirish, ruxsat saqlash, chegaralangan foydalanuvchiga
 `/web/users` → **403**, superadminni o'chirishga → **403**.
 
-Keyingi: "Yig'ish" bo'limi (partiyalar, sessiyalar, ish joylari) va
-"Yorliqlar" ni SPA ichiga ko'chirish, so'ng ildizni SPA'ga o'tkazish.
+**"Yig'ish" bo'limi ✅ (2026-08-06)** — partiyalar to'liq ishlaydi:
+
+* buyurtma ID ro'yxatini joylab partiya yaratish (vergul/bo'shliq/yangi qator
+  — hammasi ajratuvchi, takrorlar olib tashlanadi)
+* yaratilgandan keyin **hisobot**: nechtasi qo'shildi, qaysi ID keshda
+  topilmadi, qaysi biri boshqa ochiq partiyada qolib ketdi
+* do'kon bo'yicha guruhlash va `2/22` progress (mobil ilovadagi ko'rsatkich
+  bilan bir xil hisob), buyurtmalar jadvali, partiyani yopish/qayta ochish/
+  o'chirish, alohida buyurtmani chiqarib tashlash
+* **skan doirasi**: ochiq partiya bo'lsa telefon faqat shu ro'yxatdagi
+  buyurtmalarni ochadi; partiya yo'q bo'lsa eski xatti-harakat saqlanadi —
+  ro'yxat kiritilmagan kuni ish to'xtab qolmasin
+* buyurtma yig'ilgach `batch_orders` da `packed` deb belgilanadi (operator
+  nomi bilan) — mobil ilovadagi "mening yig'ganlarim" shu yerdan
+
+Keyingi: "Yorliqlar" ni SPA ichiga ko'chirish, mobil ilova (do'kon tanlash,
+`2/22`, Print tugmasi), so'ng ildizni SPA'ga o'tkazish.
 
 ### 3-bosqich rejasi (asl matn) ⏳
 

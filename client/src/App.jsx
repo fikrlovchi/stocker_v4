@@ -5,6 +5,7 @@ import { useTheme } from "./theme";
 import { setLanguage } from "./i18n";
 import Login from "./pages/Login";
 import Users from "./pages/Users";
+import Packing from "./pages/Packing";
 import Placeholder from "./pages/Placeholder";
 
 // Menyu — bo'lim kaliti bilan. Ko'rinishi foydalanuvchi ruxsatiga bog'liq;
@@ -94,7 +95,7 @@ function Shell() {
             path="/packing"
             element={
               <Guarded section="packing">
-                <Placeholder titleKey="section.packing" href="/projects/stocker" />
+                <Packing />
               </Guarded>
             }
           />
