@@ -11,6 +11,7 @@ import { login, logout, resolveToken } from "../auth/operators.js";
 import { FLAGS, SECTIONS } from "../auth/sections.js";
 import * as users from "../auth/users.js";
 import * as batches from "../packing/batches.js";
+import { labelsRouter } from "./labels.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -194,6 +195,11 @@ export function webRouter() {
     batches.removeOrderFromBatch(Number(req.params.id), req.params.orderId);
     res.json({ ok: true });
   });
+
+  /* ---------- yorliqlar (uzumPDFs) ---------- */
+
+  // Butun bo'lim `labels` ruxsati bilan yopiladi; ichkarisi labels.js da.
+  router.use("/labels", requireWeb, requireSection("labels"), labelsRouter());
 
   return router;
 }

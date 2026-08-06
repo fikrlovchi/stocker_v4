@@ -37,6 +37,31 @@ async function call(path, { method = "GET", body } = {}) {
   return data;
 }
 
+// Ikkilik javob (PDF) — token sarlavhasi bilan olinadi va blob URL'ga
+// aylantiriladi: `<iframe src>` va `<a href>` sarlavha yubora olmaydi.
+export async function blobUrl(path, { method = "GET", body } = {}) {
+  const token = getToken();
+  const res = await fetch(`/web${path}`, {
+    method,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = `HTTP ${res.status}`;
+    try {
+      msg = JSON.parse(text).error || msg;
+    } catch {
+      /* HTML yoki bo'sh javob — kod bilan cheklanamiz */
+    }
+    throw new ApiError(msg, res.status);
+  }
+  return URL.createObjectURL(await res.blob());
+}
+
 export const api = {
   login: (login, password) => call("/auth/login", { method: "POST", body: { login, password } }),
   logout: () => call("/auth/logout", { method: "POST" }),
@@ -49,6 +74,10 @@ export const api = {
   reopenBatch: (id) => call(`/batches/${id}/reopen`, { method: "POST" }),
   deleteBatch: (id) => call(`/batches/${id}`, { method: "DELETE" }),
   removeBatchOrder: (id, orderId) => call(`/batches/${id}/orders/${encodeURIComponent(orderId)}`, { method: "DELETE" }),
+
+  labelsProcess: (orderIds, pdfConfig) => call("/labels/process", { method: "POST", body: { orderIds, pdfConfig } }),
+  labelsBatch: (id) => call(`/labels/batch/${encodeURIComponent(id)}`),
+  labelsHistory: () => call("/labels/history"),
 
   listUsers: () => call("/users"),
   createUser: (payload) => call("/users", { method: "POST", body: payload }),

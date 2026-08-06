@@ -5,6 +5,7 @@ import { useTheme } from "./theme";
 import { setLanguage } from "./i18n";
 import Login from "./pages/Login";
 import Users from "./pages/Users";
+import Labels from "./pages/Labels";
 import Packing from "./pages/Packing";
 import Placeholder from "./pages/Placeholder";
 
@@ -103,7 +104,7 @@ function Shell() {
             path="/labels"
             element={
               <Guarded section="labels">
-                <Placeholder titleKey="section.labels" href="/pdf/" />
+                <Labels />
               </Guarded>
             }
           />

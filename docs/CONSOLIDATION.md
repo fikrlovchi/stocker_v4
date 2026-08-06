@@ -135,8 +135,29 @@ Brauzerda tekshirildi: kirish, ruxsat saqlash, chegaralangan foydalanuvchiga
 * buyurtma yig'ilgach `batch_orders` da `packed` deb belgilanadi (operator
   nomi bilan) — mobil ilovadagi "mening yig'ganlarim" shu yerdan
 
-Keyingi: "Yorliqlar" ni SPA ichiga ko'chirish, mobil ilova (do'kon tanlash,
-`2/22`, Print tugmasi), so'ng ildizni SPA'ga o'tkazish.
+**"Yorliqlar" bo'limi ✅ (2026-08-06)** — eski `/pdf/` sahifasi React
+sahifasiga ko'chdi (`client/src/pages/Labels.jsx`): ID'lar maydoni, ShK/BIG
+yasash va holatni kuzatish, PDF konstruktori jonli namunasi, tarix.
+
+Muhim nuqta — **so'rovlar `/pdf/` ga to'g'ridan-to'g'ri bormaydi**. SPA
+`Authorization: Bearer` bilan ishlaydi, `/pdf/` esa nginx `auth_request`
+orqali panel sessiyasini (cookie) so'raydi — ikkalasi bir-birini tanimaydi.
+Shuning uchun oraliq qatlam qo'shildi:
+
+```
+SPA ──Bearer──> stocker-server /web/labels/* ──> 127.0.0.1:4040 (uzumPDFs)
+```
+
+Yon foydasi: ruxsat bizning `labels` bo'limi bo'yicha tekshiriladi, va
+4-bosqichda (jarayonlarni birlashtirish) shu qatlam o'z joyida qoladi.
+
+PDF fayllar `fetch` bilan olinib blob sifatida ko'rsatiladi: `<iframe src>`
+va `<a href>` `Authorization` sarlavhasini yubora olmaydi.
+
+uzumPDFs kodiga tegilmadi — faqat ko'rinish ko'chdi. Eski `/pdf/` sahifasi
+zaxira sifatida ishlab turaveradi; ildiz SPA'ga o'tgach o'chiriladi.
+
+Keyingi: ildizni SPA'ga o'tkazish va `panel/` ni yo'q qilish, so'ng 4-bosqich.
 
 ### 3-bosqich rejasi (asl matn) ⏳
 
