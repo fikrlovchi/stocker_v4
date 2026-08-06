@@ -1,0 +1,178 @@
+/* Stocker brend uslubi — brand/README.md.
+   Ranglar FAQAT shu tokenlar orqali ishlatiladi: xom #rrggbb yozilsa
+   yorug' tema buziladi (DMS v8 da o'rnatilgan qoida). */
+:root,
+:root[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-2: #1a1a1a;
+  --border: #3a3a3a;
+  --text: #e6e6e6;
+  --muted: #6b6b6b;
+  --accent: #00ff8c;
+  --accent-2: #00cc6a;
+  --on-accent: #0a0a0a;
+  --danger: #ff3b30;
+  --warn: #ffb020;
+  --glow-1: rgba(0, 255, 140, 0.13);
+  --glow-2: rgba(0, 204, 106, 0.08);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f6f5;
+  --surface: #ffffff;
+  --surface-2: #eef1f0;
+  --border: #d5dbd8;
+  --text: #12151400;
+  --text: #121514;
+  --muted: #6b7370;
+  --accent: #00b866;
+  --accent-2: #009c56;
+  --on-accent: #ffffff;
+  --danger: #d62d20;
+  --warn: #b26a00;
+  --glow-1: rgba(0, 200, 110, 0.10);
+  --glow-2: rgba(0, 160, 90, 0.06);
+  --shadow: 0 10px 26px rgba(18, 21, 20, 0.10);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 15px/1.55 "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  background-image:
+    radial-gradient(760px 420px at 82% -8%, var(--glow-1), transparent 70%),
+    radial-gradient(560px 380px at 4% 104%, var(--glow-2), transparent 72%);
+  background-attachment: fixed;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+
+/* ---------- Karkas: chap menyu + sarlavha ---------- */
+
+.shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; }
+.brand img.icon { width: 28px; height: 28px; border-radius: 8px; }
+/* Wordmark balandlik bo'yicha — nisbati saqlanadi. */
+.brand img.wordmark { height: 22px; width: auto; }
+:root[data-theme="light"] .brand img.wordmark { filter: invert(1) hue-rotate(180deg); }
+
+.nav-link {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+.nav-link:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+.nav-link.active { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+
+.sidebar .spacer { flex: 1; }
+.sidebar .who { font-size: 12px; color: var(--muted); padding: 0 12px 8px; }
+
+.topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.content { padding: 24px; max-width: 1100px; }
+h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+.page-sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+
+/* ---------- Kartalar, jadval, forma ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.card > h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+
+input, select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 14px;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+
+button {
+  background: var(--accent);
+  color: var(--on-accent);
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--accent-2); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.ghost { background: none; border: 1px solid var(--border); color: var(--text); font-weight: 500; }
+button.ghost:hover:not(:disabled) { background: var(--surface-2); }
+button.link { background: none; border: none; color: var(--danger); padding: 0; font-size: 13px; text-decoration: underline; }
+
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); font-size: 13px; }
+.error { color: var(--danger); font-size: 14px; }
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.badge.off { background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
+
+/* Ruxsat belgilash — checkbox'lar qatori */
+.perms { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.perms label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+.perms input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+
+/* ---------- Kirish sahifasi ---------- */
+
+.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card { width: 340px; }
+.login-card img.wordmark { height: 34px; width: auto; display: block; margin: 0 auto 6px; }
+:root[data-theme="light"] .login-card img.wordmark { filter: invert(1) hue-rotate(180deg); }
+.login-card .sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+.login-card label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.login-card input { width: 100%; border-radius: 10px; margin-bottom: 14px; }
+.login-card button { width: 100%; padding: 11px; }
+
+@media (max-width: 760px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; }
+  .sidebar .spacer, .sidebar .who { display: none; }
+}

@@ -95,7 +95,29 @@ user_flags(user_id, flag)              -- 'mobile'  — mobil ilovaga kirish huq
 Superadmin hamma bo'limni ko'radi va ruxsat bera oladi. Mobil ilovaga faqat
 `mobile` bayrog'i bor foydalanuvchi kira oladi.
 
-### 3-bosqich — React SPA ⏳
+### 3-bosqich — React SPA ⏳ boshlandi (2026-08-06)
+
+Tayyor:
+
+* `client/` — Vite + React + react-router + i18next (DMS v8 bilan bir xil
+  stek). `npm run build` → `client/dist`, nginx uni **`/app/`** da beradi.
+* Karkas: chap menyu (ruxsatga qarab), sarlavhada til (uz/ru) va mavzu
+  (qora/oq) tanlash. Ranglar faqat CSS tokenlari orqali.
+* **Kirish** — `/web/auth/login`, token `localStorage` da.
+* **Foydalanuvchilar va ruxsatlar** bo'limi to'liq ishlaydi: qo'shish, ism
+  o'zgartirish, parol tiklash, bo'lim/bayroq belgilash, faolsizlantirish,
+  o'chirish. Ruxsat va foydalanuvchi bitta ekranda — ruxsat har doim aniq
+  odamga beriladi, ikki ekran orasida sakrash ortiqcha qadam bo'lardi.
+* Qolgan bo'limlar hozircha eski interfeysga havola qiladi (soxta UI
+  chizilmadi).
+
+Brauzerda tekshirildi: kirish, ruxsat saqlash, chegaralangan foydalanuvchiga
+`/web/users` → **403**, superadminni o'chirishga → **403**.
+
+Keyingi: "Yig'ish" bo'limi (partiyalar, sessiyalar, ish joylari) va
+"Yorliqlar" ni SPA ichiga ko'chirish, so'ng ildizni SPA'ga o'tkazish.
+
+### 3-bosqich rejasi (asl matn) ⏳
 
 `client/` (Vite + React), DMS v8 dagi tuzilma: chap menyu, bo'limlar, i18n
 (uz/ru), dark/light. Bo'limlar:
