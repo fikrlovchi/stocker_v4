@@ -15,6 +15,7 @@
 import express from "express";
 import { config } from "../config.js";
 import logger from "../logger.js";
+import { getShkConfig, resetShkConfig, setShkConfig } from "./settings.js";
 
 const BASE = config.print.uzumPdfsBaseUrl.replace(/\/$/, "");
 
@@ -56,10 +57,32 @@ async function pipeBinary(res, upstream) {
 export function labelsRouter() {
   const router = express.Router();
 
-  // Yorliq yasash: {orderIds, pdfConfig} → {batchId}
+  /* ---------- standart o'lchamlar (hamma uchun bir xil) ---------- */
+
+  router.get("/config", (req, res) => res.json(getShkConfig()));
+
+  router.put("/config", (req, res) => {
+    if (!req.body || typeof req.body !== "object") return res.status(400).json({ error: "JSON kerak" });
+    res.json(setShkConfig(req.body, req.user?.login));
+  });
+
+  router.delete("/config", (req, res) => res.json(resetShkConfig(req.user?.login)));
+
+  // Yorliq yasash: {orderIds, format, pdfConfig} → {batchId}
+  //
+  // `pdfConfig` berilmasa — bazadagi UMUMIY standart ishlatiladi. Shu bilan
+  // "bir kompyuterda moslangan, boshqasida boshqacha chiqadi" holati yo'q.
   router.post("/process", async (req, res) => {
     try {
-      const upstream = await forward("/process", { method: "POST", body: req.body });
+      const { config } = getShkConfig();
+      const format = req.body?.format || config.format || "legacy";
+      const pdfConfig =
+        req.body?.pdfConfig || (format === "small" ? { small: config.small } : config.legacy);
+
+      const upstream = await forward("/process", {
+        method: "POST",
+        body: { orderIds: req.body?.orderIds, format, pdfConfig },
+      });
       res.status(upstream.status).json(await upstream.json());
     } catch (e) {
       logger.error(`Yorliq yasashda xato: ${e.message}`);
@@ -89,7 +112,9 @@ export function labelsRouter() {
   // Konstruktor namunasi — PDF baytlari.
   router.post("/preview", async (req, res) => {
     try {
-      await pipeBinary(res, await forward("/preview", { method: "POST", body: req.body }));
+      const { config } = getShkConfig();
+      const body = { pdfConfig: req.body?.pdfConfig || config.legacy };
+      await pipeBinary(res, await forward("/preview", { method: "POST", body }));
     } catch (e) {
       res.status(502).json({ error: e.message });
     }

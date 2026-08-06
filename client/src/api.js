@@ -83,7 +83,10 @@ export const api = {
   projectInterval: (slug, seconds) =>
     call(`/projects/${encodeURIComponent(slug)}/interval`, { method: "POST", body: { seconds } }),
 
-  labelsProcess: (orderIds, pdfConfig) => call("/labels/process", { method: "POST", body: { orderIds, pdfConfig } }),
+  labelsConfig: () => call("/labels/config"),
+  saveLabelsConfig: (config) => call("/labels/config", { method: "PUT", body: config }),
+  labelsProcess: (orderIds, format, pdfConfig) =>
+    call("/labels/process", { method: "POST", body: { orderIds, format, pdfConfig } }),
   labelsBatch: (id) => call(`/labels/batch/${encodeURIComponent(id)}`),
   labelsHistory: () => call("/labels/history"),
 

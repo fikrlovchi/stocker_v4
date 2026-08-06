@@ -183,6 +183,26 @@ Serverda ko'chirish: [`deploy/migrate-uzum-order.sh`](../deploy/migrate-uzum-ord
 ko'chiradi, systemd unit yo'llarini yangilaydi va xato bo'lsa qaytarish
 yo'lini chiqaradi.
 
+**Yorliq standartlari va format tanlash ✅ (2026-08-06)**
+
+ShK o'lchamlari ilgari **brauzerning localStorage'ida** edi (`uzumPdfCfg`) —
+bir kompyuterda moslab qo'yilgan bo'lsa, boshqasida yo'q va yorliq boshqacha
+chiqardi. Endi qiymat **bazada** (`app_settings.labels.shkConfig`) va hamma
+uchun bir xil:
+
+* boshlang'ich standart — `uzumPDFs/main.js` dagi qo'lda moslangan
+  `DEFAULT_PDF_CONFIG` (qrSize 360 · 594×420 · matn 24/50 · QR 90,40)
+* "Standart qilib saqlash" tugmasi joriy qiymatlarni hamma uchun yozadi
+* serverda saqlangan qiymat bo'lmasa va brauzerda eski `uzumPdfCfg` topilsa —
+  maydonlar o'shandan to'ldiriladi (domen bir xil bo'lgani uchun eski
+  dashboard sozlamalari yo'qolmagan)
+
+**Format tanlash:** *Yangi* — 40×30 yorliq, desktop client skan paytida
+chiqaradigan yorliqning aynan o'zi (`createShkSmall`); *Eski* — uzumPDFs'dagi
+A5 maket (`createProductsPdf`). uzumPDFs'da `runGenerateSmall()` qo'shildi:
+buyurtmalar ro'yxatidagi har bir tovar uchun 40×30 yorliq yasab bitta PDF'ga
+yig'adi.
+
 Keyingi: o'zgaruvchilar katalogini ko'chirish → `panel/` ni o'chirish →
 4-bosqich (uchta Node jarayonini bittaga yig'ish).
 

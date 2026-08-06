@@ -19,8 +19,6 @@ const CFG_FIELDS = [
   { key: "by", label: "Shtrix Y" },
 ];
 
-const CFG_STORE = "stocker.pdfCfg";
-
 // Bo'sh maydon "sozlanmagan" degani — serverga yuborilmaydi (u o'z
 // standartini ishlatadi).
 function buildConfig(cfg) {
@@ -42,13 +40,12 @@ function buildConfig(cfg) {
 export default function Labels() {
   const { t } = useTranslation();
   const [orders, setOrders] = useState("");
-  const [cfg, setCfg] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(CFG_STORE) || "{}");
-    } catch {
-      return {};
-    }
-  });
+  // Standart o'lchamlar SERVERDAN — hamma uchun bir xil. Ilgari ular
+  // brauzerning localStorage'ida edi va boshqa kompyuterda yo'q bo'lardi.
+  const [cfg, setCfg] = useState({});
+  const [savedCfg, setSavedCfg] = useState(null);
+  const [imported, setImported] = useState(false);
+  const [format, setFormat] = useState("legacy");
   const [batch, setBatch] = useState(null); // {shk, big}
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -64,6 +61,49 @@ export default function Labels() {
   const loadHistory = () => api.labelsHistory().then(setHistory).catch(() => {});
 
   useEffect(() => {
+    api
+      .labelsConfig()
+      .then((r) => {
+        setSavedCfg(r);
+        setFormat(r.config.format || "legacy");
+        const L = r.config.legacy || {};
+
+        // Eski dashboard (stocker.uz/pdf/) sozlamalari SHU BRAUZERDA qolgan
+        // bo'lishi mumkin — domen bir xil. Serverda hali standart saqlanmagan
+        // bo'lsa, o'shani ko'rsatamiz: qo'lda moslangan qiymatlar yo'qolmasin.
+        let legacyLocal = null;
+        if (r.isDefault) {
+          try {
+            const raw = localStorage.getItem("uzumPdfCfg");
+            if (raw) legacyLocal = JSON.parse(raw);
+          } catch {
+            /* buzuq JSON — e'tiborsiz qoldiramiz */
+          }
+        }
+        if (legacyLocal) setImported(true);
+
+        const pick = (key, serverValue) => {
+          const v = legacyLocal?.[key];
+          return v !== undefined && v !== "" ? v : serverValue;
+        };
+
+        setCfg({
+          ori: pick("ori", L.orientation || ""),
+          qr: pick("qr", L.qrSize ?? ""),
+          pw: pick("pw", L.pageSize?.width ?? ""),
+          ph: pick("ph", L.pageSize?.height ?? ""),
+          tt: pick("tt", L.textSize?.top ?? ""),
+          bs: pick("bs", L.textSize?.bottom ?? ""),
+          qx: pick("qx", L.qrPosition?.x ?? ""),
+          qy: pick("qy", L.qrPosition?.y ?? ""),
+          os: pick("os", L.orderSize ?? ""),
+          tx: pick("tx", L.titlePosition?.x ?? ""),
+          ty: pick("ty", L.titlePosition?.y ?? ""),
+          bx: pick("bx", L.barcodePosition?.x ?? ""),
+          by: pick("by", L.barcodePosition?.y ?? ""),
+        });
+      })
+      .catch((e) => setError(e.message));
     loadHistory();
     return () => {
       clearTimeout(poller.current);
@@ -89,11 +129,14 @@ export default function Labels() {
     }, 400);
   }, [cfg, showCfg]);
 
-  const setField = (key, value) => {
-    const next = { ...cfg, [key]: value };
-    setCfg(next);
-    localStorage.setItem(CFG_STORE, JSON.stringify(next));
-  };
+  const setField = (key, value) => setCfg({ ...cfg, [key]: value });
+
+  // Joriy qiymatlarni HAMMA uchun standart qilib saqlash.
+  const saveAsDefault = () =>
+    api
+      .saveLabelsConfig({ format, legacy: buildConfig(cfg), small: savedCfg?.config?.small })
+      .then(setSavedCfg)
+      .catch((e) => setError(e.message));
 
   const poll = async (batchId) => {
     try {
@@ -117,7 +160,7 @@ export default function Labels() {
     setBatch(null);
     setRunning(true);
     try {
-      const r = await api.labelsProcess(ids, buildConfig(cfg));
+      const r = await api.labelsProcess(ids, format, format === "legacy" ? buildConfig(cfg) : null);
       if (!r.batchId) throw new Error(r.message || "Server xatosi");
       poll(r.batchId);
     } catch (e) {
@@ -151,14 +194,31 @@ export default function Labels() {
             fontSize: 13,
           }}
         />
+        {/* Format: "Yangi" — desktop client chiqaradigan 40×30 yorliq,
+            "Eski" — uzumPDFs'dagi A5 maket. */}
+        <div className="row" style={{ marginTop: 12 }}>
+          <span className="muted">{t("labels.format")}:</span>
+          <button className={format === "small" ? "" : "ghost"} onClick={() => setFormat("small")}>
+            {t("labels.formatNew")}
+          </button>
+          <button className={format === "legacy" ? "" : "ghost"} onClick={() => setFormat("legacy")}>
+            {t("labels.formatOld")}
+          </button>
+          <span className="muted">
+            {format === "small" ? t("labels.formatNewHint") : t("labels.formatOldHint")}
+          </span>
+        </div>
+
         <div className="row" style={{ marginTop: 12 }}>
           <button disabled={running || !ids.length} onClick={start}>
             {running ? "…" : t("labels.make")}
           </button>
           <span className="muted">{ids.length}</span>
-          <button className="ghost" onClick={() => setShowCfg((v) => !v)}>
-            {t("labels.constructor")}
-          </button>
+          {format === "legacy" && (
+            <button className="ghost" onClick={() => setShowCfg((v) => !v)}>
+              {t("labels.constructor")}
+            </button>
+          )}
         </div>
       </div>
 
@@ -184,6 +244,16 @@ export default function Labels() {
                 />
               </label>
             ))}
+          </div>
+          <div className="row" style={{ marginTop: 12 }}>
+            <button onClick={saveAsDefault}>{t("labels.saveDefault")}</button>
+            <span className="muted">
+              {imported
+                ? t("labels.imported")
+                : savedCfg?.isDefault
+                  ? t("labels.usingBuiltin")
+                  : `${t("labels.savedBy")}: ${savedCfg?.updatedBy || "—"}`}
+            </span>
           </div>
           <div className="muted" style={{ marginTop: 10 }}>
             {t("labels.previewNote")} {preview.note}

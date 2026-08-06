@@ -10,7 +10,7 @@ import fs from "fs";
 import path from "path";
 import { createProductsPdf, uploadToDrive } from './functions/createPdf.js'
 import { createShkSmall } from './functions/shkSmall.js'
-import { parseOrderIds, buildProductsFromOrders, buildProductForItem, getShopTokenMap, getOrderShopMap } from './functions/sheetData.js'
+import { parseOrderIds, buildProductsFromOrders, buildProductForItem, findOrderItems, getShopTokenMap, getOrderShopMap } from './functions/sheetData.js'
 import { getLabelPdf, cleanupOldLabels } from './functions/uzumLabels.js'
 import { withRetry } from './functions/retry.js'
 import { drive, sheets } from "./google.js";
@@ -118,6 +118,46 @@ async function runGenerate(orderIds, pdfConfig) {
     const { fileName, url } = saveGeneratedPdf(Buffer.from(pdfBytes), "shk");
     console.log(`[shk] ${orderIds.length} order -> ${products.length} bet -> ${fileName}`);
     return { fileName, url, pages: products.length, orders: orderIds.length };
+}
+
+// YANGI format ShK: 40×30 yorliq — desktop client skan paytida chiqaradigan
+// yorliqning aynan o'zi (createShkSmall). Bu yerda butun buyurtmalar ro'yxati
+// uchun bitta PDF'ga yig'iladi, ya'ni smena boshida hammasini bir yo'la
+// chiqarib olish mumkin.
+//
+// ESKI format (createProductsPdf, A5) o'z joyida qoldi — `format` maydoni
+// bilan tanlanadi.
+async function runGenerateSmall(orderIds, options = {}) {
+    const merged = await PDFDocument.create();
+    let pages = 0;
+    const skipped = [];
+
+    for (const orderId of orderIds) {
+        let items = [];
+        try {
+            items = await findOrderItems(orderId);
+        } catch (e) {
+            skipped.push(orderId);
+            console.error(`[shk-small] ${orderId}: ${e.message}`);
+            continue;
+        }
+        if (!items.length) {
+            skipped.push(orderId);
+            continue;
+        }
+        for (const item of items) {
+            const bytes = await createShkSmall(item, options);
+            const doc = await PDFDocument.load(bytes);
+            const copied = await merged.copyPages(doc, doc.getPageIndices());
+            copied.forEach((pg) => merged.addPage(pg));
+            pages += copied.length;
+        }
+    }
+
+    if (!pages) throw new Error("Berilgan orderlar uchun detail topilmadi");
+    const { fileName, url } = saveGeneratedPdf(Buffer.from(await merged.save()), "shk40");
+    console.log(`[shk-small] ${orderIds.length} order -> ${pages} bet -> ${fileName}`);
+    return { fileName, url, pages, orders: orderIds.length, skipped: skipped.length };
 }
 
 // BIG: har order label'ini Uzum API'dan olib (cache) bitta PDF'ga merge
@@ -422,6 +462,8 @@ app.post("/process", requireAuth, (req, res) => {
         return res.status(400).json({ status: "error", message: "orderIds required" });
     }
     const pdfConfig = req.body.pdfConfig || DEFAULT_PDF_CONFIG;
+    // "small" — 40×30 (desktop client formati), "legacy" — eski A5 maket.
+    const format = req.body.format === "small" ? "small" : "legacy";
 
     const batchId = randomUUID();
     const batch = {
@@ -445,7 +487,15 @@ app.post("/process", requireAuth, (req, res) => {
     };
 
     (async () => {
-        try { batch.shk = { status: "done", ...(await runGenerate(orderIds, pdfConfig)) }; }
+        try {
+            batch.shk = {
+                status: "done",
+                format,
+                ...(format === "small"
+                    ? await runGenerateSmall(orderIds, pdfConfig?.small || {})
+                    : await runGenerate(orderIds, pdfConfig)),
+            };
+        }
         catch (e) { console.error("[shk]", e.message); batch.shk = { status: "error", error: e.message }; }
         maybeSave();
     })();
