@@ -1,0 +1,145 @@
+# Yagona tizim — konsolidatsiya rejasi
+
+2026-08-05 da qabul qilingan yo'nalish: barcha Stocker loyihalari **bitta
+repo, bitta domen, bitta dastur** bo'ladi. Namuna — `Server/DMS/v8`
+(React SPA + Express + rol/ruxsat + uz/ru + dark/light).
+
+Qabul qilingan to'rt qaror:
+
+| Savol | Qaror |
+|---|---|
+| Birlashuv chuqurligi | **Bosqichma-bosqich** — avval monorepo, keyin bitta API jarayoni |
+| Veb interfeys | **React SPA** (Vite), DMS v8 uslubi |
+| Ma'lumotlar bazasi | **Bitta SQLite** |
+| Skan doirasi | **Nomlangan partiya** (buyurtma ID ro'yxati) |
+
+---
+
+## 1. Maqsad tuzilishi
+
+```
+stocker_v4/                 (GitHub: stocker_v4 · serverda /root/stocker)
+├─ server/     API — yig'ish, yorliqlar, panel backend (bosqichma-bosqich birlashadi)
+├─ client/     React SPA (Vite) — stocker.uz ning o'zi
+├─ panel/      ESKI EJS panel — client/ tayyor bo'lgach yo'q qilinadi
+├─ pdfs/       uzumPDFs — API'si server/ ga ko'chadi, UI'si client/ ga
+├─ android/    operator ilovasi
+├─ desktop/    print client
+├─ brand/      logotip, palitra, ikonka quvuri
+├─ deploy/     nginx, migratsiya skriptlari
+└─ docs/       shu hujjat, kontekst
+```
+
+Serverdagi yo'llar ham shunga qarab bitta ildizga yig'iladi:
+`/root/stocker/{server,panel,pdfs,...}`.
+
+## 2. Bosqichlar
+
+### 1-bosqich — monorepo ✅ (2026-08-05)
+
+`git subtree` bilan **tarixi saqlangan holda** ko'chirildi:
+`fikrlovchi_project_panel` → `panel/`, `uzumpdfs` → `pdfs/`.
+
+Serverda ko'chirish: [`deploy/migrate-to-monorepo.sh`](../deploy/migrate-to-monorepo.sh).
+Skript kodni emas, **kodga kirmaydigan** narsalarni ko'chiradi (`.env`, `data/`,
+`uploads/`, `oauth.json`) va systemd/pm2 yo'llarini yangilaydi. Eski papkalar
+`.bak-<sana>` bo'lib qoladi, tekshiruv o'tmasa qaytarish yo'li chiqadi.
+
+Jarayonlar hozircha alohida: `stocker-server` (4044) · `fikrlovchi-panel`
+(3000) · `uzumpdfs` (4040, pm2). Chop etish quvuri tegilmagan.
+
+> Eski GitHub repolari (`fikrlovchi_project_panel`, `uzumpdfs`) o'chirilmaydi —
+> arxiv sifatida qoladi, lekin **ishlanmaydi**. Barcha o'zgarish `stocker_v4` da.
+
+### 2-bosqich — bitta baza va foydalanuvchilar ⏳
+
+1. `panel/data/panel.db` va `server/data/stocker.db` **bitta** `data/stocker.db`
+   ga birlashadi (migratsiya skripti bilan, jadval nomlari to'qnashmaydi).
+2. **Foydalanuvchilar** — bitta jadval, hozirgi ikki xil kirish o'rniga:
+   * panel admin (`ADMIN_PASSWORD_HASH` env) → `users` dagi superadmin yozuvi
+   * `project_users` (operatorlar) → shu jadvalga ko'chadi
+3. **Ruxsatlar** — har foydalanuvchi uchun bo'limlar ro'yxati:
+
+```sql
+users(id, login, display_name, password_hash, is_active, is_superadmin, created_at)
+user_permissions(user_id, section)     -- 'orders_to_mc' | 'packing' | 'labels' | 'users' | 'settings'
+user_flags(user_id, flag)              -- 'mobile'  — mobil ilovaga kirish huquqi
+```
+
+Superadmin hamma bo'limni ko'radi va ruxsat bera oladi. Mobil ilovaga faqat
+`mobile` bayrog'i bor foydalanuvchi kira oladi.
+
+### 3-bosqich — React SPA ⏳
+
+`client/` (Vite + React), DMS v8 dagi tuzilma: chap menyu, bo'limlar, i18n
+(uz/ru), dark/light. Bo'limlar:
+
+| Bo'lim | Manbasi |
+|---|---|
+| Uzum order to MC | hozirgi panel'ning loyiha sahifasi (loglar, boshqaruv, muhit) |
+| Stocker — yig'ish | partiyalar, sessiyalar, ish joylari, operator tarixi |
+| Yorliqlar | `pdfs/public/index.html` ning React varianti |
+| Foydalanuvchilar | yangi |
+| Ruxsatlar | yangi |
+
+EJS sahifalar bo'lim ko'chgani sari o'chiriladi; oxirida `panel/` yo'qoladi.
+
+### 4-bosqich — bitta API jarayoni ⏳
+
+`panel/src` va `pdfs/main.js` marshrutlari `server/` ichiga ko'chadi, nginx
+bitta portga (4044) qaraydi. **Oxirida** qilinadi: yorliq quvuri
+(`/internal/shk-item`) shu servisga bog'liq, u ishlamay qolsa chop etish
+to'xtaydi.
+
+---
+
+## 3. Yangi funksiyalar (bosqichlarga taqsimlangan)
+
+### Partiyalar — skan doirasi (2-bosqich bilan birga)
+
+Admin `stocker.uz/pdf/` dagi kabi **buyurtma ID ro'yxatini** joylaydi va unga
+nom beradi. Mobil ilova faqat **ochiq partiyadagi** buyurtmalarni ko'radi.
+
+```sql
+batches(id, name, created_by, created_at, closed_at)
+batch_orders(batch_id, order_id, shop_id, status)   -- status: pending | packed
+```
+
+* Do'kon bo'yicha guruhlash `shop_id` dan (kesh'da bor: `uzum_order!G`).
+* Mobil ekrandagi `2/22` — shu partiyadagi do'kon bo'yicha
+  `packed / jami`.
+* Partiya yopilgach tarixda qoladi.
+
+### Mobil ilova (3-bosqich bilan birga)
+
+| O'zgarish | Izoh |
+|---|---|
+| Do'kon tanlash | Ochiq partiyadagi yig'ilmagan buyurtmalar soni bilan |
+| `2/22` progress | Tanlangan do'kon bo'yicha |
+| **Print** tugmasi | Buyurtmaning **barcha** tovarlari skanerlangach faollashadi |
+| Qo'lda barcode kiritish | **Olib tashlanadi** |
+| Server manzili maydoni | **Olib tashlanadi** (ilovaga qattiq yoziladi) |
+| uz/ru | Til tanlash |
+| Oq/qora mavzu | Hozir faqat qora — oq qo'shiladi |
+| Mening yig'ganlarim | Sana, buyurtma ID, tarkibi |
+| Sozlamalar | Login, til, mavzu, ish joyi — bitta ekranda |
+
+Miqdor mantiqi **o'zgarmaydi**: tovardan 2 ta bo'lsa 2 marta skanerlanadi
+(hozir ham shunday).
+
+### Desktop client (3-bosqich bilan birga)
+
+* Navbatni tozalash tugmasi
+* uz/ru
+
+---
+
+## 4. Xavflar va ularni kamaytirish
+
+| Xavf | Yumshatish |
+|---|---|
+| Ko'chirishda chop etish to'xtashi | 1-bosqichda jarayonlar tegilmaydi; skript tekshiruv bilan tugaydi va qaytarish yo'lini chiqaradi |
+| `pdfs` `process.cwd()` ga bog'liq | pm2 `--cwd` bilan ishga tushiriladi — skriptda hisobga olingan |
+| Ikki bazani birlashtirish | Avval nusxa olinadi; jadval nomlari to'qnashmaydi (tekshirilgan) |
+| SPA yozilayotganda panel kerak | EJS panel bo'lim ko'chgunicha ishlab turadi |
+| Ruxsatlar xatosi | Superadmin hech qachon o'zini bloklay olmaydi; server tomonida har so'rov tekshiriladi (faqat menyu yashirish emas) |

@@ -8,6 +8,11 @@ Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
 
 ---
 
+> **2026-08-05 dan yangi yo'nalish:** barcha loyihalar bitta repo va bitta
+> dasturga birlashtirilmoqda — [docs/CONSOLIDATION.md](docs/CONSOLIDATION.md).
+> `panel/` va `pdfs/` shu repo ichida (subtree bilan, tarixi saqlangan).
+> Serverga ko'chirish: `deploy/migrate-to-monorepo.sh`.
+
 ## 1. Fazalar holati
 
 | Faza | Holat | Izoh |
