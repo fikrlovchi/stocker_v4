@@ -50,6 +50,7 @@ const publicUser = (u) => ({
   id: u.id,
   login: u.login,
   displayName: u.displayName,
+  telegramId: u.telegramId,
   isActive: u.isActive,
   isSuperadmin: u.isSuperadmin,
   sections: u.sections,
@@ -121,9 +122,10 @@ export function webRouter() {
     const target = users.getUserById(id);
     if (!target) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
 
-    const { displayName, password, sections, flags, isActive } = req.body || {};
+    const { displayName, telegramId, password, sections, flags, isActive } = req.body || {};
     try {
       if (displayName !== undefined) users.rename(id, displayName);
+      if (telegramId !== undefined) users.setTelegramId(id, telegramId);
       if (password) users.setPassword(id, password);
       if (sections !== undefined) users.setSections(id, sections);
       if (flags !== undefined) users.setFlags(id, flags);

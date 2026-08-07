@@ -18,6 +18,7 @@ const SHEETS = {
   stockMod: "uzum_stock_mod",
   stockModDetail: "uzum_stock_mod_detail",
   modDefault: "uzum_mod_default",
+  mcStock: "mc_stock",
 };
 
 // K ustunidagi eski qo'shimcha: `...@3`, `...#2`, `...%5`, `...&4` yoki `...$`.
@@ -211,6 +212,37 @@ export async function importStockMods(sheets) {
   })();
 
   return report;
+}
+
+/**
+ * `mc_stock` listini bazaga ko'chiradi — MoySklad o'rniga.
+ *
+ * Faqat SOLISHTIRISH uchun. Server MoySklad'dan yangi qoldiqni oladi,
+ * jadvaldagi qiymat esa oxirgi `MSStockSync` dan qolgan — shu sababdan
+ * chiqadigan farq mantiq xatosi emas, vaqt farqi. Ikkovini ajratish uchun
+ * jadvalning O'Z qoldig'i bilan hisoblanadi: shunda qolgan har qanday farq
+ * haqiqiy xato bo'ladi.
+ *
+ * Ustunlar: A ID · B Vaqt · C Product (UUID) · D Stock · E External ID
+ */
+export async function importMcStockFromSheet(sheets) {
+  const rows = await readSheet(sheets, SHEETS.mcStock);
+  const now = new Date().toISOString();
+  const insert = db.prepare("INSERT OR REPLACE INTO mc_stock (uuid, stock, external_id, synced_at) VALUES (?, ?, ?, ?)");
+
+  let imported = 0;
+  db.transaction(() => {
+    db.exec("DELETE FROM mc_stock");
+    for (const r of rows) {
+      const uuid = str(r[2]);
+      if (!uuid) continue;
+      insert.run(uuid, num(r[3]) ?? 0, str(r[4]), now);
+      imported++;
+    }
+  })();
+
+  logger.info(`mc_stock jadvaldan ko'chirildi: ${imported} ta (solishtirish uchun)`);
+  return { imported, total: rows.length };
 }
 
 export async function importAll() {

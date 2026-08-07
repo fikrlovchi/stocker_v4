@@ -1,8 +1,15 @@
 // v3 bazasini serverga ko'chirish va natijani jadval bilan solishtirish.
 //
-//   node src/scripts/v3Sync.js                  # to'liq: MoySklad + jadval + solishtirish
-//   node src/scripts/v3Sync.js --skip-moysklad  # faqat jadvaldan ko'chirish
-//   node src/scripts/v3Sync.js --compare        # hech narsa yozmay, faqat solishtirish
+//   node src/scripts/v3Sync.js                     # to'liq: MoySklad + jadval + solishtirish
+//   node src/scripts/v3Sync.js --skip-moysklad     # MoySklad'ga tegmay, faqat jadvaldan
+//   node src/scripts/v3Sync.js --compare           # hech narsa ko'chirmay, faqat solishtirish
+//   node src/scripts/v3Sync.js --stock-from-sheet  # qoldiqni ham jadvaldan olib solishtirish
+//
+// `--stock-from-sheet` NIMA UCHUN KERAK. Odatdagi ishda server MoySklad'dan
+// YANGI qoldiqni oladi, jadvaldagi qiymat esa oxirgi `MSStockSync` dan
+// qolgan. Ular tabiiy ravishda farq qiladi va bu mantiq xatosi emas. Shu
+// bayroq bilan hisob jadvalning O'Z qoldig'iga tayanadi — qolgan har qanday
+// farq haqiqiy xato bo'ladi.
 //
 // HECH NARSA YOZILMAYDI: na Uzumga, na jadvalga. Skript faqat o'qiydi va
 // server bazasini to'ldiradi — joriy jarayonlar (GAS triggerlari, AppSheet)
@@ -15,13 +22,14 @@ import { config } from "../config.js";
 import logger from "../logger.js";
 import { getSheetsClient } from "../google/sheetsClient.js";
 import { syncProducts, syncStock } from "../moysklad/assortment.js";
-import { importAll } from "../stock/importFromSheet.js";
+import { importAll, importMcStockFromSheet } from "../stock/importFromSheet.js";
 import { loadMods, loadDefaults, loadStockByExternalId, loadLinkProducts } from "../stock/catalog.js";
 import { computeRow } from "../stock/rules.js";
 
 const args = new Set(process.argv.slice(2));
 const compareOnly = args.has("--compare");
-const skipMoysklad = args.has("--skip-moysklad") || compareOnly;
+const stockFromSheet = args.has("--stock-from-sheet");
+const skipMoysklad = args.has("--skip-moysklad") || compareOnly || stockFromSheet;
 
 function list(items, limit = 10) {
   if (!items.length) return "yo'q";
@@ -73,9 +81,30 @@ async function compare(sheets) {
     // Jadvalda "" bo'sh katak bo'lib keladi, bizda `null` — bir xil ma'no.
     const same = (a, b) => (a === null || a === undefined || a === "" ? b === "" || b === undefined || b === null : Number(a) === Number(b));
 
-    if (!same(got.fact, want.fact)) diff.fact.push({ skuTitle: row.skuTitle, server: got.fact, sheet: want.fact });
-    if (!same(got.amount, want.amount)) diff.amount.push({ skuTitle: row.skuTitle, server: got.amount, sheet: want.amount });
+    // Farq chiqsa sababini ko'rsatadigan kontekst ham yoziladi: qaysi
+    // External ID, qoldiq topildimi, qoida ishladimi, N nechchi.
+    const context = {
+      skuTitle: row.skuTitle,
+      externalId: row.mcExternalId,
+      cardQuantity: row.cardQuantity,
+      legacyDivisor: row.legacyDivisor,
+      hasRule: mods.has(row.skuTitle),
+      stockFound: stock.has(row.mcExternalId),
+    };
+
+    if (!same(got.fact, want.fact)) diff.fact.push({ ...context, server: got.fact, sheet: want.fact });
+    if (!same(got.amount, want.amount)) diff.amount.push({ ...context, server: got.amount, sheet: want.amount });
   }
+
+  const show = (v) => (v === null || v === undefined || v === "" ? "(bo'sh)" : v);
+  const why = (d) => {
+    const bits = [];
+    if (!d.stockFound) bits.push("qoldiq topilmadi");
+    if (d.hasRule) bits.push("qoida bor");
+    if (d.legacyDivisor !== 1) bits.push(`eski bo'luvchi ${d.legacyDivisor}`);
+    if (d.cardQuantity !== 1) bits.push(`N=${d.cardQuantity}`);
+    return bits.length ? ` [${bits.join(", ")}]` : "";
+  };
 
   console.log(`\n── Solishtirish: ${checked} ta qator tekshirildi`);
   if (diff.missingInSheet) console.log(`   ${diff.missingInSheet} ta qator jadvalda topilmadi`);
@@ -83,13 +112,14 @@ async function compare(sheets) {
   console.log(`   amount (F) farqi:        ${diff.amount.length}`);
 
   for (const d of diff.amount.slice(0, 20)) {
-    console.log(`     ✕ ${d.skuTitle}: server=${d.server} jadval=${d.sheet}`);
+    console.log(`     F ✕ ${d.skuTitle}: server=${show(d.server)} jadval=${show(d.sheet)}${why(d)}`);
   }
   if (diff.amount.length > 20) console.log(`     … va yana ${diff.amount.length - 20} ta`);
 
-  for (const d of diff.fact.slice(0, 10)) {
-    console.log(`     L ✕ ${d.skuTitle}: server=${d.server} jadval=${d.sheet}`);
+  for (const d of diff.fact.slice(0, 20)) {
+    console.log(`     L ✕ ${d.skuTitle}: server=${show(d.server)} jadval=${show(d.sheet)}${why(d)}`);
   }
+  if (diff.fact.length > 20) console.log(`     … va yana ${diff.fact.length - 20} ta`);
 
   return diff;
 }
@@ -116,10 +146,25 @@ async function main() {
     if (mods.badComparison.length) console.log(`   ⚠ noma'lum operator: ${list(mods.badComparison)}`);
   }
 
+  if (stockFromSheet) {
+    console.log("── Qoldiq jadvaldan (mantiqni vaqt farqidan ajratish uchun)");
+    console.log("  ", JSON.stringify(await importMcStockFromSheet(getSheetsClient())));
+  }
+
   const diff = await compare(getSheetsClient());
 
   const ok = diff.amount.length === 0 && diff.fact.length === 0;
-  console.log(ok ? "\n✅ Server hisobi jadval bilan to'liq mos." : "\n❌ Farq bor — GAS triggerini o'chirmang.");
+  if (ok) {
+    console.log("\n✅ Server hisobi jadval bilan to'liq mos.");
+  } else if (stockFromSheet) {
+    console.log("\n❌ Qoldiq bir xil bo'lsa ham farq bor — bu MANTIQ xatosi, tuzatilishi kerak.");
+  } else {
+    console.log(
+      "\n❌ Farq bor. Avval `--stock-from-sheet` bilan qaytadan yurgizing:\n" +
+        "   agar u yerda farq 0 bo'lsa — mantiq to'g'ri, farq faqat jadvaldagi\n" +
+        "   qoldiq eskirganidan (oxirgi MSStockSync dan beri o'zgargan)."
+    );
+  }
   process.exit(ok ? 0 : 1);
 }
 

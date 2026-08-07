@@ -43,6 +43,7 @@ function shape(row) {
     id: row.id,
     login: row.login,
     displayName: row.display_name,
+    telegramId: row.telegram_id || null,
     isActive: row.is_active === 1,
     isSuperadmin: row.is_superadmin === 1,
     createdAt: row.created_at,
@@ -131,6 +132,13 @@ export const setFlags = db.transaction((userId, flags) => {
 export function rename(userId, displayName) {
   if (!displayName || !String(displayName).trim()) throw new Error("Ism bo'sh bo'lishi mumkin emas");
   db.prepare("UPDATE users SET display_name = ? WHERE id = ?").run(String(displayName).trim(), userId);
+}
+
+/** Telegram ID. Bo'sh yuborilsa bog'lanish uziladi. */
+export function setTelegramId(userId, telegramId) {
+  const value = String(telegramId || "").trim();
+  if (value && !/^-?\d+$/.test(value)) throw new Error("Telegram ID faqat raqamdan iborat bo'ladi");
+  db.prepare("UPDATE users SET telegram_id = ? WHERE id = ?").run(value || null, userId);
 }
 
 export function setPassword(userId, password) {

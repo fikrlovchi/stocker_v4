@@ -161,12 +161,31 @@ cd /root/stocker/server && node src/scripts/v3Sync.js
 `--skip-moysklad` — MoySklad'ga tegmay faqat jadvaldan ko'chiradi.
 `--compare` — hech narsa yozmay, faqat solishtiradi.
 
-## Ochiq savollar
+## Ko'chirilmaydigan listlar
 
-1. **`link_product.G` (Company/token)** ko'chirilmadi: yangi tizimda token
-   `shop_id` → `uzum_shops` → `uzum_cabinets` zanjiri orqali topiladi. Bu
-   to'g'rimi, yoki qatorga to'g'ridan-to'g'ri token biriktirilishi kerakmi?
-2. **`uzum_generated` / `uzum_merged` / `link_check` / `mc_errors`** listlari
-   nima uchun kerak — ular ham ko'chadimi yoki v3 bilan qoladimi?
-3. **`user` listi** (5 qator, Telegram ID va Role bilan) — SPA'dagi
-   `users` bilan birlashadimi?
+| List | Sabab |
+|---|---|
+| `link_product.G` (Company/token) | Token `shop_id` → `uzum_shops` → `uzum_cabinets` orqali topiladi. Ustun GAS'ni yengillashtirish uchun qo'yilgan edi |
+| `uzum_generated` · `uzum_merged` · `link_check` · `mc_errors` | v3 bilan qoladi |
+| `user.Role` | Huquq `user_permissions` orqali beriladi — ikkinchi mexanizm kerak emas |
+| `user.Telegram ID` | ✅ ko'chdi: `users.telegram_id` (`012_user_telegram.sql`), Foydalanuvchilar bo'limida tahrirlanadi |
+| `mc_token` | ✅ ko'chdi: Konfiguratsiya → MoySklad |
+| `uzum_shop` · `uzum_token` | ✅ o'rni bor: Konfiguratsiya → Uzum |
+
+## Solishtirish natijasi (2026-08-07)
+
+Birinchi yurgizishda 3764 qatordan **5 tasida** `amount` farq qildi. Hammasi
+bir xil sababdan: server MoySklad'dan yangi qoldiq oldi, jadvaldagi qiymat esa
+oxirgi `MSStockSync` dan qolgan (440 ↔ 442, 35 ↔ 36, 1 ↔ 2, va jadvalda hali
+yo'q tovarlar).
+
+Buni taxminda qoldirmaslik uchun `--stock-from-sheet` bayrog'i qo'shildi:
+qoldiq ham jadvaldan olinadi, ya'ni ikkala tomon **bir xil** raqamdan
+hisoblaydi. Bu rejimda qoladigan har qanday farq — haqiqiy mantiq xatosi.
+
+```bash
+cd /root/stocker/server && node src/scripts/v3Sync.js --stock-from-sheet
+```
+
+Bundan tashqari import 9 ta qatorda `K` ustunida eski `@N` / `$` qo'shimchasi
+qolganini ko'rsatdi — ular tozalanishi kerak.

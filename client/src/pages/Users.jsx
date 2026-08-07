@@ -49,6 +49,7 @@ export default function Users() {
             <tr>
               <th>{t("users.login")}</th>
               <th>{t("users.name")}</th>
+              <th>{t("users.telegramId")}</th>
               <th>{t("users.sections")}</th>
               <th>{t("users.status")}</th>
               <th>{t("users.actions")}</th>
@@ -110,16 +111,19 @@ function UserRow({ user, me, sections, flags, onRun }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState({ sections: user.sections, flags: user.flags });
   const [name, setName] = useState(user.displayName);
+  const [telegramId, setTelegramId] = useState(user.telegramId || "");
   const [password, setPassword] = useState("");
 
   // Server javobi kelgach qatordagi qoralama yangilanadi.
   useEffect(() => {
     setDraft({ sections: user.sections, flags: user.flags });
     setName(user.displayName);
+    setTelegramId(user.telegramId || "");
   }, [user]);
 
   const dirty =
     name !== user.displayName ||
+    telegramId !== (user.telegramId || "") ||
     JSON.stringify([...draft.sections].sort()) !== JSON.stringify([...user.sections].sort()) ||
     JSON.stringify([...draft.flags].sort()) !== JSON.stringify([...user.flags].sort());
 
@@ -131,6 +135,15 @@ function UserRow({ user, me, sections, flags, onRun }) {
       </td>
       <td>
         <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: 170 }} />
+      </td>
+      <td>
+        {/* Telegram xabarida odamni belgilash uchun — v3 dagi `user` listidan. */}
+        <input
+          value={telegramId}
+          onChange={(e) => setTelegramId(e.target.value)}
+          placeholder="—"
+          style={{ width: 110 }}
+        />
       </td>
       <td>
         {user.isSuperadmin ? (
@@ -152,6 +165,7 @@ function UserRow({ user, me, sections, flags, onRun }) {
               onRun(() =>
                 api.updateUser(user.id, {
                   displayName: name,
+                  telegramId,
                   ...(user.isSuperadmin ? {} : { sections: draft.sections, flags: draft.flags }),
                 })
               )
