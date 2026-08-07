@@ -1028,6 +1028,48 @@ check("qayta so'rov: saqlangan tovar qatorda", saved.rows.find((r) => r.uuid ===
 // Hisobotda bo'lgan tovarlarga qayta so'rov ta'sir qilmaydi.
 check("qayta so'rov: boshqa qatorlar tegilmaydi", restored.rows.filter((r) => r.uuid === "a")[0].stock, 10);
 
+/* --- Kuzatuv: sinxronizatsiya tarixi --- */
+
+const sl = await import("../moysklad/stockLog.js");
+
+sl.recordStockSync({ applied: true, reportCount: 2142, previousCount: 2142, storedCount: 2142 });
+sl.recordStockSync({
+  applied: true,
+  reportCount: 2140,
+  previousCount: 2142,
+  storedCount: 2142,
+  missing: 2,
+  restored: 2,
+});
+sl.recordStockSync({ applied: false, reason: "javobda 100 ta, oldingi safar 2142 ta edi", reportCount: 100 });
+
+check("tarix: yozuvlar saqlanadi", sl.recentStockSyncs(10).length, 3);
+check("tarix: oxirgisi birinchi chiqadi", sl.recentStockSyncs(1)[0].applied, 0);
+
+const summary = sl.stockSyncSummary(10);
+check("tarix: rad etilganlar sanaladi", summary.rejected, 1);
+check("tarix: tushib qolgan safarlar", summary.runsWithMissing, 1);
+check("tarix: maqsadli so'rov topgani", summary.restoredTotal, 2);
+check("tarix: 0 deb belgilangani", summary.zeroedTotal, 0);
+
+// Xabar mantiqi. Biriktirishni ATAYLAB bo'shatamiz: selfTest tarmoqqa
+// chiqmasligi kerak, va aynan shu holat — Telegram sozlanmagan bo'lsa
+// kuzatuv jim o'tishi — tekshirilishi ham kerak.
+const telegram = await import("../telegram/index.js");
+telegram.setBinding("uzum_stock", { botId: null, chatId: null }, "root");
+check(
+  "tarix: Telegram sozlanmagan bo'lsa xabar jim o'tadi",
+  (await sl.alertIfNeeded({ applied: false, reason: "sinov" })).reason,
+  "biriktirilmagan"
+);
+check(
+  "tarix: hammasi joyida bo'lsa xabar umuman yasalmaydi",
+  (await sl.alertIfNeeded({ applied: true, zeroed: 0 })).reason,
+  "xabar kerak emas"
+);
+
+db.exec("DELETE FROM mc_stock_sync_log");
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

@@ -230,6 +230,12 @@ MoySklad qoldiq hisobotining barqarorligini o'lchash (faqat o'qiydi):
 cd /root/stocker/server && node src/scripts/stockProbe.js
 ```
 
+Qoldiq sinxronizatsiyalari tarixi va xulosa:
+
+```bash
+cd /root/stocker/server && node src/scripts/stockLog.js
+```
+
 Diagnostika (`TOKEN` = `.env` dagi `SERVICE_TOKEN`):
 
 ```bash

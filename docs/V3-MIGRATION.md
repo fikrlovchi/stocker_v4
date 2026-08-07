@@ -215,8 +215,51 @@ barqarormi degan savolga javob beradi. Yon tekshiruv sifatida
 `stockMode=all` ham sinaladi — u nol qoldiqlarni qaytarsa, "tushib qolish"
 o'rniga 0 ko'rinadi va muammo ildizidan yopiladi.
 
-Barcha chegaralar `config.json` → `moysklad` da. Har sinxronizatsiyada
-nechtasi so'ralgani, tiklangani va 0 deb belgilangani logga yoziladi.
+> **2026-08-07 dagi natija:** 4 marta ketma-ket so'rovda hammasi 2142 ta,
+> nomuvofiqlik **takrorlanmadi**. Bir martalik sinov "muammo yo'q" degan
+> xulosa uchun asos bo'lmaydi — muammo kuzatilgan, demak u vaqti-vaqti bilan
+> chiqadi. Shuning uchun doimiy kuzatuv qo'shildi (pastda).
+
+Barcha chegaralar `config.json` → `moysklad` da.
+
+### Doimiy kuzatuv
+
+Har sinxronizatsiya `mc_stock_sync_log` ga yoziladi (90 kun saqlanadi):
+hisobotda nechta tovar kelgani, nechtasi tushib qolgani, maqsadli so'rov
+nechtasini tiklagani va oxir-oqibat nechtasi 0 deb belgilangani.
+
+```bash
+cd /root/stocker/server && node src/scripts/stockLog.js
+```
+
+Skript oxirida xulosa chiqaradi va `stockMissingConfirmations` ni
+pasaytirish xavfsizmi degan savolga **dalil bilan** javob beradi: agar
+tushib qolgan tovarlarning hammasini har safar maqsadli so'rov hal qilgan
+bo'lsa, kutish rejimi amalda ishlamayapti va uni qisqartirsa bo'ladi.
+
+Diqqat talab qiladigan holatda **Telegram'ga xabar** ketadi (Konfiguratsiya →
+Telegram → "Uzumga qoldiq yuborish" integratsiyasi): hisobot rad etilganda,
+tovar 0 deb belgilanganda yoki maqsadli so'rov xato berganda. Har
+sinxronizatsiyada emas — aks holda xabar shovqinga aylanib o'qilmay qoladi.
+
+### `stockMissingConfirmations` nima degani
+
+Tovar **necha marta ketma-ket** hisobotda ko'rinmasa, qoldig'i 0 deb
+belgilanadi. Hozir `3`:
+
+| Sinxronizatsiya | Natija |
+|---|---|
+| 1-chi da yo'q | oxirgi ma'lum qoldiq saqlanadi (`missing_count = 1`) |
+| 2-chi da yo'q | yana saqlanadi (`missing_count = 2`) |
+| 3-chi da yo'q | **0 deb belgilanadi**, Uzumga 0 ketadi |
+
+Katta son — noto'g'ri nol yuborish xavfi kam, lekin tovar haqiqatan
+tugaganda Uzumda uzoq "bor" bo'lib turadi (sotib bo'lmaydigan buyurtma
+tushishi mumkin). Kichik son — teskarisi.
+
+Son **tsiklda** o'lchanadi, daqiqada emas. `syncStock` hozircha faqat qo'lda
+ishga tushadi, jadval bo'yicha ishlashi 4-bosqichda qo'shiladi — interval
+belgilangandan keyin bu qiymat qayta ko'rib chiqiladi.
 
 ## MoySklad havolalari (MC href)
 

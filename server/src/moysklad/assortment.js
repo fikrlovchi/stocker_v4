@@ -10,6 +10,7 @@ import { config } from "../config.js";
 import { db } from "../db/index.js";
 import logger from "../logger.js";
 import { msGetJson, msFetch } from "./client.js";
+import { recordStockSync, alertIfNeeded } from "./stockLog.js";
 
 const ENTITIES = ["product", "variant", "service", "bundle"];
 const PAGE = 1000;
@@ -208,13 +209,22 @@ export async function syncStock() {
 
   if (!merged.applied) {
     logger.error(`mc_stock YANGILANMADI — hisobot shubhali: ${merged.reason}. Eski qoldiq saqlanib qoldi.`);
-    return { applied: false, reason: merged.reason, total: report.length, previous: previous.length };
+    const entry = {
+      applied: false,
+      reason: merged.reason,
+      reportCount: report.length,
+      previousCount: previous.length,
+    };
+    recordStockSync(entry);
+    await alertIfNeeded(entry);
+    return { ...entry, total: report.length, previous: previous.length };
   }
 
   // Tushib qolgan tovarlarni MAQSADLI so'rov bilan aniqlashtiramiz — 3 tsikl
   // kutib o'tirmasdan. Xato bo'lsa ish to'xtamaydi: himoya (kutish) o'z
   // kuchida qoladi, shuning uchun bu qadam "yaxshilash", majburiyat emas.
   const absent = [...merged.kept, ...merged.dropped];
+  const missingBeforeRecheck = absent.length;
   let recheck = null;
   if (config.moysklad.stockRecheckMissing && absent.length) {
     if (absent.length > (config.moysklad.stockRecheckMax || 200)) {
@@ -261,6 +271,22 @@ export async function syncStock() {
       ? ` — ${merged.kept.length} ta kelmadi (oxirgi qoldiq saqlandi), ${merged.dropped.length} ta 0 deb belgilandi`
       : "";
   logger.info(`mc_stock yangilandi: ${report.length} ta qoldiq (${withoutExternal} tasida External ID yo'q)${note}`);
+
+  // Kuzatuv: nomuvofiqlik har doim takrorlanmaydi, shuning uchun har
+  // sinxronizatsiya yozib boriladi va naqsh kunlar bo'yicha ko'rinadi.
+  const entry = {
+    applied: true,
+    reportCount: report.length,
+    previousCount: previous.length,
+    storedCount: merged.rows.length,
+    missing: missingBeforeRecheck,
+    restored: recheck?.restored || 0,
+    stillMissing: recheck?.stillMissing ?? merged.kept.length,
+    zeroed: merged.dropped.length,
+    recheckError: recheck?.error || null,
+  };
+  recordStockSync(entry);
+  await alertIfNeeded(entry);
 
   return {
     applied: true,
