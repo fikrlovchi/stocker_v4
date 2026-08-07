@@ -71,9 +71,16 @@ export function variablesRouter() {
           topics: all("SELECT id, name, topic_id FROM telegram_topics WHERE chat_id = ? ORDER BY name", c.id),
         })),
       })),
-      cabinets: all("SELECT id, name FROM uzum_cabinets ORDER BY name").map((c) => ({
+      // MoySklad havolalari (v3 dagi "MC href"): kabinetniki — yuridik
+      // shaxs, do'konniki — sotuv kanali. Buyurtmani MoySklad'ga yozishda
+      // ikkalasi ham kerak.
+      cabinets: all("SELECT id, name, mc_organization_href FROM uzum_cabinets ORDER BY name").map((c) => ({
         ...c,
-        shops: all("SELECT id, name, shop_id FROM uzum_shops WHERE cabinet_id = ? ORDER BY name", c.id),
+        shops: all(
+          `SELECT id, name, shop_id, sku_code, stock_update, mc_saleschannel_href
+           FROM uzum_shops WHERE cabinet_id = ? ORDER BY name`,
+          c.id
+        ),
       })),
       // Manbalar ro'yxati — `.env` bog'lash oynasi shundan to'ladi.
       sources: Object.entries(SOURCES).map(([key, s]) => ({ key, label: s.label })),
@@ -172,11 +179,38 @@ export function variablesRouter() {
   });
 
   // Do'kon nomini qo'lda tuzatish — mobil ilovada ham shu nom ko'rinadi.
+  // Shu bilan birga MoySklad havolasi, SKU prefiksi va qoldiq bayrog'i.
   router.patch("/uzum/shops/:id", (req, res) => {
-    const { name } = req.body || {};
-    if (!name?.trim()) return res.status(400).json({ error: "Nom kerak" });
-    db.prepare("UPDATE uzum_shops SET name = ? WHERE id = ?").run(name.trim(), Number(req.params.id));
+    const { name, mcSaleschannelHref, skuCode, stockUpdate } = req.body || {};
+    const id = Number(req.params.id);
+    const shop = db.prepare("SELECT * FROM uzum_shops WHERE id = ?").get(id);
+    if (!shop) return res.status(404).json({ error: "Do'kon topilmadi" });
+    if (name !== undefined && !name?.trim()) return res.status(400).json({ error: "Nom kerak" });
+
+    db.prepare(
+      `UPDATE uzum_shops SET name = ?, mc_saleschannel_href = ?, sku_code = ?, stock_update = ? WHERE id = ?`
+    ).run(
+      name?.trim() || shop.name,
+      mcSaleschannelHref === undefined ? shop.mc_saleschannel_href : mcSaleschannelHref?.trim() || null,
+      skuCode === undefined ? shop.sku_code : skuCode?.trim() || null,
+      stockUpdate === undefined ? shop.stock_update : stockUpdate ? 1 : 0,
+      id
+    );
     clearShopNameCache();
+    res.json({ ok: true });
+  });
+
+  // Kabinetning MoySklad yuridik shaxsi (v3: uzum_token!D).
+  router.patch("/uzum/cabinets/:id", (req, res) => {
+    const { mcOrganizationHref } = req.body || {};
+    const id = Number(req.params.id);
+    if (!db.prepare("SELECT 1 FROM uzum_cabinets WHERE id = ?").get(id)) {
+      return res.status(404).json({ error: "Kabinet topilmadi" });
+    }
+    db.prepare("UPDATE uzum_cabinets SET mc_organization_href = ? WHERE id = ?").run(
+      mcOrganizationHref?.trim() || null,
+      id
+    );
     res.json({ ok: true });
   });
 

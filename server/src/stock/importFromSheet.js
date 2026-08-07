@@ -19,6 +19,8 @@ const SHEETS = {
   stockModDetail: "uzum_stock_mod_detail",
   modDefault: "uzum_mod_default",
   mcStock: "mc_stock",
+  uzumShop: "uzum_shop",
+  uzumToken: "uzum_token",
 };
 
 // K ustunidagi eski qo'shimcha: `...@3`, `...#2`, `...%5`, `...&4` yoki `...$`.
@@ -245,13 +247,76 @@ export async function importMcStockFromSheet(sheets) {
   return { imported, total: rows.length };
 }
 
+/**
+ * `uzum_shop` va `uzum_token` listlaridagi MoySklad havolalarini mavjud
+ * kataloga yozadi (Konfiguratsiya → Uzum).
+ *
+ * Do'kon va kabinet YARATILMAYDI — faqat bor qatorlar to'ldiriladi.
+ * Kabinetlar Uzum API'dan keladi, jadval esa ularning MoySklad'dagi
+ * juftini biladi, xolos.
+ *
+ * uzum_shop:  A Id · B Name · C token · D uzum_token_ref · E Stock update
+ *             · F SKU code · G MC href (sotuv kanali)
+ * uzum_token: A Token · B Firma · C ID · D MC href (yuridik shaxs)
+ */
+export async function importUzumLinks(sheets) {
+  const [shopRows, tokenRows] = await Promise.all([
+    readSheet(sheets, SHEETS.uzumShop),
+    readSheet(sheets, SHEETS.uzumToken),
+  ]);
+
+  // uzum_token: ID (C) → MC href (D)
+  const orgByRef = new Map();
+  for (const r of tokenRows) {
+    const ref = str(r[2]);
+    const href = str(r[3]);
+    if (ref && href) orgByRef.set(ref, href);
+  }
+
+  const report = { shops: 0, cabinets: 0, unknownShops: [], noOrgHref: [] };
+  const updateShop = db.prepare(
+    "UPDATE uzum_shops SET mc_saleschannel_href = ?, sku_code = ?, stock_update = ? WHERE shop_id = ?"
+  );
+  const updateCabinet = db.prepare("UPDATE uzum_cabinets SET mc_organization_href = ? WHERE id = ?");
+
+  db.transaction(() => {
+    for (const r of shopRows) {
+      const shopId = str(r[0]);
+      if (!shopId) continue;
+
+      const ours = db.prepare("SELECT id, cabinet_id FROM uzum_shops WHERE shop_id = ?").get(shopId);
+      if (!ours) {
+        // Jadvalda bor, bizda yo'q — kabinet hali sinxronlanmagan bo'lishi
+        // mumkin. Yaratib qo'ymaymiz: do'kon qaysi kabinetga tegishli ekani
+        // faqat Uzum API'dan aniq bilinadi.
+        report.unknownShops.push({ shopId, name: str(r[1]) });
+        continue;
+      }
+
+      updateShop.run(str(r[6]), str(r[5]), bool(r[4]), shopId);
+      report.shops++;
+
+      const orgHref = orgByRef.get(str(r[3]));
+      if (!orgHref) {
+        report.noOrgHref.push({ shopId, ref: str(r[3]) });
+      } else if (updateCabinet.run(orgHref, ours.cabinet_id).changes) {
+        report.cabinets++;
+      }
+    }
+  })();
+
+  return report;
+}
+
 export async function importAll() {
   const sheets = getSheetsClient();
   const mods = await importStockMods(sheets);
   const links = await importLinkProducts(sheets);
+  const uzum = await importUzumLinks(sheets);
   logger.info(
     `v3 ko'chirildi: link_product ${links.imported}/${links.total}, ` +
-      `qoidalar ${mods.mods}+${mods.details}, standart ${mods.defaults}`
+      `qoidalar ${mods.mods}+${mods.details}, standart ${mods.defaults}, ` +
+      `MoySklad havolalari ${uzum.shops} do'kon`
   );
-  return { links, mods };
+  return { links, mods, uzum };
 }

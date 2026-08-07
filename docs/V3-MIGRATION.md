@@ -172,6 +172,50 @@ cd /root/stocker/server && node src/scripts/v3Sync.js
 | `mc_token` | ✅ ko'chdi: Konfiguratsiya → MoySklad |
 | `uzum_shop` · `uzum_token` | ✅ o'rni bor: Konfiguratsiya → Uzum |
 
+## MoySklad qoldiq hisoboti ishonchsiz
+
+`report/stock/all/current` ketma-ket chaqirilganda har xil son qaytaradi
+(3000 → 2997 → 2998 → 3000). Yo'qolgan tovarlar tekshirilganda boshqa
+omborga o'tmagan va qoldig'i nolga tushmagan — bu API tomonidagi
+nomuvofiqlik.
+
+**Nega xavfli:** tovar bitta javobda ko'rinmasa, biz uni "qoldiq yo'q" deb
+Uzumga **0** yuborardik — sotuvdagi tovar do'kondan yo'qolardi.
+
+Tovar kesimida so'rov berish API xarajatini oshiradi, shuning uchun yechim
+javobning o'zida — **hamon bitta so'rov**, ikki qavat himoya
+([`moysklad/assortment.js`](../server/src/moysklad/assortment.js)):
+
+1. **Butun javob rad etilishi mumkin.** Qatorlar soni oldingisidan
+   `stockMinResponseRatio` (0.95) dan ko'proq kamaysa, hisobot umuman
+   qo'llanmaydi va logga xato yoziladi. Bir necha tovar tushib qolishi
+   normal, ommaviy kamayish — nosozlik.
+2. **Bitta javob yetarli emas.** Ko'rinmagan tovarning oxirgi ma'lum
+   qoldig'i saqlanadi va `missing_count` oshadi; u ketma-ket
+   `stockMissingConfirmations` (3) marta kelmagandagina 0 deb belgilanadi.
+   Qaytib kelsa hisob nollanadi. Hisobotda **aniq 0** kelgan bo'lsa —
+   darhol 0, kutilmaydi.
+
+Ikkala chegara `config.json` da (`moysklad.stockMinResponseRatio`,
+`moysklad.stockMissingConfirmations`). Har sinxronizatsiyada nechta tovar
+saqlanib qolgani va nechtasi 0 bo'lgani logga yoziladi.
+
+## MoySklad havolalari (MC href)
+
+v3 dagi `uzum_shop!G` va `uzum_token!D` ustunlari buyurtmani MoySklad'ga
+yozishda ishlatiladi:
+
+| v3 | Ma'nosi | Yangi joyi |
+|---|---|---|
+| `uzum_token!D` | yuridik shaxs (`organization_href`) | `uzum_cabinets.mc_organization_href` |
+| `uzum_shop!G` | sotuv kanali (`saleschannel_href`) | `uzum_shops.mc_saleschannel_href` |
+| `uzum_shop!F` | SKU prefiksi (UZON, BUYO…) | `uzum_shops.sku_code` |
+| `uzum_shop!E` | do'kon bo'yicha qoldiq yangilash | `uzum_shops.stock_update` |
+
+`v3Sync.js` ularni jadvaldan o'qib to'ldiradi va Konfiguratsiya → Uzum da
+tahrirlash mumkin. Do'kon yoki kabinet **yaratilmaydi** — ular Uzum API'dan
+keladi; jadval faqat MoySklad'dagi juftini biladi.
+
 ## Solishtirish natijasi (2026-08-07)
 
 Birinchi yurgizishda 3764 qatordan **5 tasida** `amount` farq qildi. Hammasi
@@ -181,11 +225,15 @@ yo'q tovarlar).
 
 Buni taxminda qoldirmaslik uchun `--stock-from-sheet` bayrog'i qo'shildi:
 qoldiq ham jadvaldan olinadi, ya'ni ikkala tomon **bir xil** raqamdan
-hisoblaydi. Bu rejimda qoladigan har qanday farq — haqiqiy mantiq xatosi.
+hisoblaydi.
 
 ```bash
 cd /root/stocker/server && node src/scripts/v3Sync.js --stock-from-sheet
 ```
 
-Bundan tashqari import 9 ta qatorda `K` ustunida eski `@N` / `$` qo'shimchasi
-qolganini ko'rsatdi — ular tozalanishi kerak.
+Natija: **`L` farqi 0, `F` farqi 0** — 3764 qatorning hammasida. Ya'ni
+formulalar to'g'ri ko'chgan va oldingi 5 ta farq faqat qoldiq
+eskirganidan edi.
+
+Import 9 ta qatorda `K` ustunida eski `@N` / `$` qo'shimchasi qolganini
+ko'rsatdi; ular **2026-08-07 da tozalandi**.

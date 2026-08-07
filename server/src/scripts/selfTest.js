@@ -630,14 +630,15 @@ check(
   { shopId: "9001", name: "9001", total: 2, packed: 1, pending: 1 }
 );
 
-// Do'kon nomi: jadval bo'lsa nom, bo'lmasa ID.
-db.exec("CREATE TABLE IF NOT EXISTS uzum_shops (id INTEGER PRIMARY KEY, cabinet_id INTEGER, name TEXT, shop_id TEXT)");
-db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (1, ?, ?)").run("Buyo Fashion", "9001");
+// Do'kon nomi: katalogda bo'lsa nom, bo'lmasa ID. Jadvallar 014
+// migratsiyasida yaratiladi, do'kon esa kabinetga bog'liq (FK).
+const cabId = db.prepare("INSERT INTO uzum_cabinets (name, token) VALUES ('Sinov', 't')").run().lastInsertRowid;
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (?, ?, ?)").run(cabId, "Buyo Fashion", "9001");
 const { clearShopNameCache } = await import("../packing/shops.js");
 clearShopNameCache();
 check("do'kon nomi ko'rinadi", B.batchShops(made.batch.id).find((s) => s.shopId === "9001").name, "Buyo Fashion");
 check("nomsiz do'kon uchun ID qoladi", B.batchShops(made.batch.id).find((s) => s.shopId === "—")?.name, "—");
-db.exec("DROP TABLE uzum_shops");
+db.exec("DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
 clearShopNameCache();
 check("partiya: operator tarixi", B.packedByOperator("aziz").map((r) => r.orderId), ["OK1"]);
 
@@ -934,6 +935,59 @@ const zero = {
   details: [{ quantityFrom: 1, comparison: "greater than", priority: 1, useDefault: false, quantityTo: 0 }],
 };
 check("F: qoida 0 bersa 0 qaytadi", uzumAmount(500, lp(), { mod: zero, defaults: DEFAULTS }), 0);
+
+/* ---------- 17. MoySklad qoldiq hisobotining ishonchsizligi ---------- */
+
+// MoySklad `report/stock/all/current` ketma-ket chaqirilganda turli son
+// qaytaradi (3000 → 2997 → 2998). Tovar aslida yo'qolmagan. To'g'ridan-
+// to'g'ri ishonsak, sotuvdagi tovarga Uzumga 0 yuborardik.
+const { mergeStockReport } = await import("../moysklad/assortment.js");
+
+const prev = (uuids, missingCount = 0) => uuids.map((u) => ({ uuid: u, stock: 10, missingCount }));
+const rep = (uuids) => uuids.map((u) => ({ uuid: u, stock: 10 }));
+const OPTS = { missingConfirmations: 3, minResponseRatio: 0.95 };
+
+check("qoldiq: bo'sh bazaga birinchi javob", mergeStockReport([], rep(["a", "b"]), OPTS).rows.length, 2);
+
+// Bitta tovar tushib qolsa: o'chirilmaydi, oxirgi qoldiq saqlanadi.
+const once = mergeStockReport(prev(["a", "b", "c"]), rep(["a", "b"]), { ...OPTS, minResponseRatio: 0.5 });
+check("qoldiq: bir marta kelmagan tovar saqlanadi", once.kept, ["c"]);
+check("qoldiq: hech narsa o'chirilmadi", once.dropped, []);
+check("qoldiq: qatorlar soni o'zgarmadi", once.rows.length, 3);
+check("qoldiq: saqlangan qiymat o'zgarmadi", once.rows.find((r) => r.uuid === "c").stock, 10);
+
+// Uchinchi marta ham kelmasa — endi haqiqatan yo'q.
+const thirdMiss = mergeStockReport(
+  [...prev(["a", "b"]), { uuid: "c", stock: 10, missingCount: 2 }],
+  rep(["a", "b"]),
+  { ...OPTS, minResponseRatio: 0.5 }
+);
+check("qoldiq: uchinchi martadan keyin o'chiriladi", thirdMiss.dropped, ["c"]);
+check("qoldiq: o'chirilgan qator qolmaydi", thirdMiss.rows.map((r) => r.uuid).sort(), ["a", "b"]);
+
+// Qaytib kelsa hisob nolga tushadi.
+const back = mergeStockReport([{ uuid: "c", stock: 10, missingCount: 2 }], rep(["c"]), OPTS);
+check("qoldiq: qaytib kelsa hisob nollanadi", back.rows[0].missingCount, 0);
+
+// Ommaviy kamayish — javob butunlay rad etiladi.
+const suspicious = mergeStockReport(prev(Array.from({ length: 100 }, (_, i) => `u${i}`)), rep(["u0", "u1"]), OPTS);
+check("qoldiq: shubhali javob qo'llanmaydi", suspicious.applied, false);
+check("qoldiq: rad etilganda hech narsa o'chmaydi", suspicious.dropped, []);
+
+// Chegaraga teng kamayish — hali qabul qilinadi (100 → 95).
+const edge = mergeStockReport(
+  prev(Array.from({ length: 100 }, (_, i) => `u${i}`)),
+  rep(Array.from({ length: 95 }, (_, i) => `u${i}`)),
+  OPTS
+);
+check("qoldiq: 5% kamayish qabul qilinadi", edge.applied, true);
+
+// Yangi tovar qo'shilishi hech narsani bloklamaydi.
+check("qoldiq: o'sish qabul qilinadi", mergeStockReport(prev(["a"]), rep(["a", "b", "c"]), OPTS).rows.length, 3);
+
+// Aniq 0 kelgan bo'lsa — darhol 0, kutilmaydi.
+const explicitZero = mergeStockReport(prev(["a"]), [{ uuid: "a", stock: 0 }], OPTS);
+check("qoldiq: aniq 0 darhol qo'llanadi", explicitZero.rows[0].stock, 0);
 
 /* ---------------- Yakun ---------------- */
 

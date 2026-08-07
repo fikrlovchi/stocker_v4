@@ -134,9 +134,14 @@ async function main() {
 
   if (!compareOnly) {
     console.log("── Jadvaldan ko'chirish");
-    const { links, mods } = await importAll();
+    const { links, mods, uzum } = await importAll();
     console.log(`   link_product: ${links.imported}/${links.total} (${links.skipped} o'tkazildi)`);
     console.log(`   qoidalar: ${mods.mods} ota, ${mods.details} qoida, ${mods.defaults} standart`);
+    console.log(`   MoySklad havolalari: ${uzum.shops} do'kon, ${uzum.cabinets} kabinet`);
+    if (uzum.unknownShops.length)
+      console.log(`   ⚠ jadvalda bor, bizda yo'q do'kon: ${uzum.unknownShops.map((s) => `${s.shopId} ${s.name}`).join(", ")}`);
+    if (uzum.noOrgHref.length)
+      console.log(`   ⚠ yuridik shaxs havolasi topilmadi: ${uzum.noOrgHref.map((s) => s.shopId).join(", ")}`);
 
     // Ogohlantirishlar — bular ko'chishdan keyin tozalanishi kerak.
     if (links.withSuffix.length) console.log(`   ⚠ K da eski qo'shimcha (@N/$): ${list(links.withSuffix)}`);

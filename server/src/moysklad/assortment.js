@@ -67,12 +67,54 @@ export async function syncProducts() {
 }
 
 /**
- * Ombordagi qoldiqni o'qib `mc_stock` ni yangilaydi.
+ * Hisobotni oldingi holat bilan birlashtiradi.
  *
- * Bu yerda jadval TO'LIQ almashtiriladi (v3 dagidek): hisobotda ko'rinmagan
- * tovarning qoldig'i yo'q degani, eski qatorni qoldirsak "bor" bo'lib
- * ko'rinib qolardi va Uzumga noto'g'ri son ketardi.
+ * MoySklad `report/stock/all/current` ketma-ket chaqirilganda turli son
+ * qaytaradi (3000 → 2997 → 2998). Yo'qolganlar aslida boshqa omborga
+ * o'tmagan va nolga tushmagan — bu API nomuvofiqligi. To'g'ridan-to'g'ri
+ * ishonsak, sotuvdagi tovarga Uzumga 0 yuborib qo'yardik.
+ *
+ * Shuning uchun ikki qavat himoya. Ikkalasi ham qo'shimcha so'rov
+ * talab qilmaydi — hamon bitta chaqiruv.
+ *
+ * Toza funksiya: bazani bilmaydi, testda to'liq tekshiriladi.
  */
+export function mergeStockReport(previous, report, { missingConfirmations = 3, minResponseRatio = 0.95 } = {}) {
+  // 1-qavat: butun javob shubhali bo'lsa umuman qo'llanmaydi. Bir necha
+  //    tovar tushib qolishi mumkin, lekin ommaviy kamayish — bu nosozlik.
+  if (previous.length && report.length < previous.length * minResponseRatio) {
+    return {
+      applied: false,
+      reason: `javobda ${report.length} ta, oldingi safar ${previous.length} ta edi`,
+      rows: [],
+      kept: [],
+      dropped: [],
+    };
+  }
+
+  const rows = report.map((r) => ({ uuid: r.uuid, stock: r.stock, missingCount: 0, seen: true }));
+  const seen = new Set(rows.map((r) => r.uuid));
+
+  // 2-qavat: bitta javobda ko'rinmagan tovar darhol yo'q deb hisoblanmaydi.
+  //    Oxirgi ma'lum qoldig'i saqlanadi, faqat ketma-ket bir necha marta
+  //    kelmagandan keyin o'chiriladi (o'chgani = qoldiq 0).
+  const kept = [];
+  const dropped = [];
+  for (const p of previous) {
+    if (seen.has(p.uuid)) continue;
+    const missingCount = (p.missingCount || 0) + 1;
+    if (missingCount >= missingConfirmations) {
+      dropped.push(p.uuid);
+    } else {
+      rows.push({ uuid: p.uuid, stock: p.stock, missingCount, seen: false });
+      kept.push(p.uuid);
+    }
+  }
+
+  return { applied: true, rows, kept, dropped };
+}
+
+/** Ombordagi qoldiqni o'qib `mc_stock` ni yangilaydi. */
 export async function syncStock() {
   const storeId = config.moysklad.stockStoreId;
   if (!storeId) throw new Error("config.json: moysklad.stockStoreId ko'rsatilmagan");
@@ -84,26 +126,57 @@ export async function syncStock() {
   const report = await res.json();
   if (!Array.isArray(report)) throw new Error("MoySklad qoldiq hisoboti kutilmagan ko'rinishda");
 
+  const previous = db
+    .prepare("SELECT uuid, stock, missing_count AS missingCount, last_seen_at AS lastSeenAt FROM mc_stock")
+    .all();
+
+  const merged = mergeStockReport(
+    previous,
+    report.map((r) => ({ uuid: r.assortmentId, stock: Number(r.stock) || 0 })),
+    {
+      missingConfirmations: config.moysklad.stockMissingConfirmations,
+      minResponseRatio: config.moysklad.stockMinResponseRatio,
+    }
+  );
+
+  if (!merged.applied) {
+    logger.error(`mc_stock YANGILANMADI — hisobot shubhali: ${merged.reason}. Eski qoldiq saqlanib qoldi.`);
+    return { applied: false, reason: merged.reason, total: report.length, previous: previous.length };
+  }
+
   const now = new Date().toISOString();
+  const lastSeen = new Map(previous.map((p) => [p.uuid, p.lastSeenAt]));
   // External ID `mc_product` dan olinadi — hisobotning o'zida u yo'q.
   const externalById = new Map(
     db.prepare("SELECT uuid, external_id FROM mc_product WHERE external_id IS NOT NULL").all().map((r) => [r.uuid, r.external_id])
   );
 
   const insert = db.prepare(
-    "INSERT INTO mc_stock (uuid, stock, external_id, synced_at) VALUES (?, ?, ?, ?)"
+    "INSERT INTO mc_stock (uuid, stock, external_id, missing_count, last_seen_at, synced_at) VALUES (?, ?, ?, ?, ?, ?)"
   );
   let withoutExternal = 0;
 
   db.transaction(() => {
     db.exec("DELETE FROM mc_stock");
-    for (const row of report) {
-      const externalId = externalById.get(row.assortmentId) || null;
+    for (const row of merged.rows) {
+      const externalId = externalById.get(row.uuid) || null;
       if (!externalId) withoutExternal++;
-      insert.run(row.assortmentId, Number(row.stock) || 0, externalId, now);
+      insert.run(row.uuid, row.stock, externalId, row.missingCount, row.seen ? now : lastSeen.get(row.uuid) || null, now);
     }
   })();
 
-  logger.info(`mc_stock yangilandi: ${report.length} ta qoldiq (${withoutExternal} tasida External ID yo'q)`);
-  return { total: report.length, withoutExternal };
+  const note =
+    merged.kept.length || merged.dropped.length
+      ? ` — ${merged.kept.length} ta kelmadi (oxirgi qoldiq saqlandi), ${merged.dropped.length} ta 0 deb belgilandi`
+      : "";
+  logger.info(`mc_stock yangilandi: ${report.length} ta qoldiq (${withoutExternal} tasida External ID yo'q)${note}`);
+
+  return {
+    applied: true,
+    total: report.length,
+    stored: merged.rows.length,
+    keptMissing: merged.kept.length,
+    dropped: merged.dropped.length,
+    withoutExternal,
+  };
 }
