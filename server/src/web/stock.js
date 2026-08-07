@@ -19,6 +19,7 @@ import {
 import { loadMods, loadDefaults, loadStockByExternalId, loadShopTokens } from "../stock/catalog.js";
 import { computeRow } from "../stock/rules.js";
 import { recentStockSyncs, stockSyncSummary } from "../moysklad/stockLog.js";
+import { createLinkProduct, retryLinkProduct, recentEvents } from "../stock/linkProductCreate.js";
 
 export function stockRouter() {
   const router = express.Router();
@@ -95,6 +96,52 @@ export function stockRouter() {
  */
 export function linkProductRouter() {
   const router = express.Router();
+
+  /**
+   * Forma uchun do'konlar ro'yxati (token YO'Q).
+   *
+   * `skuCode` — SKU prefiksi: forma skuTitle kiritilganda do'konni shu
+   * bo'yicha o'zi tanlaydi (v3 dagi AppSheet "initial value" kabi).
+   */
+  router.get("/shops", (req, res) => {
+    res.json({
+      shops: db
+        .prepare(
+          `SELECT s.shop_id AS shopId, s.name, s.sku_code AS skuCode, c.name AS cabinetName
+           FROM uzum_shops s JOIN uzum_cabinets c ON c.id = s.cabinet_id
+           ORDER BY c.name, s.name`
+        )
+        .all(),
+    });
+  });
+
+  /**
+   * Yangi bog'lama. Qator yaratilgach IKKI amal bajariladi: Uzum'dan SKU
+   * ma'lumotini olish va barcode'ni MoySklad'ga qo'shish — v3 dagi AppSheet
+   * automation'i kabi, jadval bo'yicha emas.
+   */
+  router.post("/", async (req, res) => {
+    try {
+      res.json(await createLinkProduct(req.body || {}, req.user?.login));
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  // Birinchi urinishda Uzum javob bermagan bo'lsa — qayta urinish.
+  router.post("/:id/retry", async (req, res) => {
+    try {
+      res.json(await retryLinkProduct(Number(req.params.id), req.user?.login));
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  router.get("/:id/events", (req, res) => {
+    const row = db.prepare("SELECT sku_title FROM link_product WHERE id = ?").get(Number(req.params.id));
+    if (!row) return res.status(404).json({ error: "Qator topilmadi" });
+    res.json({ events: recentEvents({ skuTitle: row.sku_title, limit: 20 }) });
+  });
 
   // Hisoblangan qoldiq bilan birga: interfeysda "nega bu son ketadi" degan
   // savolga javob bo'lishi kerak, aks holda faqat jadvalning nusxasi bo'lardi.
@@ -214,6 +261,37 @@ export function linkProductRouter() {
     );
 
     res.json({ ok: true });
+  });
+
+  return router;
+}
+
+/**
+ * Barcode va SKU jurnali — alohida bo'lim.
+ *
+ * Bu ikki amal (Uzum'dan SKU olish va barcode → MoySklad) yangi bog'lama
+ * qo'shilganda bajariladi, ya'ni ularni "ishga tushirish" degan tugma
+ * ma'nosiz. Shuning uchun bu yerda faqat NATIJA ko'rinadi.
+ */
+export function skuLogRouter() {
+  const router = express.Router();
+
+  router.get("/", (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 60, 200);
+    const kind = ["uzum_fetch", "mc_barcode"].includes(req.query.kind) ? req.query.kind : null;
+    const events = recentEvents({ limit, kind, skuTitle: req.query.search });
+
+    // Xulosa: xato bo'lganlar ko'zga tashlanib turishi kerak.
+    const count = (k, s) => events.filter((e) => e.kind === k && e.status === s).length;
+    res.json({
+      events,
+      summary: {
+        total: events.length,
+        uzumFetchErrors: count("uzum_fetch", "error"),
+        barcodeErrors: count("mc_barcode", "error"),
+        barcodeAdded: count("mc_barcode", "success"),
+      },
+    });
   });
 
   return router;

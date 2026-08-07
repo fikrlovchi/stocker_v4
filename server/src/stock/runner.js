@@ -18,6 +18,12 @@ import { notify } from "../telegram/index.js";
 
 export const KINDS = ["sync", "push", "barcode"];
 
+// Jadval bo'yicha takrorlanadigan oqimlar. `barcode` bu ro'yxatda YO'Q:
+// u endi yangi tovar bog'lamasi qo'shilganda bajariladi (v3 dagi AppSheet
+// automation'i kabi), takrorlanadigan ish emas. Ko'chish davrida jadvalda
+// bayroq qolgan qatorlar uchun `barcodeSync.js` skripti qoladi.
+export const SCHEDULABLE = ["sync", "push"];
+
 export const SCHEDULE_KEY = "stock.schedule";
 
 // STANDART HOLAT — HAMMASI O'CHIRILGAN. Yangilanishdan keyin server o'z-o'zidan
@@ -25,13 +31,12 @@ export const SCHEDULE_KEY = "stock.schedule";
 export const DEFAULT_SCHEDULE = {
   sync: { enabled: false, intervalMinutes: 30 },
   push: { enabled: false, intervalMinutes: 30 },
-  barcode: { enabled: false, intervalMinutes: 15 },
 };
 
 export function getSchedule() {
   const saved = getSetting(SCHEDULE_KEY)?.value || {};
   const out = {};
-  for (const kind of KINDS) {
+  for (const kind of SCHEDULABLE) {
     out[kind] = { ...DEFAULT_SCHEDULE[kind], ...(saved[kind] || {}) };
   }
   return out;
@@ -39,7 +44,7 @@ export function getSchedule() {
 
 export function setSchedule(patch, login) {
   const current = getSchedule();
-  for (const kind of KINDS) {
+  for (const kind of SCHEDULABLE) {
     if (!patch[kind]) continue;
     const { enabled, intervalMinutes } = patch[kind];
     if (enabled !== undefined) current[kind].enabled = Boolean(enabled);
@@ -257,7 +262,7 @@ export function startStockSchedule() {
   timers.clear();
 
   const schedule = getSchedule();
-  for (const kind of KINDS) {
+  for (const kind of SCHEDULABLE) {
     const { enabled, intervalMinutes } = schedule[kind];
     if (!enabled) continue;
 

@@ -112,7 +112,18 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v !== "" && v !== undefined && v !== null) q.set(k, v);
     return call(`/link-products?${q}`);
   },
+  linkProductShops: () => call("/link-products/shops"),
+  addLinkProduct: (body) => call("/link-products", { method: "POST", body }),
   editLinkProduct: (id, body) => call(`/link-products/${id}`, { method: "PATCH", body }),
+  retryLinkProduct: (id) => call(`/link-products/${id}/retry`, { method: "POST" }),
+  linkProductEvents: (id) => call(`/link-products/${id}/events`),
+
+  // Barcode va SKU jurnali — alohida bo'lim, faqat o'qish.
+  skuLog: (params = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== "" && v !== undefined && v !== null) q.set(k, v);
+    return call(`/sku-log?${q}`);
+  },
 
   moysklad: () => call("/moysklad"),
   setMcToken: (token) => call("/moysklad/token", { method: "PUT", body: { token } }),

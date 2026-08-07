@@ -9,6 +9,7 @@
 export const SECTIONS = [
   { key: "orders_to_mc", label: "Integratsiyalar" },
   { key: "link_product", label: "Tovar bog'lamalari (link_product)" },
+  { key: "sku_log", label: "Barcode va SKU jurnali" },
   { key: "uzum_orders", label: "Uzum buyurtmalari" },
   { key: "packing", label: "Stocker — yig'ish" },
   { key: "labels", label: "Yorliqlar" },

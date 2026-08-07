@@ -24,7 +24,8 @@ faqat ko'rinadigan nom va ichki tuzilma o'zgaradi.
 |---|---|---|
 | `orders_to_mc` | Uzum order to MC | **Integratsiyalar** (+ "Qoldiq oqimlari" varag'i) |
 | `settings` | O'zgaruvchilar | **Konfiguratsiya** |
-| `link_product` | — | **Tovar bog'lamalari** (yangi) |
+| `link_product` | — | **Tovar bog'lamalari** (yangi, qo'shish formasi bilan) |
+| `sku_log` | — | **Barcode va SKU jurnali** (yangi) |
 | `uzum_orders` | — | **Uzum buyurtmalari** (yangi) |
 | `packing` · `labels` · `users` | — | o'zgarmaydi |
 
@@ -161,12 +162,55 @@ GAS'dan ikki farqi:
 * token har qatorda takrorlanmaydi (`link_product!G`) — do'kon orqali
   kabinetdan olinadi, ya'ni bitta joyda turadi.
 
-**Bitta xatti-harakat farqi bor va u ataylab:** do'kon darajasidagi
-`uzum_shop!E` ("Stock update") bayrog'i hisobga olinadi. GAS bu ustundan
-foydalanmagan. Dry-run hisobotida shu sababli o'tkazib yuborilgan qatorlar
-**alohida ko'rsatiladi** — sinovdan oldin ko'zdan kechirish kerak.
+Qoldiq yuborishni **faqat `link_product!J`** boshqaradi. Do'kon
+darajasidagi `uzum_shop!E` ("Stock update") eski mantiqning qoldig'i edi —
+ustun ham, interfeysdagi belgi ham olib tashlandi (`017`).
 
-#### Barcode → MoySklad
+#### Barcode va SKU — jadval bilan EMAS, qator qo'shilganda
+
+v3 da bu ikki amal AppSheet automation'i orqali, `link_product` ga yangi
+qator qo'shilganda ishlardi (`runAll`: `fetchUzumProducts` +
+`addBarcodesToMoySklad`). Shu xatti-harakat saqlanadi — ular jadval
+bo'yicha takrorlanadigan ish EMAS.
+
+"Tovar bog'lamalari" bo'limida yangi SKU qo'shilganda server ketma-ket:
+
+1. External ID → UUID (`mc_product` dan). **Topilmasa qator umuman
+   yaratilmaydi** — aks holda katalogda "yarim" qator qolib, qoldiq
+   hisobida jim ravishda 0 berardi.
+2. Uzum'dan SKU ma'lumoti: `skuId`, tovar nomi, barcode, rasm.
+   Qidiruv kaliti `skuTitle` va u Uzum javobidagi `skuFullTitle` bilan
+   **aynan** mos kelishi shart.
+3. Barcode → MoySklad (mavjudlar ustiga qo'shiladi).
+
+2- yoki 3-qadam yiqilsa **qator saqlanib qoladi** (masalan Uzum javob
+bermasa) va jadvalda "Qayta urinish" tugmasi paydo bo'ladi.
+
+Natija **"Barcode va SKU jurnali"** bo'limida (`link_product_events`):
+qaysi SKU, qaysi amal, holat va sabab. Bu bo'limda "ishga tushirish"
+tugmasi yo'q — ishga tushiradigan narsa qator qo'shilishi.
+
+Ko'chish davrida jadvalda bayroq (`link_product!H`) qolgan qatorlar uchun
+`barcodeSync.js` skripti qoladi.
+
+#### Qo'shish formasi
+
+Maydonlar v3 dagi AppSheet formasi bilan bir xil: `skuTitle` ·
+`MC External ID` · Do'kon · Kartochkadagi miqdor · Qoldiqni yangilash? ·
+Order import.
+
+Do'kon **o'zi tanlanadi** — v3 dagi "initial value" formulasining aynan
+o'zi:
+
+```
+LOOKUP(INDEX(SPLIT(TRIM([skuTitle]), "-"), 1), "uzum_shop", "SKU code", "ID")
+```
+
+`-` gacha bo'lgan birinchi bo'lak `SKU code` bilan **aynan** solishtiriladi.
+"Shu bilan boshlanadi" degan moslik emas: `UZONX-1` uchun `UZON` kodi mos
+kelmasligi kerak, aks holda tovar boshqa do'konga biriktirilardi.
+
+#### Barcode → MoySklad (mantiq)
 
 [`stock/barcodeToMc.js`](../server/src/stock/barcodeToMc.js) — v3 dagi
 `addBarcodesToMoySklad`. Eng muhim qoida saqlangan: PUT'dan oldin tovarning
@@ -394,7 +438,6 @@ yozishda ishlatiladi:
 | `uzum_token!D` | yuridik shaxs (`organization_href`) | `uzum_cabinets.mc_organization_href` |
 | `uzum_shop!G` | sotuv kanali (`saleschannel_href`) | `uzum_shops.mc_saleschannel_href` |
 | `uzum_shop!F` | SKU prefiksi (UZON, BUYO…) | `uzum_shops.sku_code` |
-| `uzum_shop!E` | do'kon bo'yicha qoldiq yangilash | `uzum_shops.stock_update` |
 
 `v3Sync.js` ularni jadvaldan o'qib to'ldiradi va Konfiguratsiya → Uzum da
 tahrirlash mumkin. Do'kon yoki kabinet **yaratilmaydi** — ular Uzum API'dan

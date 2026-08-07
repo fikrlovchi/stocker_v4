@@ -16,7 +16,7 @@ import { projectsRouter } from "./projects.js";
 import { variablesRouter } from "./variables.js";
 import { telegramRouter } from "./telegram.js";
 import { moyskladRouter } from "./moysklad.js";
-import { stockRouter, linkProductRouter } from "./stock.js";
+import { stockRouter, linkProductRouter, skuLogRouter } from "./stock.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -216,6 +216,10 @@ export function webRouter() {
   // Katalogning o'zi alohida bo'lim va alohida ruxsat: unda tovar
   // bog'lamalari tahrirlanadi, oqimlarni ishga tushirish esa yo'q.
   router.use("/link-products", requireWeb, requireSection("link_product"), linkProductRouter());
+
+  // Barcode va SKU amallarining jurnali. Ular yangi bog'lama qo'shilganda
+  // bajariladi, shuning uchun bu bo'limda faqat natija ko'rinadi.
+  router.use("/sku-log", requireWeb, requireSection("sku_log"), skuLogRouter());
 
   /* ---------- Konfiguratsiya ---------- */
 

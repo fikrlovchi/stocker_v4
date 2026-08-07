@@ -50,7 +50,7 @@ export function loadStockByExternalId() {
 }
 
 /**
- * shop_id → { name, cabinetId, token, stockUpdate }.
+ * shop_id → { name, cabinetId, token }.
  *
  * v3 da token har `link_product` qatorida takrorlanardi (`link_product!G`) —
  * bu yerda esa do'kon orqali kabinetdan olinadi, ya'ni token bitta joyda
@@ -60,7 +60,7 @@ export function loadShopTokens() {
   const map = new Map();
   const rows = db
     .prepare(
-      `SELECT s.shop_id, s.name, s.stock_update, s.cabinet_id, c.token, c.name AS cabinet_name
+      `SELECT s.shop_id, s.name, s.cabinet_id, c.token, c.name AS cabinet_name
        FROM uzum_shops s JOIN uzum_cabinets c ON c.id = s.cabinet_id`
     )
     .all();
@@ -70,7 +70,6 @@ export function loadShopTokens() {
       cabinetId: r.cabinet_id,
       cabinetName: r.cabinet_name,
       token: r.token,
-      stockUpdate: r.stock_update !== 0,
     });
   }
   return map;

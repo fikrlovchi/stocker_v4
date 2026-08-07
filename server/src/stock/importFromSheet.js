@@ -275,7 +275,7 @@ export async function importUzumLinks(sheets) {
 
   const report = { shops: 0, cabinets: 0, unknownShops: [], noOrgHref: [] };
   const updateShop = db.prepare(
-    "UPDATE uzum_shops SET mc_saleschannel_href = ?, sku_code = ?, stock_update = ? WHERE shop_id = ?"
+    "UPDATE uzum_shops SET mc_saleschannel_href = ?, sku_code = ? WHERE shop_id = ?"
   );
   const updateCabinet = db.prepare("UPDATE uzum_cabinets SET mc_organization_href = ? WHERE id = ?");
 
@@ -293,7 +293,9 @@ export async function importUzumLinks(sheets) {
         continue;
       }
 
-      updateShop.run(str(r[6]), str(r[5]), bool(r[4]), shopId);
+      // E ustuni ("Stock update") ko'chirilmaydi: qoldiq yuborishni faqat
+      // `link_product.stock_update` boshqaradi.
+      updateShop.run(str(r[6]), str(r[5]), shopId);
       report.shops++;
 
       const orgHref = orgByRef.get(str(r[3]));

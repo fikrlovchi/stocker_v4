@@ -4,13 +4,17 @@ import { api } from "../api";
 
 // Qoldiq oqimlari — Integratsiyalar bo'limi ichida.
 //
-// Uchta oqim: MoySklad'dan o'qish · Uzumga yuborish · barcode → MoySklad.
-// Har biri uchun holat, jadval sozlamasi, qo'lda ishga tushirish va tarix.
+// Ikkita oqim: MoySklad'dan o'qish va Uzumga yuborish. Har biri uchun
+// holat, jadval sozlamasi, qo'lda ishga tushirish va tarix.
+//
+// "Barcode → MoySklad" bu yerda YO'Q: u yangi tovar bog'lamasi qo'shilganda
+// bajariladi (v3 dagi AppSheet automation'i kabi), jadval bo'yicha
+// takrorlanmaydi. Natijasi "Barcode va SKU jurnali" bo'limida.
 //
 // Muhim: "Yuborish" tugmasi ATAYLAB ikki qadamli. Dry-run — bir bosishda,
 // haqiqiy yuborish esa tasdiqlash bilan: bu tashqi natijaga olib keladi
 // (Uzumda tovar sotuvdan chiqishi mumkin).
-const FLOWS = ["sync", "push", "barcode"];
+const FLOWS = ["sync", "push"];
 
 export default function StockFlows() {
   const { t } = useTranslation();

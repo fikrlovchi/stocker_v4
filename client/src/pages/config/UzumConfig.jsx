@@ -85,7 +85,6 @@ function Cabinet({ cab, run }) {
               <th>{t("vars.shopName")}</th>
               <th>shop_id</th>
               <th>{t("vars.skuCode")}</th>
-              <th>{t("vars.stockUpdate")}</th>
               <th>{t("vars.mcSaleschannel")}</th>
               <th />
             </tr>
@@ -129,14 +128,6 @@ function ShopRow({ shop, onRun }) {
       <td><code>{shop.shop_id}</code></td>
       <td>
         <input value={draft.skuCode} onChange={(e) => set("skuCode", e.target.value)} style={{ width: 80 }} />
-      </td>
-      <td>
-        {/* Do'kon bo'yicha qoldiq yuborishni o'chirib qo'yish — darhol saqlanadi. */}
-        <input
-          type="checkbox"
-          checked={Boolean(shop.stock_update)}
-          onChange={(e) => onRun(() => api.editShop(shop.id, { stockUpdate: e.target.checked }))}
-        />
       </td>
       <td>
         <input

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
+import LinkProductForm from "./LinkProductForm";
 
 // Tovar bog'lamalari (v3 dagi `link_product`).
 //
@@ -18,6 +19,7 @@ export default function LinkProducts() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +59,17 @@ export default function LinkProducts() {
       {note && <div className="card muted">{note}</div>}
 
       <div className="row" style={{ marginBottom: 12 }}>
+        <button onClick={() => setAdding(true)}>+ {t("lp.add")}</button>
+      </div>
+
+      {adding && (
+        <LinkProductForm
+          onClose={() => setAdding(false)}
+          onCreated={load}
+        />
+      )}
+
+      <div className="row" style={{ marginBottom: 12, marginTop: 12 }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -177,21 +190,30 @@ function Row({ item, onRun }) {
         />
       </td>
       <td>
-        <button
-          disabled={!dirty}
-          onClick={() =>
-            onRun(
-              () =>
-                api.editLinkProduct(item.id, {
-                  mcExternalId: draft.mcExternalId,
-                  cardQuantity: Number(draft.cardQuantity),
-                }),
-              t("lp.saved")
-            )
-          }
-        >
-          {t("lp.save")}
-        </button>
+        <div className="row">
+          <button
+            disabled={!dirty}
+            onClick={() =>
+              onRun(
+                () =>
+                  api.editLinkProduct(item.id, {
+                    mcExternalId: draft.mcExternalId,
+                    cardQuantity: Number(draft.cardQuantity),
+                  }),
+                t("lp.saved")
+              )
+            }
+          >
+            {t("lp.save")}
+          </button>
+          {/* skuId bo'sh — Uzum'dan ma'lumot kelmagan. Qayta urinish
+              Uzum qidiruvini va barcode qo'shishni takrorlaydi. */}
+          {!item.skuId && (
+            <button className="ghost" onClick={() => onRun(() => api.retryLinkProduct(item.id), t("lp.retried"))}>
+              {t("lp.retry")}
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   );

@@ -77,7 +77,7 @@ export function variablesRouter() {
       cabinets: all("SELECT id, name, mc_organization_href FROM uzum_cabinets ORDER BY name").map((c) => ({
         ...c,
         shops: all(
-          `SELECT id, name, shop_id, sku_code, stock_update, mc_saleschannel_href
+          `SELECT id, name, shop_id, sku_code, mc_saleschannel_href
            FROM uzum_shops WHERE cabinet_id = ? ORDER BY name`,
           c.id
         ),
@@ -181,19 +181,18 @@ export function variablesRouter() {
   // Do'kon nomini qo'lda tuzatish — mobil ilovada ham shu nom ko'rinadi.
   // Shu bilan birga MoySklad havolasi, SKU prefiksi va qoldiq bayrog'i.
   router.patch("/uzum/shops/:id", (req, res) => {
-    const { name, mcSaleschannelHref, skuCode, stockUpdate } = req.body || {};
+    const { name, mcSaleschannelHref, skuCode } = req.body || {};
     const id = Number(req.params.id);
     const shop = db.prepare("SELECT * FROM uzum_shops WHERE id = ?").get(id);
     if (!shop) return res.status(404).json({ error: "Do'kon topilmadi" });
     if (name !== undefined && !name?.trim()) return res.status(400).json({ error: "Nom kerak" });
 
     db.prepare(
-      `UPDATE uzum_shops SET name = ?, mc_saleschannel_href = ?, sku_code = ?, stock_update = ? WHERE id = ?`
+      `UPDATE uzum_shops SET name = ?, mc_saleschannel_href = ?, sku_code = ? WHERE id = ?`
     ).run(
       name?.trim() || shop.name,
       mcSaleschannelHref === undefined ? shop.mc_saleschannel_href : mcSaleschannelHref?.trim() || null,
       skuCode === undefined ? shop.sku_code : skuCode?.trim() || null,
-      stockUpdate === undefined ? shop.stock_update : stockUpdate ? 1 : 0,
       id
     );
     clearShopNameCache();

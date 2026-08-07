@@ -1302,6 +1302,70 @@ check("oqim: kesh holati — mc_stock bo'sh", cacheStatus.stockRows, 0);
 
 db.exec("DELETE FROM stock_runs; DELETE FROM link_product; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
 
+/* ---------- 21. Do'konni SKU prefiksidan topish ---------- */
+
+// v3 dagi AppSheet formulasi:
+//   LOOKUP(INDEX(SPLIT(TRIM([skuTitle]), "-"), 1), "uzum_shop", "SKU code", "ID")
+// Ya'ni `-` gacha bo'lgan birinchi bo'lak "SKU code" bilan AYNAN mos
+// kelishi kerak — "shu bilan boshlanadi" degan moslik EMAS.
+const { shopBySkuPrefix } = await import("../stock/uzumFetch.js");
+
+const cabPfx = db.prepare("INSERT INTO uzum_cabinets (name, token) VALUES ('Kab', 'tok')").run().lastInsertRowid;
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id, sku_code) VALUES (?, 'uzon.market', '682', 'UZON')").run(cabPfx);
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id, sku_code) VALUES (?, 'BUYO', '86488', 'BUYOACC')").run(cabPfx);
+
+check("prefiks: oddiy holat", shopBySkuPrefix("UZON-0400082")?.shop_id, "682");
+check("prefiks: ikkinchi do'kon", shopBySkuPrefix("BUYOACC-SS1612001387-КОРИЧН")?.shop_id, "86488");
+check("prefiks: kichik harf ham topiladi", shopBySkuPrefix("uzon-0400082")?.shop_id, "682");
+check("prefiks: bo'shliqlar tozalanadi", shopBySkuPrefix("  UZON-1  ")?.shop_id, "682");
+
+// ENG MUHIM: "boshlanadi" mosligi bo'lmasligi kerak. `UZONX` — boshqa
+// prefiks, `UZON` do'koniga biriktirilmasligi shart.
+check("prefiks: UZONX → UZON ga tushmaydi", shopBySkuPrefix("UZONX-1"), null);
+check("prefiks: tiresiz nom", shopBySkuPrefix("UZON")?.shop_id, "682");
+check("prefiks: noma'lum prefiks", shopBySkuPrefix("YANGI-1"), null);
+check("prefiks: bo'sh qiymat", shopBySkuPrefix(""), null);
+
+/* ---------- 22. Bog'lama qo'shish (Uzum/MoySklad'ga chiqmaydigan qismi) ---------- */
+
+const lpCreate = await import("../stock/linkProductCreate.js");
+
+// Tekshiruvlar: hammasi tarmoqqa chiqishdan OLDIN ishlaydi, shuning uchun
+// test oflayn qoladi.
+const badCases = [
+  [{ skuTitle: "", mcExternalId: "e", shopId: "682", cardQuantity: 1 }, "skuTitle kerak"],
+  [{ skuTitle: "A-1", mcExternalId: "", shopId: "682", cardQuantity: 1 }, "MC External ID kerak"],
+  [{ skuTitle: "A-1", mcExternalId: "e", shopId: "", cardQuantity: 1 }, "Do'kon kerak"],
+  [{ skuTitle: "A-1", mcExternalId: "e", shopId: "682", cardQuantity: 0 }, "Kartochka miqdori kamida 1 bo'lishi kerak"],
+  [{ skuTitle: "A-1", mcExternalId: "e", shopId: "yo'q", cardQuantity: 1 }, "Do'kon katalogda yo'q: yo'q"],
+  [{ skuTitle: "A-1", mcExternalId: "yo'q", shopId: "682", cardQuantity: 1 }, "MoySklad'da bu External ID topilmadi: yo'q"],
+];
+for (const [input, expected] of badCases) {
+  const msg = await lpCreate.createLinkProduct(input, "root").then(() => "(xato bo'lmadi)", (e) => e.message);
+  check(`qo'shish: ${expected}`, msg, expected);
+}
+
+// Takroriy skuTitle — qoldiq hisobida kalit shu, takrorlanmasligi kerak.
+db.prepare("INSERT INTO link_product (sku_title, shop_id, card_quantity) VALUES ('BOR-1', '682', 1)").run();
+check(
+  "qo'shish: takroriy skuTitle rad etiladi",
+  await lpCreate.createLinkProduct({ skuTitle: "BOR-1", mcExternalId: "e", shopId: "682", cardQuantity: 1 }, "root").then(
+    () => "(xato bo'lmadi)",
+    (e) => e.message
+  ),
+  "Bu skuTitle allaqachon mavjud: BOR-1"
+);
+
+// Jurnal: amallar natijasi shu yerda saqlanadi.
+lpCreate.logEvent({ linkProductId: 1, skuTitle: "LOG-1", kind: "uzum_fetch", status: "error", message: "topilmadi", byLogin: "root" });
+lpCreate.logEvent({ linkProductId: 1, skuTitle: "LOG-1", kind: "mc_barcode", status: "success", message: "qo'shildi", byLogin: "root" });
+check("jurnal: yozuvlar saqlanadi", lpCreate.recentEvents({ limit: 10 }).length, 2);
+check("jurnal: tur bo'yicha filtr", lpCreate.recentEvents({ kind: "mc_barcode" }).map((e) => e.status), ["success"]);
+check("jurnal: skuTitle bo'yicha qidiruv", lpCreate.recentEvents({ skuTitle: "LOG" }).length, 2);
+check("jurnal: topilmaydigan qidiruv", lpCreate.recentEvents({ skuTitle: "YO'Q" }).length, 0);
+
+db.exec("DELETE FROM link_product_events; DELETE FROM link_product; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();
