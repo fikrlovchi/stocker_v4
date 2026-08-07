@@ -8,16 +8,23 @@ import Users from "./pages/Users";
 import Labels from "./pages/Labels";
 import Packing from "./pages/Packing";
 import Projects from "./pages/Projects";
-import Variables from "./pages/Variables";
+import UzumOrders from "./pages/UzumOrders";
+import Config from "./pages/Config";
 
 // Menyu — bo'lim kaliti bilan. Ko'rinishi foydalanuvchi ruxsatiga bog'liq;
 // server esa har so'rovda o'zi tekshiradi (menyu yashirish himoya emas).
+//
+// Kalitlar `user_permissions` dagi qiymatlar — ularni o'zgartirib bo'lmaydi.
+// Ko'rinadigan nom `nav.<kalit>` tarjimasidan keladi, shuning uchun
+// "Uzum order to MC" → "Integratsiyalar" ga aylanishi uchun migratsiya
+// kerak bo'lmadi.
 const NAV = [
-  { section: "orders_to_mc", to: "/orders-to-mc" },
+  { section: "orders_to_mc", to: "/integrations" },
+  { section: "uzum_orders", to: "/uzum-orders" },
   { section: "packing", to: "/packing" },
   { section: "labels", to: "/labels" },
   { section: "users", to: "/users" },
-  { section: "settings", to: "/variables" },
+  { section: "settings", to: "/config" },
 ];
 
 function Sidebar() {
@@ -87,10 +94,18 @@ function Shell() {
         <Routes>
           <Route path="/" element={<Navigate to={first ? first.to : "/no-access"} replace />} />
           <Route
-            path="/orders-to-mc"
+            path="/integrations"
             element={
               <Guarded section="orders_to_mc">
                 <Projects />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/uzum-orders"
+            element={
+              <Guarded section="uzum_orders">
+                <UzumOrders />
               </Guarded>
             }
           />
@@ -119,13 +134,16 @@ function Shell() {
             }
           />
           <Route
-            path="/variables"
+            path="/config"
             element={
               <Guarded section="settings">
-                <Variables />
+                <Config />
               </Guarded>
             }
           />
+          {/* Eski manzillar — saqlangan havolalar buzilmasin. */}
+          <Route path="/orders-to-mc" element={<Navigate to="/integrations" replace />} />
+          <Route path="/variables" element={<Navigate to="/config" replace />} />
           <Route
             path="/no-access"
             element={

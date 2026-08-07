@@ -1,12 +1,16 @@
 // MoySklad remap 1.2 klienti. 429 (tezlik limiti: 45 so'rov / 3 s) kelganda
 // server aytgan intervalcha kutib qayta uriniladi — uzumOrderToMC/src/moysklad.js
 // dagi msFetch bilan bir xil mantiq.
-import { config, env } from "../config.js";
+import { config } from "../config.js";
+import { getMoyskladToken } from "./token.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function msFetch(url, options = {}) {
-  if (!env.moyskladToken) throw new Error("MOYSKLAD_TOKEN o'rnatilmagan");
+  // Token har so'rovda o'qiladi (import paytida emas): Konfiguratsiyada
+  // o'zgartirilsa servisni qayta ishga tushirish kerak bo'lmasin.
+  const token = getMoyskladToken();
+  if (!token) throw new Error("MoySklad tokeni o'rnatilmagan (Konfiguratsiya → MoySklad)");
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     const response = await fetch(url, {
@@ -14,7 +18,7 @@ export async function msFetch(url, options = {}) {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json;charset=utf-8",
-        Authorization: "Bearer " + env.moyskladToken,
+        Authorization: "Bearer " + token,
         ...(options.headers || {}),
       },
     });

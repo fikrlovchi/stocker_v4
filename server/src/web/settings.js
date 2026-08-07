@@ -3,8 +3,8 @@
 // Nega serverda: ilgari bu qiymatlar brauzerning localStorage'ida edi
 // (`uzumPdfCfg`). Bir kompyuterda moslab qo'yilgan bo'lsa, boshqasida yo'q —
 // va yorliq boshqacha chiqardi. Endi qiymat bazada: kim ochsa ham bir xil.
-import { db } from "../db/index.js";
 import logger from "../logger.js";
+import { getSetting, setSetting, deleteSetting } from "../settings.js";
 
 export const SHK_CONFIG_KEY = "labels.shkConfig";
 
@@ -31,20 +31,8 @@ export const DEFAULT_SHK_CONFIG = {
   },
 };
 
-function readRaw(key) {
-  const row = db.prepare("SELECT value, updated_at, updated_by FROM app_settings WHERE key = ?").get(key);
-  if (!row) return null;
-  try {
-    return { value: JSON.parse(row.value), updatedAt: row.updated_at, updatedBy: row.updated_by };
-  } catch {
-    // Buzuq JSON standartni bloklamasin.
-    logger.warn(`app_settings.${key} JSON emas — standart ishlatiladi`);
-    return null;
-  }
-}
-
 export function getShkConfig() {
-  const saved = readRaw(SHK_CONFIG_KEY);
+  const saved = getSetting(SHK_CONFIG_KEY);
   if (!saved) return { config: DEFAULT_SHK_CONFIG, isDefault: true, updatedAt: null, updatedBy: null };
   // Saqlangan qiymat to'liq bo'lmasligi mumkin (yangi maydon qo'shilgan) —
   // standart ustiga qo'yiladi.
@@ -62,18 +50,13 @@ export function getShkConfig() {
 }
 
 export function setShkConfig(config, login) {
-  db.prepare(
-    `INSERT INTO app_settings (key, value, updated_at, updated_by)
-     VALUES (?, ?, datetime('now'), ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value,
-       updated_at = excluded.updated_at, updated_by = excluded.updated_by`
-  ).run(SHK_CONFIG_KEY, JSON.stringify(config), login || null);
+  setSetting(SHK_CONFIG_KEY, config, login);
   logger.info(`Yorliq standart o'lchamlari yangilandi (${login})`);
   return getShkConfig();
 }
 
 export function resetShkConfig(login) {
-  db.prepare("DELETE FROM app_settings WHERE key = ?").run(SHK_CONFIG_KEY);
+  deleteSetting(SHK_CONFIG_KEY);
   logger.info(`Yorliq o'lchamlari standartga qaytarildi (${login})`);
   return getShkConfig();
 }

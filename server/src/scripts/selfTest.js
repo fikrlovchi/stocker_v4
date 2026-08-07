@@ -780,6 +780,72 @@ if (!fs.existsSync(PANEL_MIGRATIONS)) {
   }
 
   await new Promise((r) => varsServer.close(r));
+
+  /* ---------- 14. Telegram katalogi (v3 ko'chishi) ---------- */
+
+  // Eski `telegram_bots/chats/topics` (panel'niki) yuqorida to'ldirildi —
+  // shuning uchun ko'chirish shu yerda, aynan haqiqiy ma'lumot ustida
+  // sinaladi.
+  const tg = await import("../telegram/index.js");
+
+  const imported = tg.importLegacyTelegram();
+  check("tg: eski botlar ko'chdi", imported.bots, 1);
+  // Bitta chat + bitta mavzu = ikkita manzil (guruh va mavzuli guruh).
+  check("tg: chat va mavzu ikki manzil bo'ldi", imported.chats, 2);
+  check("tg: takror ko'chirish yangi yozuv yasamaydi", tg.importLegacyTelegram(), { bots: 0, chats: 0 });
+
+  const tgChats = tg.listChats();
+  check("tg: mavzuli guruh yasaldi", tgChats.filter((c) => c.type === "topic_group").map((c) => c.topic_id), ["7"]);
+  check("tg: mavzu nomi guruh bilan birga", tgChats.find((c) => c.type === "topic_group").name, "chat / mavzu");
+
+  const bot = tg.createBot({ name: "Sinov", token: "111:AAA" }, "root");
+  const chat = tg.createChat({ name: "Ombor", chatId: "-100500", type: "group" }, "root");
+  check("tg: bot qo'shildi", bot.name, "Sinov");
+  check("tg: chat turi standart", chat.type, "group");
+
+  // Mavzusiz turda topic_id saqlanib qolmasligi kerak — aks holda xabar
+  // noto'g'ri joyga ketardi.
+  const noTopic = tg.updateChat(chat.id, { type: "group", topicId: "99" }, "root");
+  check("tg: guruhda mavzu tozalanadi", noTopic.topic_id, null);
+
+  let topicErr = "";
+  try {
+    tg.createChat({ name: "X", chatId: "-1", type: "topic_group" }, "root");
+  } catch (e) {
+    topicErr = e.message;
+  }
+  check("tg: mavzuli guruh mavzusiz qo'shilmaydi", topicErr, "Mavzuli guruh uchun mavzu ID kerak");
+
+  check("tg: biriktirilmagan holat", tg.getBinding("uzum_stock").bot_id, null);
+  tg.setBinding("uzum_stock", { botId: bot.id, chatId: chat.id }, "root");
+  check("tg: biriktirildi", tg.getBinding("uzum_stock").bot_id, bot.id);
+
+  // Ishlatilayotgan bot o'chirilmasligi kerak — integratsiya jim qolmasin.
+  let delErr = "";
+  try {
+    tg.removeBot(bot.id);
+  } catch (e) {
+    delErr = e.message;
+  }
+  check("tg: ishlatilayotgan bot o'chmaydi", delErr, "Bot ishlatilmoqda: uzum_stock");
+
+  // Telegram sozlanmagan bo'lsa `notify` XATO BERMAYDI — asosiy ish
+  // (qoldiq yuborish) shu sababdan to'xtab qolmasligi kerak.
+  check("tg: biriktirilmagan integratsiya jim o'tadi", (await tg.notify("packing", "x")).reason, "biriktirilmagan");
+
+  /* ---------- 15. MoySklad tokeni Konfiguratsiyada ---------- */
+
+  const mc = await import("../moysklad/token.js");
+
+  check("mc: boshida token yo'q", mc.moyskladTokenInfo().source, "none");
+  mc.setMoyskladToken("abcdef0123456789xyz", "root");
+  check("mc: baza manba bo'ldi", mc.moyskladTokenInfo().source, "db");
+  check("mc: token niqoblanadi", mc.moyskladTokenInfo().masked, "abcdef…9xyz");
+  check("mc: klient shu tokenni oladi", mc.getMoyskladToken(), "abcdef0123456789xyz");
+  // Baza qiymati bor ekan, `.env` dan ko'chirish qaytadan yozmasligi kerak.
+  check("mc: takroriy ko'chirish o'tkazib yuboriladi", mc.importLegacyMoyskladToken(), false);
+  mc.clearMoyskladToken("root");
+  check("mc: o'chirilgach manba yo'q", mc.moyskladTokenInfo().source, "none");
 }
 
 /* ---------------- Yakun ---------------- */

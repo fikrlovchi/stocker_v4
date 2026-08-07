@@ -4,12 +4,15 @@
 // migratsiya talab qilmasin), shuning uchun to'g'ri qiymatlar ro'yxati
 // SHU YERDA. Server har so'rovda shu bo'yicha tekshiradi — menyuni yashirish
 // yetarli emas, aks holda URL'ni qo'lda yozib kirish mumkin bo'lardi.
+// Kalitlar O'ZGARMAYDI: `user_permissions.section` da aynan shular yozilgan,
+// nomni o'zgartirsak hamma ruxsat yo'qolardi. Ko'rinadigan nom esa erkin.
 export const SECTIONS = [
-  { key: "orders_to_mc", label: "Uzum order to MC" },
+  { key: "orders_to_mc", label: "Integratsiyalar" },
+  { key: "uzum_orders", label: "Uzum buyurtmalari" },
   { key: "packing", label: "Stocker — yig'ish" },
   { key: "labels", label: "Yorliqlar" },
   { key: "users", label: "Foydalanuvchilar va ruxsatlar" },
-  { key: "settings", label: "Sozlamalar" },
+  { key: "settings", label: "Konfiguratsiya" },
 ];
 
 export const SECTION_KEYS = SECTIONS.map((s) => s.key);

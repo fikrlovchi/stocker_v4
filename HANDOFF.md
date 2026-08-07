@@ -2,7 +2,10 @@
 
 Yangi sessiyada ishni davom ettirish uchun. **Avval o'qing:**
 [docs/CONSOLIDATION.md](docs/CONSOLIDATION.md) — yagona tizimga birlashtirish
-rejasi va nima bajarilgani. Loyihaning dastlabki dizayni [PLAN.md](PLAN.md) da.
+rejasi va nima bajarilgani, so'ng
+[docs/V3-MIGRATION.md](docs/V3-MIGRATION.md) — AppSheet v3 bazasini (Google
+Sheets) serverga ko'chirish rejasi, **hozirgi asosiy ish**. Loyihaning
+dastlabki dizayni [PLAN.md](PLAN.md) da.
 
 Oxirgi holat: 2026-08-07. Barcha kod **bitta repo**da (`stocker_v4`),
 serverda `/root/stocker`, domen **stocker.uz**.
@@ -36,8 +39,9 @@ cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart sto
 | Kirish, foydalanuvchilar va ruxsatlar | ✅ | `users` + bo'lim ruxsatlari + `mobile` bayrog'i |
 | Yig'ish (partiyalar) | ✅ | ID ro'yxati, do'kon bo'yicha 2/22, skan doirasi |
 | Yorliqlar | ✅ | SPA ichida; Yangi (40×30) / Eski format; umumiy standart o'lchamlar |
-| Uzum order to MC (loyihalar) | ✅ | ishga tushishlar, loglar, systemd boshqaruvi |
-| O'zgaruvchilar katalogi | ✅ | Sheets · Telegram · Uzum kabinet/do'kon · `.env` bog'lamalari |
+| Integratsiyalar (ex "Uzum order to MC") | ✅ | ishga tushishlar, loglar, systemd boshqaruvi |
+| Konfiguratsiya | ✅ | Uzum · MoySklad token · Telegram · Google Sheets · Qoldiq modifikatsiyasi (bo'sh) |
+| Uzum buyurtmalari | ⏳ | karkas bor, ma'lumot 5-bosqichda ([docs/V3-MIGRATION.md](docs/V3-MIGRATION.md)) |
 | Mobil ilova | ✅ | v0.6.1 — do'kon nomi, 2/22, PRINT, uz/ru, oq/qora, tarix |
 | Desktop client | ✅ | v0.4.0 — navbatni tozalash, uz/ru |
 | **`panel/` ni o'chirish** | ⏳ | **keyingi ish** — hamma bo'lim ko'chdi, sinovdan keyin o'chiriladi |
@@ -204,6 +208,13 @@ cd /root/stocker && git pull && sudo systemctl restart stocker-server
 ```bash
 cd /root/stocker/server && node src/scripts/refreshOnce.js     # keshni bir marta
 cd /root/stocker/server && node src/scripts/syncBarcodes.js    # to'liq assortiment
+```
+
+v3 jadvalining tuzilmasini chiqarish (`docs/v3-sheet-structure.json` ga
+yoziladi, tokenlar niqoblanadi):
+
+```bash
+cd /root/stocker/server && node src/scripts/dumpSheet.js
 ```
 
 Diagnostika (`TOKEN` = `.env` dagi `SERVICE_TOKEN`):

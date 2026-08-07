@@ -15,6 +15,8 @@ import {
   findAmbiguousBarcodes,
 } from "./cache/queries.js";
 import { fullAssortmentSync } from "./moysklad/productBarcodes.js";
+import { importLegacyMoyskladToken } from "./moysklad/token.js";
+import { importLegacyTelegram } from "./telegram/index.js";
 import { startHeartbeat, countError, countSuccess } from "./panel/reporter.js";
 import { scanRouter } from "./scan/routes.js";
 import { expireStaleSessions } from "./scan/sessions.js";
@@ -202,6 +204,15 @@ attachPrintHub(server);
 
 server.listen(env.port, env.host, async () => {
   logger.info(`stocker-server ${env.host}:${env.port} da ishga tushdi`);
+
+  // Konfiguratsiyaga ko'chirish — ikkalasi ham takroriy chaqirilishga
+  // chidamli. Xato bo'lsa servis to'xtamasin: bular yordamchi qadam.
+  try {
+    importLegacyMoyskladToken();
+    importLegacyTelegram();
+  } catch (e) {
+    logger.error(`Konfiguratsiyaga ko'chirishda xato: ${e.message}`);
+  }
 
   startHeartbeat(() => {
     const s = lastRefresh.summary;

@@ -78,17 +78,30 @@ export const api = {
   variables: () => call("/variables"),
   addSheet: (name, sheetId) => call("/variables/sheets", { method: "POST", body: { name, sheetId } }),
   addSheetList: (id, name) => call(`/variables/sheets/${id}/lists`, { method: "POST", body: { name } }),
-  addBot: (name, token) => call("/variables/telegram/bots", { method: "POST", body: { name, token } }),
-  addChat: (botId, name, chatId) =>
-    call(`/variables/telegram/bots/${botId}/chats`, { method: "POST", body: { name, chatId } }),
-  addTopic: (chatId, name, topicId) =>
-    call(`/variables/telegram/chats/${chatId}/topics`, { method: "POST", body: { name, topicId } }),
   addCabinet: (name, token) => call("/variables/uzum/cabinets", { method: "POST", body: { name, token } }),
   syncUzumShops: (id) => call(`/variables/uzum/cabinets/${id}/sync`, { method: "POST" }),
   renameShop: (id, name) => call(`/variables/uzum/shops/${id}`, { method: "PATCH", body: { name } }),
   deleteVar: (kind, id) => call(`/variables/${kind}/${id}`, { method: "DELETE" }),
   addBinding: (payload) => call("/variables/bindings", { method: "POST", body: payload }),
   deleteBinding: (id) => call(`/variables/bindings/${id}`, { method: "DELETE" }),
+
+  // Telegram (Konfiguratsiya → Telegram). Bot va chat alohida katalog,
+  // integratsiyaga esa "bot + chat" juftligi biriktiriladi.
+  telegram: () => call("/telegram"),
+  addTgBot: (body) => call("/telegram/bots", { method: "POST", body }),
+  editTgBot: (id, body) => call(`/telegram/bots/${id}`, { method: "PATCH", body }),
+  deleteTgBot: (id) => call(`/telegram/bots/${id}`, { method: "DELETE" }),
+  testTgBot: (id) => call(`/telegram/bots/${id}/test`, { method: "POST" }),
+  addTgChat: (body) => call("/telegram/chats", { method: "POST", body }),
+  editTgChat: (id, body) => call(`/telegram/chats/${id}`, { method: "PATCH", body }),
+  deleteTgChat: (id) => call(`/telegram/chats/${id}`, { method: "DELETE" }),
+  bindTg: (key, botId, chatId) => call(`/telegram/integrations/${key}`, { method: "PUT", body: { botId, chatId } }),
+  testTgBinding: (key) => call(`/telegram/integrations/${key}/test`, { method: "POST" }),
+
+  moysklad: () => call("/moysklad"),
+  setMcToken: (token) => call("/moysklad/token", { method: "PUT", body: { token } }),
+  clearMcToken: () => call("/moysklad/token", { method: "DELETE" }),
+  testMc: () => call("/moysklad/test", { method: "POST" }),
 
   listProjects: () => call("/projects"),
   getProject: (slug) => call(`/projects/${encodeURIComponent(slug)}`),

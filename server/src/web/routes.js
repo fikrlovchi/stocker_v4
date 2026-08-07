@@ -14,6 +14,8 @@ import * as batches from "../packing/batches.js";
 import { labelsRouter } from "./labels.js";
 import { projectsRouter } from "./projects.js";
 import { variablesRouter } from "./variables.js";
+import { telegramRouter } from "./telegram.js";
+import { moyskladRouter } from "./moysklad.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -202,11 +204,13 @@ export function webRouter() {
 
   router.use("/projects", requireWeb, requireSection("orders_to_mc"), projectsRouter());
 
-  /* ---------- o'zgaruvchilar katalogi ---------- */
+  /* ---------- Konfiguratsiya ---------- */
 
-  // Katalog `.env` qiymatlarini (tokenlar!) boshqaradi — shuning uchun
-  // `settings` ruxsati talab qilinadi, `orders_to_mc` emas.
+  // Bu yerdagi hamma narsa tokenlar bilan ishlaydi — `settings` ruxsati
+  // talab qilinadi, `orders_to_mc` emas.
   router.use("/variables", requireWeb, requireSection("settings"), variablesRouter());
+  router.use("/telegram", requireWeb, requireSection("settings"), telegramRouter());
+  router.use("/moysklad", requireWeb, requireSection("settings"), moyskladRouter());
 
   /* ---------- yorliqlar (uzumPDFs) ---------- */
 

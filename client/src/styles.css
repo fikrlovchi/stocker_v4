@@ -155,6 +155,10 @@ button.link { background: none; border: none; color: var(--danger); padding: 0; 
 .badge.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .badge.off { background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
 
+/* Konfiguratsiya tablari — bo'limlar bir sahifada, ostidagi chiziq ularni
+   sahifa mazmunidan ajratadi. */
+.tabs { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+
 /* Ruxsat belgilash — checkbox'lar qatori */
 .perms { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .perms label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
