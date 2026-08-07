@@ -53,9 +53,14 @@ export function variablesRouter() {
 
   /* ---------- ko'rish ---------- */
 
+  // Ustunlar panel migratsiyalaridagi nomlar bilan bir xil bo'lishi shart:
+  // jadvallar shu yerda emas, `panel/src/db/migrations` da yaratilgan.
+  // Masalan `google_sheets` da `url` ustuni YO'Q — mavjud bo'lmagan ustun
+  // so'ralsa better-sqlite3 so'rov paytida xato beradi va butun bo'lim
+  // ochilmay qoladi.
   router.get("/", (req, res) => {
     res.json({
-      sheets: all("SELECT id, name, sheet_id, url FROM google_sheets ORDER BY name").map((s) => ({
+      sheets: all("SELECT id, name, sheet_id FROM google_sheets ORDER BY name").map((s) => ({
         ...s,
         lists: all("SELECT id, name FROM sheet_lists WHERE sheet_id = ? ORDER BY name", s.id),
       })),
@@ -78,10 +83,9 @@ export function variablesRouter() {
   /* ---------- Google Sheets ---------- */
 
   router.post("/sheets", (req, res) => {
-    const { name, sheetId, url } = req.body || {};
+    const { name, sheetId } = req.body || {};
     if (!name?.trim() || !sheetId?.trim()) return res.status(400).json({ error: "Nom va sheet ID kerak" });
-    db.prepare("INSERT INTO google_sheets (name, sheet_id, url) VALUES (?, ?, ?)")
-      .run(name.trim(), sheetId.trim(), url?.trim() || null);
+    db.prepare("INSERT INTO google_sheets (name, sheet_id) VALUES (?, ?)").run(name.trim(), sheetId.trim());
     res.json({ ok: true });
   });
 
@@ -176,30 +180,11 @@ export function variablesRouter() {
     res.json({ ok: true });
   });
 
-  /* ---------- o'chirish ---------- */
-
-  // Har jadval uchun alohida route yozish o'rniga bitta — lekin jadval nomi
-  // ATAYLAB ro'yxatdan olinadi, aks holda ixtiyoriy jadvalni o'chirish
-  // mumkin bo'lardi.
-  const DELETABLE = {
-    sheet: "google_sheets",
-    list: "sheet_lists",
-    bot: "telegram_bots",
-    chat: "telegram_chats",
-    topic: "telegram_topics",
-    cabinet: "uzum_cabinets",
-    shop: "uzum_shops",
-  };
-
-  router.delete("/:kind/:id", (req, res) => {
-    const table = DELETABLE[req.params.kind];
-    if (!table) return res.status(400).json({ error: "Noma'lum tur" });
-    db.prepare(`DELETE FROM "${table}" WHERE id = ?`).run(Number(req.params.id));
-    if (table === "uzum_shops" || table === "uzum_cabinets") clearShopNameCache();
-    res.json({ ok: true });
-  });
-
   /* ---------- loyihaning .env bog'lamalari ---------- */
+
+  // DIQQAT: bu blok pastdagi `DELETE /:kind/:id` dan OLDIN turishi kerak —
+  // aks holda `DELETE /bindings/5` o'sha umumiy route'ga tushib "Noma'lum
+  // tur" qaytaradi.
 
   router.post("/bindings", (req, res) => {
     const { projectSlug, envKey, sourceType, sourceId } = req.body || {};
@@ -221,6 +206,29 @@ export function variablesRouter() {
 
   router.delete("/bindings/:id", (req, res) => {
     db.prepare("DELETE FROM project_env_bindings WHERE id = ?").run(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  /* ---------- o'chirish ---------- */
+
+  // Har jadval uchun alohida route yozish o'rniga bitta — lekin jadval nomi
+  // ATAYLAB ro'yxatdan olinadi, aks holda ixtiyoriy jadvalni o'chirish
+  // mumkin bo'lardi.
+  const DELETABLE = {
+    sheet: "google_sheets",
+    list: "sheet_lists",
+    bot: "telegram_bots",
+    chat: "telegram_chats",
+    topic: "telegram_topics",
+    cabinet: "uzum_cabinets",
+    shop: "uzum_shops",
+  };
+
+  router.delete("/:kind/:id", (req, res) => {
+    const table = DELETABLE[req.params.kind];
+    if (!table) return res.status(400).json({ error: "Noma'lum tur" });
+    db.prepare(`DELETE FROM "${table}" WHERE id = ?`).run(Number(req.params.id));
+    if (table === "uzum_shops" || table === "uzum_cabinets") clearShopNameCache();
     res.json({ ok: true });
   });
 

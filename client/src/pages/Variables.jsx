@@ -29,7 +29,18 @@ export default function Variables() {
     }
   };
 
-  if (!data) return <div className="content muted">{t("app.loading")}</div>;
+  // Sarlavha va xato har doim chiziladi: ilgari `!data` bo'lganda faqat
+  // "Yuklanmoqda..." qaytardi va so'rov xatosi ekranga umuman chiqmasdi —
+  // bo'lim abadiy yuklanayotgandek ko'rinardi.
+  if (!data) {
+    return (
+      <div className="content">
+        <h1>{t("vars.title")}</h1>
+        <p className="page-sub">{t("vars.sub")}</p>
+        {error ? <div className="card error">{error}</div> : <div className="card muted">{t("app.loading")}</div>}
+      </div>
+    );
+  }
 
   return (
     <div className="content">

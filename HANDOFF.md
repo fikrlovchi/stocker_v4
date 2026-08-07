@@ -176,6 +176,21 @@ izohlangan.
 20. **PDF'ni `<iframe src>` bilan ko'rsatib bo'lmaydi** — sarlavha
     yuborilmaydi. SPA faylni `fetch` bilan olib blob URL yasaydi.
 
+21. **Panel jadvallarining ustun nomlarini taxmin qilmang.** `google_sheets`
+    da `url` ustuni **yo'q** (`panel/src/db/migrations/003_variables.sql`),
+    lekin `server/src/web/variables.js` uni so'ragan edi → har so'rov
+    `no such column: url` bilan yiqilib, O'zgaruvchilar bo'limi "Yuklanmoqda..."
+    da qotib qolgan. Jadvallar server migratsiyalarida emas, panel'nikida
+    yaratilgan — SQL yozishdan oldin o'sha fayllarga qarang. selfTest endi
+    panel sxemasini qo'llab, routerni HTTP orqali sinaydi (13-bo'lim).
+
+22. **SPA'da `if (!data) return <Yuklanmoqda/>` — yashirin tuzoq.** So'rov
+    xato bersa `data` hech qachon to'lmaydi va xato ekranga chiqmaydi:
+    foydalanuvchi abadiy "Yuklanmoqda..." ni ko'radi. Sarlavha va xato
+    kartasi har doim chizilishi kerak (`Projects.jsx` dagidek). Server
+    tomonda ham global JSON xato ishlovchisi bor (`index.js`) — standart
+    Express HTML qaytarardi, SPA uni o'qiy olmasdi.
+
 ---
 
 ## 5. Buyruqlar

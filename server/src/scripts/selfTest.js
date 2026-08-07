@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // DB_FILE'ni config.js import qilinishidan OLDIN o'rnatamiz (dotenv mavjud
 // process.env qiymatini bosib o'tmaydi), shuning uchun dinamik import.
@@ -701,6 +702,85 @@ const mobileToken = auth.login({ login: "packer1", password: "parol1", ip: "5.3.
 check("web: mobil token doirasi 'mobile'", auth.resolveToken(mobileToken).scope, "mobile");
 
 db.exec("DELETE FROM batch_orders; DELETE FROM batches; DELETE FROM user_flags; DELETE FROM user_permissions; DELETE FROM users; DROP TABLE project_users; DELETE FROM operator_tokens");
+
+/* ---------- 13. O'zgaruvchilar katalogi ---------- */
+
+// Bu bo'limning jadvallari panel migratsiyalarida yaratilgan, server'nikida
+// emas. Shuning uchun bu yerda HAQIQIY panel sxemasi qo'llanadi va router
+// HTTP orqali chaqiriladi: mos kelmagan ustun nomi (bir marta `google_sheets.url`
+// bo'lgani kabi) faqat so'rov paytida bilinadi va butun bo'limni yopib qo'yadi.
+const PANEL_MIGRATIONS = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../panel/src/db/migrations"
+);
+
+if (!fs.existsSync(PANEL_MIGRATIONS)) {
+  console.log("\n(panel/ topilmadi — o'zgaruvchilar katalogi tekshirilmadi)");
+} else {
+  for (const f of fs.readdirSync(PANEL_MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
+    db.exec(fs.readFileSync(path.join(PANEL_MIGRATIONS, f), "utf8"));
+  }
+
+  const express = (await import("express")).default;
+  const { variablesRouter } = await import("../web/variables.js");
+
+  const varsApp = express();
+  varsApp.use(express.json());
+  varsApp.use("/variables", variablesRouter());
+  varsApp.use((err, req, res, next) => res.status(500).json({ error: err.message }));
+
+  const varsServer = varsApp.listen(0, "127.0.0.1");
+  await new Promise((r) => varsServer.once("listening", r));
+  const varsBase = `http://127.0.0.1:${varsServer.address().port}`;
+
+  const vars = async (p, method = "GET", body) => {
+    const res = await fetch(varsBase + p, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const text = await res.text();
+    try {
+      return { status: res.status, body: text ? JSON.parse(text) : null };
+    } catch {
+      return { status: res.status, body: { raw: text.slice(0, 120) } };
+    }
+  };
+
+  // Asosiy holat: bo'sh katalog ham 200 qaytarishi kerak — SPA shu javobni
+  // kutib turadi, xato bo'lsa bo'lim "Yuklanmoqda..." da qotib qoladi.
+  // Xato matni alohida tekshiriladi: sxema mos kelmasa yiqilish xabarining
+  // o'zida sabab ko'rinadi ("no such column: ...").
+  const empty = await vars("/variables");
+  check("vars: bo'sh katalog xatosiz", empty.body?.error ?? null, null);
+  check("vars: bo'sh katalog 200", empty.status, 200);
+
+  if (empty.status !== 200) {
+    console.log("\n(katalog o'qilmadi — qolgan tekshiruvlar o'tkazib yuborildi)");
+  } else {
+    check("vars: javob kalitlari", Object.keys(empty.body).sort(), ["cabinets", "sheets", "sources", "telegramBots"]);
+
+    check("vars: sheet qo'shildi", (await vars("/variables/sheets", "POST", { name: "Buyurtmalar", sheetId: "abc" })).status, 200);
+    check("vars: list qo'shildi", (await vars("/variables/sheets/1/lists", "POST", { name: "uzum_order" })).status, 200);
+    check("vars: bot qo'shildi", (await vars("/variables/telegram/bots", "POST", { name: "bot", token: "t" })).status, 200);
+    check("vars: chat qo'shildi", (await vars("/variables/telegram/bots/1/chats", "POST", { name: "chat", chatId: "-100" })).status, 200);
+    check("vars: mavzu qo'shildi", (await vars("/variables/telegram/chats/1/topics", "POST", { name: "mavzu", topicId: "7" })).status, 200);
+
+    const filled = await vars("/variables");
+    check("vars: sheet o'qildi", filled.body.sheets.map((s) => [s.name, s.sheet_id]), [["Buyurtmalar", "abc"]]);
+    check("vars: list ichma-ich", filled.body.sheets[0].lists.map((l) => l.name), ["uzum_order"]);
+    check("vars: chat va mavzu ichma-ich", filled.body.telegramBots[0].chats[0].topics.map((t) => t.topic_id), ["7"]);
+
+    check("vars: nom yoki ID bo'lmasa 400", (await vars("/variables/sheets", "POST", { name: " " })).status, 400);
+
+    // `DELETE /bindings/:id` umumiy `DELETE /:kind/:id` dan oldin turishi kerak.
+    check("vars: bindings o'chirish o'z route'iga tushadi", (await vars("/variables/bindings/1", "DELETE")).status, 200);
+    check("vars: noma'lum tur 400", (await vars("/variables/xyz/1", "DELETE")).status, 400);
+    check("vars: list o'chirildi", (await vars("/variables/list/1", "DELETE")).status, 200);
+  }
+
+  await new Promise((r) => varsServer.close(r));
+}
 
 /* ---------------- Yakun ---------------- */
 

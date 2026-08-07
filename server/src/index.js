@@ -185,6 +185,15 @@ app.use("/print", requireServiceToken, printAdminRouter());
 
 app.use((req, res) => res.status(404).json({ error: "Topilmadi" }));
 
+// Kutilmagan xato. Standart Express ishlovchisi HTML qaytaradi — SPA uni
+// tushuna olmaydi va bo'lim "Yuklanmoqda..." da qotib qoladi. Shuning uchun
+// har doim JSON: sabab ekranga chiqadi va logga tushadi.
+app.use((err, req, res, next) => {
+  logger.error(`${req.method} ${req.originalUrl} — ${err.message}`);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: err.message || "Server xatosi" });
+});
+
 /* ==================== Ishga tushirish ==================== */
 
 // WebSocket uchun HTTP server aniq yaratiladi (app.listen o'rniga).
