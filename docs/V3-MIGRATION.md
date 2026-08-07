@@ -82,16 +82,56 @@ Jadval eksportini kutmasdan qilingan ish:
 selfTest: 190 → **209** tekshiruv (Telegram katalogi, ko'chirish, biriktirish,
 MoySklad tokeni).
 
-### 2-bosqich — o'qish (jadval eksporti kelgach)
+### 2–3-bosqich — o'qish va qoldiq hisobi ✅ kod tayyor (2026-08-07)
 
-`mc_product` va `mc_stock` serverga: MoySklad'dan to'g'ridan-to'g'ri o'qish,
-bazaga yozish, natijani jadvaldagi qiymat bilan solishtirish. Mos kelsa
-`MSStockSync` va `importMoySkladShort` triggerlari o'chiriladi.
+Jadval tuzilmasi olindi (`dumpSheet.js`), formulalar kodga ko'chirildi.
+Serverda **hech narsa yozilmaydi** — na Uzumga, na jadvalga.
 
-### 3-bosqich — `link_product` va qoldiq hisobi
+* **Jadvallar** — `011_v3_stock.sql`: `mc_product`, `mc_stock`,
+  `link_product`, `uzum_stock_mod`, `uzum_stock_mod_detail`,
+  `uzum_mod_default`. Nomlar manbadagi listlar bilan bir xil.
+* **MoySklad → baza** — [`moysklad/assortment.js`](../server/src/moysklad/assortment.js):
+  assortiment (4 tur, sahifalab, upsert) va qoldiq (`report/stock/all/current`,
+  ombor `config.json:moysklad.stockStoreId`, to'liq almashtiriladi).
+  `IMPORTRANGE` va oraliq jadval kerak emas.
+* **Hisoblash** — [`stock/rules.js`](../server/src/stock/rules.js): `link_product!L`
+  va `!F` formulalarining **aynan** o'zi, toza funksiya sifatida. Sheets'ning
+  ikkita xatti-harakati ataylab takrorlangan: `INT()` pastga yaxlitlaydi va
+  `N` bo'sh bo'lsa natija 0 (manbada `#DIV/0!` → `IFERROR` → 0).
+* **Jadvaldan ko'chirish** — [`stock/importFromSheet.js`](../server/src/stock/importFromSheet.js):
+  `link_product` va qoidalar. `F`/`L` ustunlari ko'chirilmaydi — ular
+  hisoblanadigan qiymat, manba emas.
+* **Solishtirish** — [`scripts/v3Sync.js`](../server/src/scripts/v3Sync.js) server
+  hisobini jadvaldagi bugungi qiymat bilan solishtiradi va farqni ko'rsatadi.
+  Farq bo'lsa exit kodi 1.
 
-`link_product!F1` formulasi va `uzum_stock_mod`/`uzum_stock_mod_detail`
-mantiqi server kodiga ko'chadi. **Blokda:** formulalar matni kerak.
+selfTest: 209 → **236** (hisoblash mantiqi: standart qoida, priority, uchala
+operator, `use_default`, bo'sh natija, kartochka miqdori).
+
+#### Hisoblash qoidasi (o'zbekcha)
+
+`L (haqiqiy qoldiq)` = MoySklad qoldig'i, `mc_product.external_id` bo'yicha
+topiladi. MoySklad tovari biriktirilmagan yoki topilmasa — bo'sh (0 emas).
+
+`F (Uzumga yuboriladigan son)`:
+
+1. Qoldiq bo'sh yoki manfiy → **0**
+2. Shu SKU uchun `uzum_stock_mod` qoidasi bormi — `priority` kichigidan
+   boshlab birinchi mos kelgani olinadi (`greater than` / `less than` / `equal`)
+3. Qoida natijasi **bo'sh** bo'lsa — haqiqiy qoldiq qoladi. Bugungi
+   ma'lumotda aynan shu ishlatilgan: "999999 dan kam" + bo'sh natija =
+   "bu tovarga standart qoida tegmasin"
+4. Qoida yo'q/mos kelmasa — `uzum_mod_default` (hozir bitta: **10 dan kam → 0**)
+5. Natija `card_quantity` ga bo'linadi: kartochkada 3 ta tovar bo'lsa,
+   MoySkladdagi 100 dona → Uzumga **33**
+
+> **Eski `@N` / `$` qo'shimchasi.** `K` ustunidagi qiymat oxirida `@3` kabi
+> qo'shimcha bo'lsa, u ham bo'luvchi edi. Yangi tizimda bunday qo'shimcha
+> **bo'lmaydi** — External ID kiritilganda UUID `mc_product` dan darhol
+> topiladi, topilmasa xato ko'rsatiladi. Ko'chirilgan qatorlarda qo'shimcha
+> `link_product.legacy_divisor` ga ajratib olinadi (shundagina server bugungi
+> son bilan bir xil natija beradi) va import hisobotida ro'yxat qilinadi —
+> ular tozalanishi kerak.
 
 ### 4-bosqich — yozish
 
@@ -103,21 +143,30 @@ Uzumga qoldiq yuborish (`stock_updater_v3`) va barcode→MoySklad
 Server Uzum API'dan buyurtmalarni tortadi (hozir `uzum-order-to-mc` va
 `orders` keshi qiladigan ish), Google Sheets zaxira nusxa bo'lib qoladi.
 
-## Ochiq savollar
+## Buyruqlar
 
-2-bosqichni boshlash uchun jadval tuzilmasi kerak. Uni qo'lda eksport
-qilish shart emas — server o'sha jadvalga allaqachon OAuth bilan ulanadi
-(`config.json:spreadsheetId` aynan shu ID). Serverda:
+Jadval tuzilmasini qayta o'qish (natija `docs/v3-sheet-structure.json`,
+tokenlar niqoblanadi):
 
 ```bash
 cd /root/stocker/server && node src/scripts/dumpSheet.js
 ```
 
-Skript `docs/v3-sheet-structure.json` ni yozadi: har list uchun nomi, qator
-soni, sarlavhalar, birinchi ikki qator va **barcha formulalar**
-(`link_product!F1` va `!L1` shu yerda chiqadi). Tokenlar chiqmaydi —
-`mc_token` listi o'tkazib yuboriladi, uzun qiymatlar niqoblanadi.
+Ko'chirish va solishtirish:
 
-Skriptdan keyin ham qo'lda tushuntirish kerak bo'ladigan yagona narsa —
-**`uzum_stock_mod` / `uzum_stock_mod_detail` qanday shart bilan qoldiqni
-o'zgartiradi** (formula qaysi qatorni qanday tanlashini kod o'zi aytmaydi).
+```bash
+cd /root/stocker/server && node src/scripts/v3Sync.js
+```
+
+`--skip-moysklad` — MoySklad'ga tegmay faqat jadvaldan ko'chiradi.
+`--compare` — hech narsa yozmay, faqat solishtiradi.
+
+## Ochiq savollar
+
+1. **`link_product.G` (Company/token)** ko'chirilmadi: yangi tizimda token
+   `shop_id` → `uzum_shops` → `uzum_cabinets` zanjiri orqali topiladi. Bu
+   to'g'rimi, yoki qatorga to'g'ridan-to'g'ri token biriktirilishi kerakmi?
+2. **`uzum_generated` / `uzum_merged` / `link_check` / `mc_errors`** listlari
+   nima uchun kerak — ular ham ko'chadimi yoki v3 bilan qoladimi?
+3. **`user` listi** (5 qator, Telegram ID va Role bilan) — SPA'dagi
+   `users` bilan birlashadimi?

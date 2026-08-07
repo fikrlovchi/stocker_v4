@@ -848,6 +848,93 @@ if (!fs.existsSync(PANEL_MIGRATIONS)) {
   check("mc: o'chirilgach manba yo'q", mc.moyskladTokenInfo().source, "none");
 }
 
+/* ---------- 16. Qoldiq hisobi (v3 dagi link_product!L va !F) ---------- */
+
+const { mcStockFact, uzumAmount } = await import("../stock/rules.js");
+
+// Bugungi yagona standart qoida: 10 dan kam bo'lsa 0.
+const DEFAULTS = [{ quantityFrom: 10, comparison: "less than", quantityTo: 0, priority: 1 }];
+
+/* --- L: mc_stock fact --- */
+
+check("L: oddiy qoldiq", mcStockFact(100, { mcUuid: "u1" }), 100);
+check("L: MoySklad tovari biriktirilmagan", mcStockFact(100, { mcUuid: "" }), null);
+check("L: qoldiq topilmadi", mcStockFact(null, { mcUuid: "u1" }), null);
+check("L: eski @3 qo'shimchasi bo'ladi", mcStockFact(100, { mcUuid: "u1", legacyDivisor: 3 }), 33);
+check("L: pastga yaxlitlanadi", mcStockFact(8, { mcUuid: "u1", legacyDivisor: 3 }), 2);
+check("L: qoldiq 0", mcStockFact(0, { mcUuid: "u1" }), 0);
+
+/* --- F: Uzumga yuboriladigan son --- */
+
+const lp = (extra = {}) => ({ skuTitle: "UZON-1", cardQuantity: 1, ...extra });
+
+check("F: skuTitle bo'sh", uzumAmount(100, lp({ skuTitle: "" }), { defaults: DEFAULTS }), null);
+check("F: qoldiq noma'lum → 0", uzumAmount(null, lp(), { defaults: DEFAULTS }), 0);
+check("F: manfiy qoldiq → 0", uzumAmount(-5, lp(), { defaults: DEFAULTS }), 0);
+check("F: standart qoida — 10 dan kam", uzumAmount(9, lp(), { defaults: DEFAULTS }), 0);
+check("F: standart qoida chegarasi (10 o'tadi)", uzumAmount(10, lp(), { defaults: DEFAULTS }), 10);
+check("F: qoida yo'q bo'lsa kodagi zaxira ishlaydi", uzumAmount(9, lp(), { defaults: [] }), 0);
+check("F: zaxira shart — 10 dan katta", uzumAmount(50, lp(), { defaults: [] }), 50);
+
+// Kartochkada 3 ta tovar: MoySkladda 100 → Uzumga 33.
+check("F: kartochka miqdori (100 / 3)", uzumAmount(100, lp({ cardQuantity: 3 }), { defaults: DEFAULTS }), 33);
+check("F: kartochka miqdori bo'sh → 0", uzumAmount(100, lp({ cardQuantity: 0 }), { defaults: DEFAULTS }), 0);
+
+// Haqiqiy ma'lumotdagi holat: "999999 dan kam" + I=TRUE, otaning
+// "Default quantity" si bo'sh → haqiqiy qoldiq qoladi, ya'ni bu qoida
+// "10 dan kam → 0" standartini chetlab o'tish uchun.
+const bypass = {
+  defaultQuantity: null,
+  details: [{ quantityFrom: 999999, comparison: "less than", priority: 1, useDefault: true, quantityTo: null }],
+};
+check("F: bo'sh natijali qoida haqiqiy qoldiqni qoldiradi", uzumAmount(3, lp(), { mod: bypass, defaults: DEFAULTS }), 3);
+check("F: shu qoida katta sonda ham o'zgartirmaydi", uzumAmount(500, lp(), { mod: bypass, defaults: DEFAULTS }), 500);
+
+// Otaning qiymati bor: I=TRUE bo'lsa o'sha qiymat qaytadi.
+const fixed = {
+  defaultQuantity: 7,
+  details: [{ quantityFrom: 100, comparison: "less than", priority: 1, useDefault: true, quantityTo: null }],
+};
+check("F: use_default → otaning qiymati", uzumAmount(50, lp(), { mod: fixed, defaults: DEFAULTS }), 7);
+
+// Priority: kichigi ustun, birinchi mos kelgani g'olib.
+const ordered = {
+  defaultQuantity: null,
+  details: [
+    { quantityFrom: 5, comparison: "greater than", priority: 2, useDefault: false, quantityTo: 20 },
+    { quantityFrom: 5, comparison: "greater than", priority: 1, useDefault: false, quantityTo: 99 },
+  ],
+};
+check("F: priority kichigi ustun", uzumAmount(50, lp(), { mod: ordered, defaults: DEFAULTS }), 99);
+
+// Qoidasi bor, lekin shart mos kelmadi → standartga tushadi.
+const noHit = {
+  defaultQuantity: null,
+  details: [{ quantityFrom: 1000, comparison: "greater than", priority: 1, useDefault: false, quantityTo: 5 }],
+};
+check("F: qoida mos kelmasa standart ishlaydi", uzumAmount(3, lp(), { mod: noHit, defaults: DEFAULTS }), 0);
+check("F: qoida mos kelmasa, katta sonda qoldiq", uzumAmount(30, lp(), { mod: noHit, defaults: DEFAULTS }), 30);
+
+// Uchala operator.
+const op = (comparison, quantityFrom) => ({
+  defaultQuantity: null,
+  details: [{ quantityFrom, comparison, priority: 1, useDefault: false, quantityTo: 42 }],
+});
+check("F: greater than", uzumAmount(11, lp(), { mod: op("greater than", 10), defaults: DEFAULTS }), 42);
+check("F: less than", uzumAmount(9, lp(), { mod: op("less than", 10), defaults: DEFAULTS }), 42);
+check("F: equal", uzumAmount(10, lp(), { mod: op("equal", 10), defaults: DEFAULTS }), 42);
+check("F: noma'lum operator hech qachon mos kelmaydi", uzumAmount(10, lp(), { mod: op("between", 10), defaults: DEFAULTS }), 10);
+
+// Qoida natijasi ham kartochka miqdoriga bo'linadi.
+check("F: qoida natijasi ham N ga bo'linadi", uzumAmount(50, lp({ cardQuantity: 4 }), { mod: op("greater than", 10), defaults: DEFAULTS }), 10);
+
+// Qoida natijasi 0 — bu bo'sh EMAS, ya'ni haqiqiy qoldiq qaytmaydi.
+const zero = {
+  defaultQuantity: null,
+  details: [{ quantityFrom: 1, comparison: "greater than", priority: 1, useDefault: false, quantityTo: 0 }],
+};
+check("F: qoida 0 bersa 0 qaytadi", uzumAmount(500, lp(), { mod: zero, defaults: DEFAULTS }), 0);
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

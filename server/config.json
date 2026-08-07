@@ -44,6 +44,7 @@
   },
   "moysklad": {
     "baseUrl": "https://api.moysklad.ru/api/remap/1.2",
+    "stockStoreId": "a439adbf-97e3-11ed-0a80-0ca100976187",
     "canceledLookbackDays": 5,
     "barcodeTtlDays": 7,
     "missingRetryHours": 24,

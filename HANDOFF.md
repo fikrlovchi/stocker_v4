@@ -217,6 +217,13 @@ yoziladi, tokenlar niqoblanadi):
 cd /root/stocker/server && node src/scripts/dumpSheet.js
 ```
 
+v3 bazasini serverga ko'chirish va natijani jadval bilan solishtirish
+(hech narsa yozilmaydi — na Uzumga, na jadvalga):
+
+```bash
+cd /root/stocker/server && node src/scripts/v3Sync.js
+```
+
 Diagnostika (`TOKEN` = `.env` dagi `SERVICE_TOKEN`):
 
 ```bash
