@@ -13,6 +13,7 @@ import * as users from "../auth/users.js";
 import * as batches from "../packing/batches.js";
 import { labelsRouter } from "./labels.js";
 import { projectsRouter } from "./projects.js";
+import { variablesRouter } from "./variables.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -200,6 +201,12 @@ export function webRouter() {
   /* ---------- loyihalar (Uzum order to MC va boshqalar) ---------- */
 
   router.use("/projects", requireWeb, requireSection("orders_to_mc"), projectsRouter());
+
+  /* ---------- o'zgaruvchilar katalogi ---------- */
+
+  // Katalog `.env` qiymatlarini (tokenlar!) boshqaradi — shuning uchun
+  // `settings` ruxsati talab qilinadi, `orders_to_mc` emas.
+  router.use("/variables", requireWeb, requireSection("settings"), variablesRouter());
 
   /* ---------- yorliqlar (uzumPDFs) ---------- */
 

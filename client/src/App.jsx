@@ -8,6 +8,7 @@ import Users from "./pages/Users";
 import Labels from "./pages/Labels";
 import Packing from "./pages/Packing";
 import Projects from "./pages/Projects";
+import Variables from "./pages/Variables";
 
 // Menyu — bo'lim kaliti bilan. Ko'rinishi foydalanuvchi ruxsatiga bog'liq;
 // server esa har so'rovda o'zi tekshiradi (menyu yashirish himoya emas).
@@ -16,6 +17,7 @@ const NAV = [
   { section: "packing", to: "/packing" },
   { section: "labels", to: "/labels" },
   { section: "users", to: "/users" },
+  { section: "settings", to: "/variables" },
 ];
 
 function Sidebar() {
@@ -113,6 +115,14 @@ function Shell() {
             element={
               <Guarded section="users">
                 <Users />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/variables"
+            element={
+              <Guarded section="settings">
+                <Variables />
               </Guarded>
             }
           />

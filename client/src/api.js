@@ -75,6 +75,21 @@ export const api = {
   deleteBatch: (id) => call(`/batches/${id}`, { method: "DELETE" }),
   removeBatchOrder: (id, orderId) => call(`/batches/${id}/orders/${encodeURIComponent(orderId)}`, { method: "DELETE" }),
 
+  variables: () => call("/variables"),
+  addSheet: (name, sheetId) => call("/variables/sheets", { method: "POST", body: { name, sheetId } }),
+  addSheetList: (id, name) => call(`/variables/sheets/${id}/lists`, { method: "POST", body: { name } }),
+  addBot: (name, token) => call("/variables/telegram/bots", { method: "POST", body: { name, token } }),
+  addChat: (botId, name, chatId) =>
+    call(`/variables/telegram/bots/${botId}/chats`, { method: "POST", body: { name, chatId } }),
+  addTopic: (chatId, name, topicId) =>
+    call(`/variables/telegram/chats/${chatId}/topics`, { method: "POST", body: { name, topicId } }),
+  addCabinet: (name, token) => call("/variables/uzum/cabinets", { method: "POST", body: { name, token } }),
+  syncUzumShops: (id) => call(`/variables/uzum/cabinets/${id}/sync`, { method: "POST" }),
+  renameShop: (id, name) => call(`/variables/uzum/shops/${id}`, { method: "PATCH", body: { name } }),
+  deleteVar: (kind, id) => call(`/variables/${kind}/${id}`, { method: "DELETE" }),
+  addBinding: (payload) => call("/variables/bindings", { method: "POST", body: payload }),
+  deleteBinding: (id) => call(`/variables/bindings/${id}`, { method: "DELETE" }),
+
   listProjects: () => call("/projects"),
   getProject: (slug) => call(`/projects/${encodeURIComponent(slug)}`),
   projectPause: (slug) => call(`/projects/${encodeURIComponent(slug)}/pause`, { method: "POST" }),

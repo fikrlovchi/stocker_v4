@@ -217,8 +217,21 @@ timer va service'ni to'xtatib avtoyuklashdan chiqaradi, unit fayllari va
 papkani zaxiraga oladi (o'chirmaydi) va bazadagi yozuvlarini tozalaydi
 (avval baza nusxasi olinadi). GitHub repo'si **arxivlanadi**, o'chirilmaydi.
 
-Keyingi: o'zgaruvchilar katalogini ko'chirish → `panel/` ni o'chirish →
-4-bosqich (uchta Node jarayonini bittaga yig'ish).
+**O'zgaruvchilar katalogi ✅ (2026-08-07)** — `server/src/web/variables.js` +
+`client/src/pages/Variables.jsx`: Google Sheets (jadval/list), Telegram
+(bot/chat/mavzu), Uzum kabinetlari va do'konlari, hamda loyihaning `.env`
+bog'lamalari. Kabinet qo'shilganda do'konlar Uzum API'dan avtomatik tortiladi
+("Do'konlarni yangilash" bilan qayta o'qish mumkin), do'kon nomini qo'lda
+tuzatsa bo'ladi — **o'sha nom mobil ilovada ham ko'rinadi**.
+
+Bo'lim `settings` ruxsati bilan yopilgan (`orders_to_mc` emas): bu yerda
+tokenlar bor. O'chirish uchun jadval nomi qattiq kodlangan ro'yxatdan
+olinadi — ixtiyoriy jadvalni o'chirib bo'lmaydi.
+
+Shu bilan panel'dagi barcha bo'lim SPA'ga ko'chdi.
+
+Keyingi: `panel/` ni o'chirish (sinovdan keyin) → 4-bosqich (uchta Node
+jarayonini bittaga yig'ish).
 
 ### 3-bosqich rejasi (asl matn) ⏳
 

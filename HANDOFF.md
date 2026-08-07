@@ -1,36 +1,49 @@
-# Stocker v4 — topshirish hujjati
+# Stocker — topshirish hujjati
 
-Yangi sessiyada ishni davom ettirish uchun. Loyihaning **dizayni**
-[PLAN.md](PLAN.md) da, bu yerda **holat, topilgan tuzoqlar va ochiq savollar**.
+Yangi sessiyada ishni davom ettirish uchun. **Avval o'qing:**
+[docs/CONSOLIDATION.md](docs/CONSOLIDATION.md) — yagona tizimga birlashtirish
+rejasi va nima bajarilgani. Loyihaning dastlabki dizayni [PLAN.md](PLAN.md) da.
 
-Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
-`fikrlovchi_project_panel@087b84a` — ikkalasi ham push qilingan.
+Oxirgi holat: 2026-08-07. Barcha kod **bitta repo**da (`stocker_v4`),
+serverda `/root/stocker`, domen **stocker.uz**.
 
 ---
 
-> **2026-08-05 dan yangi yo'nalish:** barcha loyihalar bitta repo va bitta
-> dasturga birlashtirilmoqda — [docs/CONSOLIDATION.md](docs/CONSOLIDATION.md).
-> `panel/` va `pdfs/` shu repo ichida (subtree bilan, tarixi saqlangan).
-> Serverga ko'chirish: `deploy/migrate-to-monorepo.sh`.
+## 0. Bugungi tuzilish
 
-## 1. Fazalar holati
+```
+stocker_v4/
+├─ server/            stocker-server (systemd, 4044) — yig'ish API, /web/* SPA API
+├─ client/            React SPA — stocker.uz ning O'ZI (nginx /var/www/stocker/app dan beradi)
+├─ panel/             ESKI EJS panel (systemd, 3000) — tashqariga chiqarilmagan, o'chirishga tayyor
+├─ pdfs/              uzumPDFs (pm2, 4040) — yorliq PDF'lari
+├─ uzum-order-to-mc/  buyurtma tortish (systemd timer)
+├─ android/ desktop/  operator ilovasi (v0.6.1) va print client (v0.4.0)
+├─ brand/ deploy/ docs/ web/
+└─ data/stocker.db    YAGONA baza (panel + yig'ish jadvallar bir joyda)
+```
 
-| Faza | Holat | Izoh |
+Yangilash — bitta buyruq:
+
+```bash
+cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart stocker-server && cd .. && bash deploy/publish-client.sh && pm2 restart uzumpdfs
+```
+
+## 1. Bo'limlar holati
+
+| Bo'lim | Holat | Izoh |
 |---|---|---|
-| 1 · Server yadrosi (kesh, filtr, SQLite) | ✅ | `server/`, 100 ta test |
-| 2 · MoySklad barcode indeksi | ✅ | 7 kunlik kesh, sahifalab o'qish |
-| 3 · uzumPDFs 40×30 ShK + internal API | ✅ | maket tasdiqlandi, QR 15 mm |
-| 4 · Skan mantiqi (sessiya, lock, avto-tanlash) | ✅ | qisman UNIQUE indeks bilan lock |
-| 5 · Print quvuri (WS, navbat, ACK, retry) | ✅ | idempotent, PDF proxy orqali |
-| 6 · Electron desktop client | ✅ | + qog'oz yo'nalishi sozlamasi |
-| 7 · Android native (Kotlin + Compose) | ✅ | **v0.5.0** (original logotip + wordmark), tugmalar va chiroq sinovdan o'tdi |
-| 8a · Operator login (PLAN 6.4) | ✅ | panel karta + stocker kesh/login + Android kirish ekrani, **serverda sinalmadi** |
-| 8c · Brend (logo, palitra) | ✅ | `brand/`, Android v0.5.0 + desktop v0.3.0 |
-| 8d · stocker.uz domeni | ✅ | DNS + nginx + TLS: `/` panel, `/pack/` API, `/pdf/` yorliqlar, `/about` landing |
-| 8e · Brend interfeyslarda | ✅ | original logotip, wordmark uch joyda, panel+uzumPDFs yangi uslub |
-| **8b · Ish joylari kartasi (PLAN 6.5)** | ⏳ | **keyingi ish** — enrollment kod, station tokeni |
-| 9 · MoySklad "Собран" + `uzum_packing` + Telegram | ⏳ | |
-| 10 · Deploy yakuni (TLS, backlog tozalash) | ⏳ | qisman bajarilgan |
+| Kirish, foydalanuvchilar va ruxsatlar | ✅ | `users` + bo'lim ruxsatlari + `mobile` bayrog'i |
+| Yig'ish (partiyalar) | ✅ | ID ro'yxati, do'kon bo'yicha 2/22, skan doirasi |
+| Yorliqlar | ✅ | SPA ichida; Yangi (40×30) / Eski format; umumiy standart o'lchamlar |
+| Uzum order to MC (loyihalar) | ✅ | ishga tushishlar, loglar, systemd boshqaruvi |
+| O'zgaruvchilar katalogi | ✅ | Sheets · Telegram · Uzum kabinet/do'kon · `.env` bog'lamalari |
+| Mobil ilova | ✅ | v0.6.1 — do'kon nomi, 2/22, PRINT, uz/ru, oq/qora, tarix |
+| Desktop client | ✅ | v0.4.0 — navbatni tozalash, uz/ru |
+| **`panel/` ni o'chirish** | ⏳ | **keyingi ish** — hamma bo'lim ko'chdi, sinovdan keyin o'chiriladi |
+| 4-bosqich: bitta API jarayoni | ⏳ | panel + pdfs marshrutlari `server/` ga |
+| Ish joyi tokeni (PLAN 6.5) | ⏳ | desktop client hali umumiy `SERVICE_TOKEN` bilan ulanadi |
+| 9-faza: MoySklad "Собран" + Telegram | ⏳ | |
 
 ---
 
@@ -48,43 +61,33 @@ Oxirgi commit'lar: `stocker_v4@01d3774` · `uzumpdfs@1ba725f` ·
 
 ---
 
-## 3. Ochiq savollar — birinchi navbatda hal qilinadi
+## 3. Ochiq savollar / keyingi ish
 
-1. **Operator login'ini telefonda sinash.** Server tomoni ishlayapti:
-   panel'dan operator sinxronlanmoqda (`/debug/operators` → `lastSync.ok:true`),
-   `POST https://stocker.uz/pack/api/auth/login` javob beradi. Qolgani —
-   APK'ni o'rnatib, haqiqiy hisob bilan kirib skan qilish.
+1. **`panel/` ni o'chirish.** Barcha bo'lim SPA'ga ko'chdi (loyihalar,
+   yorliqlar, foydalanuvchilar, o'zgaruvchilar katalogi). Qolgani —
+   `stocker.uz` da hammasini bir bor sinab ko'rish, so'ng:
+   `systemctl disable --now fikrlovchi-panel`, repodan `panel/` ni olib
+   tashlash, nginx'dagi `/pdf/` uchun `auth_request` blokini olib tashlash
+   (u panel sessiyasiga tayanadi).
 
-   > **Tuzoq:** panel API kaliti mos kelmasa `lastSync.error` da
-   > `panel HTTP 401 — API kalit noto'g'ri` chiqadi. Yechim — kalitni qayta
-   > yasash: `node scripts/seed-project.js stocker "..." --regenerate-key`,
-   > so'ng `.env` dagi `PANEL_API_KEY` ni **almashtirish** (qo'shish emas —
-   > takroriy qatorlar chalkashtiradi).
+2. **Ish joyi tokeni (PLAN 6.5).** Desktop client hali umumiy
+   `SERVICE_TOKEN` bilan ulanadi — `/pack/` internetdan ochiq bo'lgani uchun
+   bu eng jiddiy ochiq nuqta.
 
-2. **`uzumpdfs` da `PUBLIC_BASE_URL`.** Stocker tomonida qo'yildi
-   (`https://stocker.uz/pack`), lekin uzumpdfs'dan `sed -i` bilan olib
-   tashlangan edi — u yerda ham kerak bo'lsa qaytarish kerak.
-
-   HTTPS holati (2026-08-05 da tashqaridan tekshirilgan):
-
-   | Manzil | Natija |
-   |---|---|
-   | `https://stocker.uz/` | 302 → `/login`, panel ochiladi |
-   | `https://stocker.uz/pack/health` | `ok:true`, 525 buyurtma tayyor |
-   | `https://stocker.uz/about` | 200, landing |
-   | `https://uzum.fikrlovchi.uz/pack/health` | `ok:true` — eski manzil ham ishlayveradi |
-
-3. **`uzumPDFs` dashboard paroli endi ishlatilmaydi** — `PANEL_AUTH=1` bilan
-   kirish panel sessiyasidan tekshiriladi (6.3). `DASHBOARD_PASSWORD` faqat
-   servis to'g'ridan-to'g'ri 4040-portda ochilganda kerak bo'ladi.
+3. **4-bosqich:** `panel/` va `pdfs/` marshrutlarini `server/` ichiga
+   ko'chirib, uchta Node jarayonini bittaga yig'ish. Oxirida qilinadi —
+   yorliq quvuri shu servislarga bog'liq.
 
 4. **BIG printer.** Gainsha GS-2408 ulanganmi? Oldingi sinov `GP-5830 Series`
-   da bo'lgan — u 58 mm chek printeri, 101.6 mm yorliq unga jismonan sig'maydi.
+   da bo'lgan — u 58 mm chek printeri, 101.6 mm yorliq unga sig'maydi.
 
-5. **Ishga tushirish kunidagi backlog.** 434 buyurtma "yig'ishga tayyor" deb
-   turadi, lekin ko'pchiligi allaqachon jo'natilgan. Yechim: `uzum_packing`
-   ga o'sha paytdagi barcha ochiq buyurtmalarni `done` bilan bir marta yozib
-   qo'yish. 10-fazada.
+5. **Ishga tushirish kunidagi backlog.** ~500 buyurtma "yig'ishga tayyor"
+   turadi, ko'pchiligi allaqachon jo'natilgan. Yechim: `uzum_packing` ga
+   o'sha paytdagi ochiq buyurtmalarni `done` bilan bir marta yozib qo'yish.
+
+6. **Yangi (40×30) format serverda sinalmagan** — lokalda Google Sheets
+   kirishi yo'q. `stocker.uz` → Yorliqlar → Yangi → bir nechta ID bilan
+   tekshirish kerak.
 
 ---
 
@@ -149,6 +152,29 @@ izohlangan.
 
 14. **Studio va buyruq satridagi Gradle bir vaqtda ishlamaydi** — qulfni
     talashadi. CLI build'dan oldin Studio'ni yopish kerak.
+
+### Konsolidatsiyada topilganlar
+
+15. **SPA'ni `/root/...` dan bermang** — `/root` 0700 bilan yopiq, nginx
+    (www-data) o'qiy olmaydi va 403 beradi. `deploy/publish-client.sh`
+    natijani `/var/www/stocker/app` ga chiqaradi.
+
+16. **`location /app/` `/app` ga mos kelmaydi** (oxirida slash yo'q) — so'rov
+    boshqa blokka tushadi. Redirect qo'shilgan.
+
+17. **uzumPDFs `process.cwd()` ga bog'liq** (`uploads/`, `public/`,
+    `history.json`) — pm2 `--cwd` bilan ishga tushirilishi shart.
+
+18. **Ikkala bazada `schema_migrations` bor edi**, ustunlari har xil
+    (`name` ↔ `filename`). Birlashtirishda panel'niki
+    `panel_schema_migrations` ga ko'chdi.
+
+19. **SPA `/pdf/` ga to'g'ridan-to'g'ri bora olmaydi**: u Bearer token bilan,
+    `/pdf/` esa panel cookie'si bilan ishlaydi. Yo'l `/web/labels/*` proxy
+    orqali (`server/src/web/labels.js`).
+
+20. **PDF'ni `<iframe src>` bilan ko'rsatib bo'lmaydi** — sarlavha
+    yuborilmaydi. SPA faylni `fetch` bilan olib blob URL yasaydi.
 
 ---
 
