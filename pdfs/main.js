@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import { createProductsPdf, uploadToDrive } from './functions/createPdf.js'
 import { createShkSmall } from './functions/shkSmall.js'
+import { shkPageCount } from './functions/labelCount.js'
 import { parseOrderIds, buildProductsFromOrders, buildProductForItem, findOrderItems, getShopTokenMap, getOrderShopMap } from './functions/sheetData.js'
 import { getLabelPdf, cleanupOldLabels } from './functions/uzumLabels.js'
 import { withRetry } from './functions/retry.js'
@@ -131,6 +132,9 @@ async function runGenerateSmall(orderIds, options = {}) {
     const merged = await PDFDocument.create();
     let pages = 0;
     const skipped = [];
+    // Miqdori yo'q qatorlar — bular jim o'tmasligi kerak, aks holda
+    // yorliq kam chiqqani sezilmaydi.
+    const noQuantity = [];
 
     for (const orderId of orderIds) {
         let items = [];
@@ -146,7 +150,17 @@ async function runGenerateSmall(orderIds, options = {}) {
             continue;
         }
         for (const item of items) {
-            const bytes = await createShkSmall(item, options);
+            // Yorliq soni = "Quantity for mc" (K) × nusxa — ESKI A5
+            // formatidagi `K * 2` bilan bir xil. Ilgari bu yerda faqat
+            // `copies` chiqardi, ya'ni kartochkada bir nechta tovar
+            // bo'lganda yorliq yetmasdi.
+            const count = shkPageCount(item.quantity, options.copies ?? 2);
+            if (!count) {
+                noQuantity.push(`${orderId}/${item.itemId}`);
+                console.error(`[shk-small] ${orderId}/${item.itemId}: miqdor yo'q (K bo'sh)`);
+                continue;
+            }
+            const bytes = await createShkSmall(item, { ...options, copies: count });
             const doc = await PDFDocument.load(bytes);
             const copied = await merged.copyPages(doc, doc.getPageIndices());
             copied.forEach((pg) => merged.addPage(pg));
@@ -156,8 +170,18 @@ async function runGenerateSmall(orderIds, options = {}) {
 
     if (!pages) throw new Error("Berilgan orderlar uchun detail topilmadi");
     const { fileName, url } = saveGeneratedPdf(Buffer.from(await merged.save()), "shk40");
-    console.log(`[shk-small] ${orderIds.length} order -> ${pages} bet -> ${fileName}`);
-    return { fileName, url, pages, orders: orderIds.length, skipped: skipped.length };
+    console.log(
+        `[shk-small] ${orderIds.length} order -> ${pages} bet -> ${fileName}` +
+            (noQuantity.length ? ` (${noQuantity.length} ta qatorda miqdor yo'q)` : "")
+    );
+    return {
+        fileName,
+        url,
+        pages,
+        orders: orderIds.length,
+        skipped: skipped.length,
+        noQuantity,
+    };
 }
 
 // BIG: har order label'ini Uzum API'dan olib (cache) bitta PDF'ga merge

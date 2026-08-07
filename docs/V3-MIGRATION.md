@@ -25,7 +25,7 @@ faqat ko'rinadigan nom va ichki tuzilma o'zgaradi.
 | `orders_to_mc` | Uzum order to MC | **Integratsiyalar** (+ "Qoldiq oqimlari" varag'i) |
 | `settings` | O'zgaruvchilar | **Konfiguratsiya** |
 | `link_product` | — | **Tovar bog'lamalari** (yangi, qo'shish formasi bilan) |
-| `sku_log` | — | **Barcode va SKU jurnali** (yangi) |
+| — | — | "Barcode va SKU jurnali" — **Integratsiyalar** ichidagi varaq |
 | `uzum_orders` | — | **Uzum buyurtmalari** (yangi) |
 | `packing` · `labels` · `users` | — | o'zgarmaydi |
 
@@ -186,7 +186,8 @@ bo'yicha takrorlanadigan ish EMAS.
 2- yoki 3-qadam yiqilsa **qator saqlanib qoladi** (masalan Uzum javob
 bermasa) va jadvalda "Qayta urinish" tugmasi paydo bo'ladi.
 
-Natija **"Barcode va SKU jurnali"** bo'limida (`link_product_events`):
+Natija **Integratsiyalar → "Barcode va SKU jurnali"** varag'ida
+(`link_product_events`):
 qaysi SKU, qaysi amal, holat va sabab. Bu bo'limda "ishga tushirish"
 tugmasi yo'q — ishga tushiradigan narsa qator qo'shilishi.
 

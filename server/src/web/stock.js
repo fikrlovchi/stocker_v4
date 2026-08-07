@@ -213,7 +213,7 @@ export function linkProductRouter() {
     const rows = db
       .prepare(
         `SELECT lp.id, lp.sku_id, lp.sku_title, lp.product_title, lp.barcode, lp.shop_id,
-                lp.status, lp.stock_update, lp.mc_external_id, lp.mc_uuid,
+                lp.status, lp.stock_update, lp.order_import, lp.mc_external_id, lp.mc_uuid,
                 lp.card_quantity, lp.legacy_divisor,
                 p.name AS mc_product_name, p.entity_type AS mc_entity_type
          FROM link_product lp
@@ -252,6 +252,7 @@ export function linkProductRouter() {
         cabinetName: shop?.cabinetName || null,
         status: r.status,
         stockUpdate: r.stock_update === 1,
+        orderImport: r.order_import === 1,
         mcExternalId: r.mc_external_id,
         mcUuid: r.mc_uuid,
         mcProductName: r.mc_product_name,
@@ -275,7 +276,7 @@ export function linkProductRouter() {
     const row = db.prepare("SELECT * FROM link_product WHERE id = ?").get(id);
     if (!row) return res.status(404).json({ error: "Qator topilmadi" });
 
-    const { cardQuantity, stockUpdate, mcExternalId, status } = req.body || {};
+    const { cardQuantity, stockUpdate, orderImport, mcExternalId, status } = req.body || {};
 
     if (cardQuantity !== undefined) {
       const n = Number(cardQuantity);
@@ -300,12 +301,13 @@ export function linkProductRouter() {
     }
 
     db.prepare(
-      `UPDATE link_product SET card_quantity = ?, stock_update = ?, mc_external_id = ?, mc_uuid = ?,
-              status = ?, updated_at = datetime('now')
+      `UPDATE link_product SET card_quantity = ?, stock_update = ?, order_import = ?,
+              mc_external_id = ?, mc_uuid = ?, status = ?, updated_at = datetime('now')
        WHERE id = ?`
     ).run(
       cardQuantity === undefined ? row.card_quantity : Math.round(Number(cardQuantity)),
       stockUpdate === undefined ? row.stock_update : stockUpdate ? 1 : 0,
+      orderImport === undefined ? row.order_import : orderImport ? 1 : 0,
       mcExternalId === undefined ? row.mc_external_id : String(mcExternalId || "").trim() || null,
       mcUuid,
       status === undefined ? row.status : String(status || "").trim() || null,

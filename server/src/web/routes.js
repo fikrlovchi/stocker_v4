@@ -217,9 +217,9 @@ export function webRouter() {
   // bog'lamalari tahrirlanadi, oqimlarni ishga tushirish esa yo'q.
   router.use("/link-products", requireWeb, requireSection("link_product"), linkProductRouter());
 
-  // Barcode va SKU amallarining jurnali. Ular yangi bog'lama qo'shilganda
-  // bajariladi, shuning uchun bu bo'limda faqat natija ko'rinadi.
-  router.use("/sku-log", requireWeb, requireSection("sku_log"), skuLogRouter());
+  // Barcode va SKU amallarining jurnali — Integratsiyalar bo'limi ichida
+  // ko'rinadi, shuning uchun ruxsati ham o'sha (`orders_to_mc`).
+  router.use("/sku-log", requireWeb, requireSection("orders_to_mc"), skuLogRouter());
 
   /* ---------- Konfiguratsiya ---------- */
 

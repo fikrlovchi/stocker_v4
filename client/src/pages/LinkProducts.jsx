@@ -104,7 +104,8 @@ export default function LinkProducts() {
                   <th title={t("lp.cardQuantityHint")}>{t("lp.cardQuantity")}</th>
                   <th title={t("lp.factHint")}>{t("lp.fact")}</th>
                   <th title={t("lp.amountHint")}>{t("lp.amount")}</th>
-                  <th>{t("lp.stockUpdate")}</th>
+                  <th title={t("lp.stockUpdateHint")}>{t("lp.stockUpdate")}</th>
+                  <th title={t("lp.orderImportHint")}>{t("lp.orderImport")}</th>
                   <th />
                 </tr>
               </thead>
@@ -211,6 +212,14 @@ function Row({ item, onRun }) {
           type="checkbox"
           checked={item.stockUpdate}
           onChange={(e) => onRun(() => api.editLinkProduct(item.id, { stockUpdate: e.target.checked }))}
+        />
+      </td>
+      <td>
+        {/* Buyurtma importi — bu qator MoySklad'ga buyurtmaga tushadimi. */}
+        <input
+          type="checkbox"
+          checked={item.orderImport}
+          onChange={(e) => onRun(() => api.editLinkProduct(item.id, { orderImport: e.target.checked }))}
         />
       </td>
       <td>

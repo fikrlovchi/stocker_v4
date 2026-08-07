@@ -41,7 +41,7 @@ cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart sto
 | Yorliqlar | ✅ | SPA ichida; Yangi (40×30) / Eski format; umumiy standart o'lchamlar |
 | Integratsiyalar (ex "Uzum order to MC") | ✅ | systemd loyihalari + **Qoldiq oqimlari** (holat, jadval, tarix) |
 | Tovar bog'lamalari (`link_product`) | ✅ | qo'shish formasi (AppSheet kabi), hisoblangan qoldiq, tahrirlash |
-| Barcode va SKU jurnali | ✅ | qator qo'shilganda bajarilgan amallar natijasi |
+| Barcode va SKU jurnali | ✅ | Integratsiyalar ichida — qator qo'shilganda bajarilgan amallar natijasi |
 | Konfiguratsiya | ✅ | Uzum · MoySklad token · Telegram · Google Sheets · Qoldiq modifikatsiyasi (bo'sh) |
 | Uzum buyurtmalari | ⏳ | karkas bor, ma'lumot 5-bosqichda ([docs/V3-MIGRATION.md](docs/V3-MIGRATION.md)) |
 | Mobil ilova | ✅ | v0.6.1 — do'kon nomi, 2/22, PRINT, uz/ru, oq/qora, tarix |
@@ -181,6 +181,15 @@ izohlangan.
 
 20. **PDF'ni `<iframe src>` bilan ko'rsatib bo'lmaydi** — sarlavha
     yuborilmaydi. SPA faylni `fetch` bilan olib blob URL yasaydi.
+
+20a. **ShK soni `uzum_order_detail!K` dan olinadi, `F` dan EMAS.**
+    `K` ("Quantity for mc") = Uzum miqdori × kartochkadagi miqdor
+    (`link_product!N`). Yangi (40×30) formatda bu ko'paytiruv tushib qolgan
+    edi va har qator uchun faqat `copies` ta yorliq chiqardi: kartochkada
+    3 ta tovar bo'lsa 6 emas, 2 ta. Hisob endi
+    `pdfs/functions/labelCount.js` da va selfTest bilan qoplangan.
+    Skan oqimi to'g'ri edi — u har birlikni alohida skanerlaydi va miqdorni
+    `config.json` dagi `details.quantity = "K"` dan oladi.
 
 21. **Panel jadvallarining ustun nomlarini taxmin qilmang.** `google_sheets`
     da `url` ustuni **yo'q** (`panel/src/db/migrations/003_variables.sql`),

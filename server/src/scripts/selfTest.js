@@ -1405,6 +1405,42 @@ db.exec("DELETE FROM mc_product");
 
 db.exec("DELETE FROM link_product_events; DELETE FROM link_product; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
 
+/* ---------- 23. ShK yorliqlari soni (uzumPDFs) ---------- */
+
+// 2026-08-07 da topilgan xato: YANGI (40×30) formatda yorliq soni
+// `Quantity for mc` (K) ni hisobga olmasdi — har qator uchun faqat `copies`
+// ta chiqardi. Kartochkada bir nechta tovar bo'lganda (link_product!N > 1)
+// yorliq yetmasdi. ESKI A5 formatida hisob to'g'ri edi (`K * 2`).
+//
+// `pdfs/` alohida servis, shuning uchun mavjud bo'lmasa o'tkazib yuboriladi.
+const LABEL_COUNT_MODULE = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../pdfs/functions/labelCount.js");
+
+if (!fs.existsSync(LABEL_COUNT_MODULE)) {
+  console.log("\n(pdfs/ topilmadi — yorliq soni tekshirilmadi)");
+} else {
+  const { shkPageCount } = await import(`file://${LABEL_COUNT_MODULE.replace(/\\/g, "/")}`);
+
+  check("yorliq: 1 dona × 2 nusxa", shkPageCount(1, 2), 2);
+  // ASOSIY HOLAT: kartochkada 3 ta tovar → K = 3 → 6 yorliq (2 emas).
+  check("yorliq: kartochkada 3 ta tovar", shkPageCount(3, 2), 6);
+  check("yorliq: Uzum miqdori 2, kartochkada 3 → K = 6", shkPageCount(6, 2), 12);
+  check("yorliq: nusxa 1 bo'lsa", shkPageCount(3, 1), 3);
+  check("yorliq: nusxa sozlanadi", shkPageCount(2, 3), 6);
+
+  // Miqdor yaroqsiz — 0 qaytadi va chaqiruvchi buni hisobotda ko'rsatadi.
+  // Jim ravishda 1 ga to'ldirish yorliqni noto'g'ri chiqarishdan yomonroq.
+  check("yorliq: miqdor bo'sh → 0", shkPageCount("", 2), 0);
+  check("yorliq: miqdor 0 → 0", shkPageCount(0, 2), 0);
+  check("yorliq: miqdor manfiy → 0", shkPageCount(-2, 2), 0);
+  check("yorliq: miqdor matn → 0", shkPageCount("abc", 2), 0);
+
+  // Kasr son — yarim yorliq bo'lmaydi, pastga yaxlitlanadi.
+  check("yorliq: kasr miqdor pastga", shkPageCount(2.9, 2), 4);
+  // Nusxa berilmasa standart 2.
+  check("yorliq: standart nusxa", shkPageCount(4), 8);
+  check("yorliq: nusxa 0 bo'lsa kamida 1", shkPageCount(3, 0), 3);
+}
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

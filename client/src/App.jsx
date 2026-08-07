@@ -10,7 +10,6 @@ import Packing from "./pages/Packing";
 import Projects from "./pages/Projects";
 import UzumOrders from "./pages/UzumOrders";
 import LinkProducts from "./pages/LinkProducts";
-import SkuLog from "./pages/SkuLog";
 import Config from "./pages/Config";
 
 // Menyu — bo'lim kaliti bilan. Ko'rinishi foydalanuvchi ruxsatiga bog'liq;
@@ -23,7 +22,6 @@ import Config from "./pages/Config";
 const NAV = [
   { section: "orders_to_mc", to: "/integrations" },
   { section: "link_product", to: "/link-products" },
-  { section: "sku_log", to: "/sku-log" },
   { section: "uzum_orders", to: "/uzum-orders" },
   { section: "packing", to: "/packing" },
   { section: "labels", to: "/labels" },
@@ -114,14 +112,6 @@ function Shell() {
             }
           />
           <Route
-            path="/sku-log"
-            element={
-              <Guarded section="sku_log">
-                <SkuLog />
-              </Guarded>
-            }
-          />
-          <Route
             path="/uzum-orders"
             element={
               <Guarded section="uzum_orders">
@@ -164,6 +154,7 @@ function Shell() {
           {/* Eski manzillar — saqlangan havolalar buzilmasin. */}
           <Route path="/orders-to-mc" element={<Navigate to="/integrations" replace />} />
           <Route path="/variables" element={<Navigate to="/config" replace />} />
+          <Route path="/sku-log" element={<Navigate to="/integrations" replace />} />
           <Route
             path="/no-access"
             element={

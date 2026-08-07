@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import StockFlows from "./StockFlows";
+import SkuLog from "./SkuLog";
 
 // Menyuda "Uzum order to MC" deb turadi, lekin ekran loyihaga bog'lanmagan:
 // yuqoridagi tanlovdan `cancel-uzum-order`, `mc-stock-to-uzum` va `stocker`
@@ -12,6 +13,7 @@ const DEFAULT_SLUG = "uzum-order-to-mc";
 // Ikki nuqta bilan boshlanadi, shuning uchun haqiqiy slug bilan
 // to'qnashmaydi.
 const STOCK_SLUG = "::stock";
+const SKULOG_SLUG = "::sku-log";
 
 export default function Projects() {
   const { t } = useTranslation();
@@ -38,7 +40,7 @@ export default function Projects() {
   useEffect(() => {
     setData(null);
     // Qoldiq oqimlari varag'i loyiha emas — `/projects/::stock` so'ralmasin.
-    if (slug !== STOCK_SLUG) loadOne(slug);
+    if (slug !== STOCK_SLUG && slug !== SKULOG_SLUG) loadOne(slug);
   }, [slug]);
 
   const act = async (fn) => {
@@ -59,11 +61,16 @@ export default function Projects() {
   // Lekin foydalanuvchi uchun bu ham "integratsiya", shuning uchun shu
   // yerda, o'sha tanlov qatoridan ochiladi.
   const stockTab = slug === STOCK_SLUG;
+  const skuLogTab = slug === SKULOG_SLUG;
 
   return (
     <div className="content">
-      <h1>{stockTab ? t("flows.title") : project?.displayName || t("projects.title")}</h1>
-      <p className="page-sub">{stockTab ? t("flows.sub") : t("projects.sub")}</p>
+      <h1>
+        {stockTab ? t("flows.title") : skuLogTab ? t("skuLog.title") : project?.displayName || t("projects.title")}
+      </h1>
+      <p className="page-sub">
+        {stockTab ? t("flows.sub") : skuLogTab ? t("skuLog.sub") : t("projects.sub")}
+      </p>
 
       {error && <div className="card error">{error}</div>}
 
@@ -81,10 +88,15 @@ export default function Projects() {
         <button className={stockTab ? "" : "ghost"} onClick={() => setSlug(STOCK_SLUG)}>
           {t("flows.title")}
         </button>
+        <button className={skuLogTab ? "" : "ghost"} onClick={() => setSlug(SKULOG_SLUG)}>
+          {t("skuLog.title")}
+        </button>
       </div>
 
       {stockTab ? (
         <StockFlows />
+      ) : skuLogTab ? (
+        <SkuLog />
       ) : !data ? (
         <div className="card muted">{t("app.loading")}</div>
       ) : (
