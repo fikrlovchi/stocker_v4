@@ -22,8 +22,9 @@ faqat ko'rinadigan nom va ichki tuzilma o'zgaradi.
 
 | Kalit | Eski nom | Yangi nom |
 |---|---|---|
-| `orders_to_mc` | Uzum order to MC | **Integratsiyalar** |
+| `orders_to_mc` | Uzum order to MC | **Integratsiyalar** (+ "Qoldiq oqimlari" varag'i) |
 | `settings` | O'zgaruvchilar | **Konfiguratsiya** |
+| `link_product` | — | **Tovar bog'lamalari** (yangi) |
 | `uzum_orders` | — | **Uzum buyurtmalari** (yangi) |
 | `packing` · `labels` · `users` | — | o'zgarmaydi |
 
@@ -189,6 +190,55 @@ qator topiladi (AppSheet qatorlarni surishi mumkin), so'ng hammasi bitta
 trigger'i hali yoqiq turganda sinash uchun: server ishni bajaradi, GAS keyin
 "allaqachon bor" deb ko'radi va bayroqni o'zi tozalaydi. Takror barcode
 qo'shilmaydi, chunki mavjudligi qiymat bo'yicha tekshiriladi.
+
+#### ⚠ 2026-08-07: 20 ta SKU Uzumda nolga tushdi
+
+`013` migratsiyasi `mc_stock` ni `DROP TABLE` qilib qaytadan yaratdi va
+uni to'ldiradigan hech narsa ishlamadi. `pushStock.js` bo'sh keshdan
+o'qib har qatorga `amount = 0` hisobladi. Hisobotda "3740/3740 nol" deb
+turgan edi, lekin skript baribir yubordi.
+
+Xulosa: **ogohlantirishni matnga yozish yetarli emas, kodga qo'yish
+kerak.** Endi yuborishdan oldin uchta shart tekshiriladi va har biri
+o'zi yetarli sabab:
+
+| Shart | Chegara |
+|---|---|
+| `mc_stock` bo'sh | — |
+| `mc_stock` eskirgan | 6 soat |
+| SKU'larning ko'pi nol bilan ketadi | 50% |
+
+Tekshiruv `stock/runner.js` da — **skript, interfeys va jadval ham aynan
+shu yo'ldan o'tadi**. Ilgari himoya faqat skriptda bo'lgani uchun
+interfeysdan yoki jadval bo'yicha yuborilganda ishlamay qolardi.
+
+To'xtatilgan ishga tushish `error` emas, **`blocked`** deb yoziladi:
+tizim xato qilmadi, ataylab hech narsa yubormadi. Chetlab o'tish faqat
+ataylab — CLI'da `--ignore-safety-checks`, interfeysda esa faqat
+superadmin.
+
+#### Interfeys (2026-08-07)
+
+Oqimlarni boshqarish uchun SSH shart emas:
+
+* **Integratsiyalar → "Qoldiq oqimlari"** — uchta oqim uchun holat, qo'lda
+  ishga tushirish (sinov / haqiqiy), jadval sozlamasi va ishga tushishlar
+  tarixi. Birinchi kartada qoldiq keshining holati: `mc_stock` bo'sh bo'lsa
+  qizil bilan ko'rinadi.
+  * "Haqiqatan yuborish" **ikki qadamli** — tasdiqlash so'raladi.
+  * Jadval bo'yicha ishlash standart holatda **o'chirilgan**: yangilanishdan
+    keyin server o'z-o'zidan Uzumga yozib yubormaydi. Yoqish interfeysdan.
+  * Interval 5–1440 daqiqa (MoySklad va Uzum tezlik cheklovi bor).
+* **Tovar bog'lamalari** (yangi bo'lim, `link_product` ruxsati) — jadvalning
+  nusxasi emas: har qatorda **hisoblangan** qiymatlar ham ko'rinadi —
+  MoySklad qoldig'i va Uzumga ketadigan son. "Nega bu tovarga 0 ketdi"
+  degan savolga shu yerda javob topiladi. External ID va kartochka miqdorini
+  tahrirlash mumkin; External ID kiritilganda UUID `mc_product` dan darhol
+  topiladi va **topilmasa xato qaytadi** (v3 dagi `@N` qo'shimchalari
+  o'rniga qabul qilingan tartib).
+
+`stock_runs` jadvali (`016`) har ishga tushishni yozadi: kim, qaysi manba
+(qo'lda / jadval / skript), holat va tafsilotlar.
 
 #### Ko'chirish tartibi
 

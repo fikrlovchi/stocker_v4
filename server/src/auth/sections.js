@@ -8,6 +8,7 @@
 // nomni o'zgartirsak hamma ruxsat yo'qolardi. Ko'rinadigan nom esa erkin.
 export const SECTIONS = [
   { key: "orders_to_mc", label: "Integratsiyalar" },
+  { key: "link_product", label: "Tovar bog'lamalari (link_product)" },
   { key: "uzum_orders", label: "Uzum buyurtmalari" },
   { key: "packing", label: "Stocker — yig'ish" },
   { key: "labels", label: "Yorliqlar" },

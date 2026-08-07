@@ -1,96 +1,61 @@
 // Bayroq qo'yilgan barcode'larni MoySklad'ga qo'shish — v3 dagi
 // `addBarcodesToMoySklad` ning o'rni.
 //
-//   node src/scripts/barcodeSync.js           # DRY-RUN: hech narsa yozilmaydi
-//   node src/scripts/barcodeSync.js --write    # HAQIQATAN yozadi
+//   node src/scripts/barcodeSync.js                        # DRY-RUN
+//   node src/scripts/barcodeSync.js --write                # HAQIQATAN yozadi
 //   node src/scripts/barcodeSync.js --write --keep-sheet-flag
 //
-// STANDART HOLAT — DRY-RUN. Bu oqim MoySklad'ni o'zgartiradi (tovarga
-// barcode qo'shadi) va jadvalga yozadi (bayroqni tozalaydi).
+// STANDART HOLAT — DRY-RUN. Bu oqim MoySklad'ni o'zgartiradi va jadvalga
+// yozadi (bayroqni tozalaydi).
 //
-// `--keep-sheet-flag` — MoySklad'ga yozadi, lekin jadvaldagi bayroqni
-// tegmaydi. GAS trigger'i hali yoqilgan bo'lsa shu bilan sinash mumkin:
-// server ishini bajaradi, GAS esa keyin "allaqachon bor" deb ko'radi va
-// bayroqni o'zi tozalaydi — takror barcode qo'shilmaydi.
+// `--keep-sheet-flag` — MoySklad'ga yozadi, jadvaldagi bayroqqa tegmaydi.
+// GAS trigger'i hali yoqiq bo'lsa shu bilan sinash mumkin: GAS keyin
+// "allaqachon bor" deb ko'radi va bayroqni o'zi tozalaydi.
+//
+// Mantiq `stock/runner.js` da — interfeys va jadval ham shu yo'ldan o'tadi.
 import logger from "../logger.js";
-import { getSheetsClient } from "../google/sheetsClient.js";
-import { pendingBarcodeRows, addBarcodesToMoySklad, clearFlag, detectBarcodeType } from "../stock/barcodeToMc.js";
-import { clearBarcodeFlags } from "../stock/sheetWriteback.js";
-import { notify } from "../telegram/index.js";
+import { runStockJob } from "../stock/runner.js";
 
 const args = new Set(process.argv.slice(2));
-const write = args.has("--write");
-const keepSheetFlag = args.has("--keep-sheet-flag");
 
 async function main() {
-  const rows = pendingBarcodeRows();
+  const run = await runStockJob("barcode", {
+    trigger: "cli",
+    startedBy: "cli",
+    dryRun: !args.has("--write"),
+    keepSheetFlag: args.has("--keep-sheet-flag"),
+  });
 
-  console.log(`\n${write ? "YOZISH" : "DRY-RUN — hech narsa yozilmaydi"}`);
-  console.log(`Bayroq qo'yilgan qator: ${rows.length}\n`);
+  const s = run.summary || {};
 
-  if (!rows.length) {
+  console.log(`\n${args.has("--write") ? "YOZISH" : "DRY-RUN — hech narsa yozilmaydi"}`);
+  console.log(`Bayroq qo'yilgan qator: ${s.pending ?? 0}\n`);
+
+  if (!s.pending) {
     console.log("Ishlash uchun qator yo'q.");
     return;
   }
 
-  for (const r of rows.slice(0, 20)) {
-    console.log(`   ${r.skuTitle}  ${r.barcode || "(barcode yo'q)"}  ${r.barcode ? detectBarcodeType(r.barcode) : ""}`);
-  }
-  if (rows.length > 20) console.log(`   … va yana ${rows.length - 20} ta`);
+  console.log("Natija:");
+  console.log(`   qo'shildi:          ${s.added ?? 0}`);
+  console.log(`   allaqachon bor edi: ${s.already ?? 0}`);
+  console.log(`   ma'lumot yetarsiz:  ${s.skipped ?? 0}`);
+  console.log(`   xato:               ${s.failed ?? 0}`);
 
-  // Muvaffaqiyatli qatorlar: server bazasidagi bayroq darhol tozalanadi,
-  // jadvaldagisi esa oxirida bitta so'rov bilan.
-  const doneSkuTitles = [];
-  const report = await addBarcodesToMoySklad(rows, {
-    dryRun: !write,
-    onDone: async (row) => {
-      clearFlag(row.id);
-      doneSkuTitles.push(row.skuTitle);
-    },
-  });
+  for (const f of s.failures || []) console.log(`     ✕ ${f.skuTitle}: ${f.reason}`);
 
-  console.log("\nNatija:");
-  console.log(`   qo'shildi:          ${report.added.length}`);
-  console.log(`   allaqachon bor edi: ${report.already.length}`);
-  console.log(`   ma'lumot yetarsiz:  ${report.skipped.length}`);
-  console.log(`   xato:               ${report.failed.length}`);
-
-  for (const f of report.failed.slice(0, 10)) console.log(`     ✕ ${f.skuTitle}: ${f.reason}`);
-  for (const s of report.skipped.slice(0, 10)) console.log(`     ⚠ ${s.skuTitle}: ${s.reason}`);
-
-  if (!write) {
-    console.log("\nHech narsa yozilmadi. Yozish uchun: --write");
-    return;
+  if (s.sheet) {
+    console.log(`\nJadvalda bayroq tozalandi: ${s.sheet.cleared}`);
+    if (s.sheet.notFound?.length) console.log(`   ⚠ jadvalda topilmadi: ${s.sheet.notFound.join(", ")}`);
   }
 
-  if (doneSkuTitles.length && !keepSheetFlag) {
-    const cleared = await clearBarcodeFlags(getSheetsClient(), doneSkuTitles);
-    console.log(`\nJadvalda bayroq tozalandi: ${cleared.cleared}`);
-    if (cleared.notFound.length) console.log(`   ⚠ jadvalda topilmadi: ${cleared.notFound.join(", ")}`);
-  } else if (keepSheetFlag) {
-    console.log("\nJadvaldagi bayroq tegilmadi (--keep-sheet-flag).");
+  if (run.status === "error") {
+    console.log(`\n❌ Xato: ${run.error}`);
+    process.exit(1);
   }
 
-  logger.info(
-    `Barcode → MoySklad: ${report.added.length} qo'shildi, ${report.already.length} bor edi, ` +
-      `${report.failed.length} xato`
-  );
-
-  if (report.failed.length || report.skipped.length) {
-    await notify(
-      "mc_barcode",
-      `⚠️ <b>Barcode → MoySklad</b>\n` +
-        `Qo'shildi: ${report.added.length}\n` +
-        `Xato: ${report.failed.length}\n` +
-        `Ma'lumot yetarsiz: ${report.skipped.length}\n` +
-        [...report.failed, ...report.skipped]
-          .slice(0, 5)
-          .map((f) => `• ${f.skuTitle}: ${f.reason}`)
-          .join("\n")
-    );
-  }
-
-  process.exit(report.failed.length ? 1 : 0);
+  if (!args.has("--write")) console.log("\nHech narsa yozilmadi. Yozish uchun: --write");
+  process.exit(s.failed ? 1 : 0);
 }
 
 main().catch((e) => {

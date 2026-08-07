@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
+import StockFlows from "./StockFlows";
 
 // Menyuda "Uzum order to MC" deb turadi, lekin ekran loyihaga bog'lanmagan:
 // yuqoridagi tanlovdan `cancel-uzum-order`, `mc-stock-to-uzum` va `stocker`
 // ham ochiladi. Panel o'chgach ular boshqaruvsiz qolmasligi uchun.
 const DEFAULT_SLUG = "uzum-order-to-mc";
+
+// Loyiha slug'i emas — tanlov qatoridagi "Qoldiq oqimlari" varag'i.
+// Ikki nuqta bilan boshlanadi, shuning uchun haqiqiy slug bilan
+// to'qnashmaydi.
+const STOCK_SLUG = "::stock";
 
 export default function Projects() {
   const { t } = useTranslation();
@@ -31,7 +37,8 @@ export default function Projects() {
 
   useEffect(() => {
     setData(null);
-    loadOne(slug);
+    // Qoldiq oqimlari varag'i loyiha emas — `/projects/::stock` so'ralmasin.
+    if (slug !== STOCK_SLUG) loadOne(slug);
   }, [slug]);
 
   const act = async (fn) => {
@@ -48,29 +55,37 @@ export default function Projects() {
   const project = data?.project;
   const status = data?.status;
 
+  // Qoldiq oqimlari systemd loyihasi emas — ular server ichida ishlaydi.
+  // Lekin foydalanuvchi uchun bu ham "integratsiya", shuning uchun shu
+  // yerda, o'sha tanlov qatoridan ochiladi.
+  const stockTab = slug === STOCK_SLUG;
+
   return (
     <div className="content">
-      <h1>{project?.displayName || t("projects.title")}</h1>
-      <p className="page-sub">{t("projects.sub")}</p>
+      <h1>{stockTab ? t("flows.title") : project?.displayName || t("projects.title")}</h1>
+      <p className="page-sub">{stockTab ? t("flows.sub") : t("projects.sub")}</p>
 
       {error && <div className="card error">{error}</div>}
 
-      {list.length > 1 && (
-        <div className="row" style={{ marginBottom: 16 }}>
-          {list.map((p) => (
-            <button
-              key={p.slug}
-              className={p.slug === slug ? "" : "ghost"}
-              onClick={() => setSlug(p.slug)}
-            >
-              {p.displayName}
-              {p.lastError ? " ⚠" : ""}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="row" style={{ marginBottom: 16 }}>
+        {list.map((p) => (
+          <button
+            key={p.slug}
+            className={p.slug === slug ? "" : "ghost"}
+            onClick={() => setSlug(p.slug)}
+          >
+            {p.displayName}
+            {p.lastError ? " ⚠" : ""}
+          </button>
+        ))}
+        <button className={stockTab ? "" : "ghost"} onClick={() => setSlug(STOCK_SLUG)}>
+          {t("flows.title")}
+        </button>
+      </div>
 
-      {!data ? (
+      {stockTab ? (
+        <StockFlows />
+      ) : !data ? (
         <div className="card muted">{t("app.loading")}</div>
       ) : (
         <>

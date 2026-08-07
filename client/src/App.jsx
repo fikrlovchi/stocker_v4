@@ -9,6 +9,7 @@ import Labels from "./pages/Labels";
 import Packing from "./pages/Packing";
 import Projects from "./pages/Projects";
 import UzumOrders from "./pages/UzumOrders";
+import LinkProducts from "./pages/LinkProducts";
 import Config from "./pages/Config";
 
 // Menyu — bo'lim kaliti bilan. Ko'rinishi foydalanuvchi ruxsatiga bog'liq;
@@ -20,6 +21,7 @@ import Config from "./pages/Config";
 // kerak bo'lmadi.
 const NAV = [
   { section: "orders_to_mc", to: "/integrations" },
+  { section: "link_product", to: "/link-products" },
   { section: "uzum_orders", to: "/uzum-orders" },
   { section: "packing", to: "/packing" },
   { section: "labels", to: "/labels" },
@@ -98,6 +100,14 @@ function Shell() {
             element={
               <Guarded section="orders_to_mc">
                 <Projects />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/link-products"
+            element={
+              <Guarded section="link_product">
+                <LinkProducts />
               </Guarded>
             }
           />

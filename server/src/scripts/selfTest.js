@@ -1242,6 +1242,66 @@ check("barcode: bayroq tozalanadi", bc.pendingBarcodeRows().map((r) => r.skuTitl
 
 db.exec("DELETE FROM link_product");
 
+/* ---------- 20. Oqimlarni ishga tushirish va jadval ---------- */
+
+const runner = await import("../stock/runner.js");
+
+// Standart holat: HAMMASI o'chirilgan. Yangilanishdan keyin server o'z-o'zidan
+// Uzumga yozib yubormasligi kerak.
+const sched = runner.getSchedule();
+check("jadval: standartda push o'chirilgan", sched.push.enabled, false);
+check("jadval: standartda sync o'chirilgan", sched.sync.enabled, false);
+check("jadval: standart interval", sched.push.intervalMinutes, 30);
+
+runner.setSchedule({ push: { enabled: true, intervalMinutes: 45 } }, "root");
+check("jadval: yoqildi", runner.getSchedule().push.enabled, true);
+check("jadval: interval saqlandi", runner.getSchedule().push.intervalMinutes, 45);
+check("jadval: boshqa oqim tegilmadi", runner.getSchedule().sync.enabled, false);
+
+// Interval chegarasi: har daqiqada butun katalogni yuborish xavfli.
+let schedErr = "";
+try {
+  runner.setSchedule({ push: { intervalMinutes: 1 } }, "root");
+} catch (e) {
+  schedErr = e.message;
+}
+check("jadval: juda kichik interval rad etiladi", schedErr, "Interval 5–1440 daqiqa orasida bo'lishi kerak");
+check("jadval: rad etilgach eski qiymat qoladi", runner.getSchedule().push.intervalMinutes, 45);
+
+// Bo'sh keshda `push` YUBORMAYDI — `blocked` bo'ladi. Bu xato emas: tizim
+// ataylab hech narsa yubormadi. Aynan shu 2026-08-07 dagi hodisaning
+// takrorlanishiga yo'l qo'ymaydi.
+db.prepare(
+  `INSERT INTO link_product (sku_id, sku_title, shop_id, stock_update, mc_external_id, mc_uuid, card_quantity)
+   VALUES (5001, 'TEST-1', '9001', 1, 'ext-x', 'uuid-x', 1)`
+).run();
+const cabForPush = db.prepare("INSERT INTO uzum_cabinets (name, token) VALUES ('Sinov', 'tok')").run().lastInsertRowid;
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (?, 'Do''kon', '9001')").run(cabForPush);
+
+const blocked = await runner.runStockJob("push", { trigger: "manual", startedBy: "root", dryRun: false });
+check("oqim: bo'sh keshda yuborish to'xtatiladi", blocked.status, "blocked");
+check("oqim: sabab yozib qo'yiladi", blocked.summary.safety.ok, false);
+
+// Ishga tushish tarixga tushadi.
+const runs = runner.recentRuns({ kind: "push", limit: 5 });
+check("oqim: tarixga yozildi", runs[0].status, "blocked");
+check("oqim: kim ishga tushirgani saqlanadi", runs[0].started_by, "root");
+check("oqim: oxirgi ishga tushish topiladi", runner.lastRun("push").id, blocked.id);
+
+// Dry-run hech narsa yubormaydi va bloklanmaydi — u faqat hisoblaydi.
+const dry = await runner.runStockJob("push", { trigger: "manual", startedBy: "root", dryRun: true });
+check("oqim: dry-run muvaffaqiyatli", dry.status, "success");
+check("oqim: dry-run belgisi", dry.summary.dryRun, true);
+
+check("oqim: noma'lum oqim rad etiladi", await runner.runStockJob("xyz").catch((e) => e.message), "Noma'lum oqim: xyz");
+
+// Kesh holati interfeysga ham shu yerdan boradi.
+const cacheStatus = runner.stockCacheStatus();
+check("oqim: kesh holati — link_product", cacheStatus.linkRows, 1);
+check("oqim: kesh holati — mc_stock bo'sh", cacheStatus.stockRows, 0);
+
+db.exec("DELETE FROM stock_runs; DELETE FROM link_product; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

@@ -39,7 +39,8 @@ cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart sto
 | Kirish, foydalanuvchilar va ruxsatlar | ✅ | `users` + bo'lim ruxsatlari + `mobile` bayrog'i |
 | Yig'ish (partiyalar) | ✅ | ID ro'yxati, do'kon bo'yicha 2/22, skan doirasi |
 | Yorliqlar | ✅ | SPA ichida; Yangi (40×30) / Eski format; umumiy standart o'lchamlar |
-| Integratsiyalar (ex "Uzum order to MC") | ✅ | ishga tushishlar, loglar, systemd boshqaruvi |
+| Integratsiyalar (ex "Uzum order to MC") | ✅ | systemd loyihalari + **Qoldiq oqimlari** (holat, jadval, tarix) |
+| Tovar bog'lamalari (`link_product`) | ✅ | hisoblangan qoldiq bilan, External ID va N tahrirlanadi |
 | Konfiguratsiya | ✅ | Uzum · MoySklad token · Telegram · Google Sheets · Qoldiq modifikatsiyasi (bo'sh) |
 | Uzum buyurtmalari | ⏳ | karkas bor, ma'lumot 5-bosqichda ([docs/V3-MIGRATION.md](docs/V3-MIGRATION.md)) |
 | Mobil ilova | ✅ | v0.6.1 — do'kon nomi, 2/22, PRINT, uz/ru, oq/qora, tarix |

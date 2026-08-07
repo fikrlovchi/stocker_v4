@@ -16,6 +16,7 @@ import { projectsRouter } from "./projects.js";
 import { variablesRouter } from "./variables.js";
 import { telegramRouter } from "./telegram.js";
 import { moyskladRouter } from "./moysklad.js";
+import { stockRouter, linkProductRouter } from "./stock.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -205,6 +206,16 @@ export function webRouter() {
   /* ---------- loyihalar (Uzum order to MC va boshqalar) ---------- */
 
   router.use("/projects", requireWeb, requireSection("orders_to_mc"), projectsRouter());
+
+  /* ---------- qoldiq oqimlari va link_product ---------- */
+
+  // Ishga tushirish va jadval — Integratsiyalar bo'limida ko'rinadi,
+  // shuning uchun `orders_to_mc` ruxsati.
+  router.use("/stock", requireWeb, requireSection("orders_to_mc"), stockRouter());
+
+  // Katalogning o'zi alohida bo'lim va alohida ruxsat: unda tovar
+  // bog'lamalari tahrirlanadi, oqimlarni ishga tushirish esa yo'q.
+  router.use("/link-products", requireWeb, requireSection("link_product"), linkProductRouter());
 
   /* ---------- Konfiguratsiya ---------- */
 

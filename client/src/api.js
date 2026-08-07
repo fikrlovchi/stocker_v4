@@ -99,6 +99,21 @@ export const api = {
   bindTg: (key, botId, chatId) => call(`/telegram/integrations/${key}`, { method: "PUT", body: { botId, chatId } }),
   testTgBinding: (key) => call(`/telegram/integrations/${key}/test`, { method: "POST" }),
 
+  // Qoldiq oqimlari (Integratsiyalar bo'limi). `dryRun` ATAYLAB standart:
+  // haqiqiy yuborish uchun chaqiruvchi uni aniq false qilishi kerak.
+  stockStatus: () => call("/stock"),
+  stockRuns: (kind, limit = 20) => call(`/stock/runs?kind=${kind || ""}&limit=${limit}`),
+  stockSyncLog: (limit = 30) => call(`/stock/sync-log?limit=${limit}`),
+  stockRun: (kind, body = {}) => call(`/stock/run/${kind}`, { method: "POST", body: { dryRun: true, ...body } }),
+  stockSchedule: (patch) => call("/stock/schedule", { method: "PUT", body: patch }),
+
+  linkProducts: (params = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== "" && v !== undefined && v !== null) q.set(k, v);
+    return call(`/link-products?${q}`);
+  },
+  editLinkProduct: (id, body) => call(`/link-products/${id}`, { method: "PATCH", body }),
+
   moysklad: () => call("/moysklad"),
   setMcToken: (token) => call("/moysklad/token", { method: "PUT", body: { token } }),
   clearMcToken: () => call("/moysklad/token", { method: "DELETE" }),

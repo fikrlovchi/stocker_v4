@@ -17,6 +17,7 @@ import {
 import { fullAssortmentSync } from "./moysklad/productBarcodes.js";
 import { importLegacyMoyskladToken } from "./moysklad/token.js";
 import { importLegacyTelegram } from "./telegram/index.js";
+import { startStockSchedule } from "./stock/runner.js";
 import { startHeartbeat, countError, countSuccess } from "./panel/reporter.js";
 import { scanRouter } from "./scan/routes.js";
 import { expireStaleSessions } from "./scan/sessions.js";
@@ -236,6 +237,11 @@ server.listen(env.port, env.host, async () => {
   }
 
   setInterval(() => runRefresh("interval"), config.cache.refreshIntervalMs);
+
+  // Qoldiq oqimlari jadvali. Standart holatda hammasi o'chirilgan — server
+  // yangilanishdan keyin o'z-o'zidan Uzumga yozib yubormasligi kerak.
+  // Yoqish Integratsiyalar bo'limidan, ataylab qilinadi.
+  startStockSchedule();
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
