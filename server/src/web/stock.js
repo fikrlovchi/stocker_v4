@@ -116,6 +116,44 @@ export function linkProductRouter() {
   });
 
   /**
+   * External ID bo'yicha MoySklad tovarini topadi.
+   *
+   * v3 da bu `mc_product` ustunining formulasi edi va `MC External ID`
+   * maydonining sharti unga tayanardi:
+   *
+   *   valid_if: ISNOTBLANK([mc_product])
+   *
+   * Ya'ni tovar topilmasa qiymatni saqlab bo'lmasdi. Shu shart interfeysga
+   * chiqarilgan: forma va ro'yxat SAQLASHDAN OLDIN shu endpoint'ni chaqirib
+   * tovar nomini ko'rsatadi. Serverdagi tekshiruv ham joyida qoladi —
+   * interfeys himoya emas.
+   *
+   * `@N` / `$` qo'shimchalari ATAYLAB kesilmaydi: yangi tartibda External ID
+   * toza bo'ladi, moslik esa aynan bo'lishi kerak.
+   */
+  router.get("/mc-product", (req, res) => {
+    const externalId = String(req.query.externalId || "").trim();
+    if (!externalId) return res.json({ found: false, reason: "bo'sh" });
+
+    const rows = db
+      .prepare("SELECT uuid, name, entity_type, code, article FROM mc_product WHERE external_id = ? LIMIT 2")
+      .all(externalId);
+
+    if (!rows.length) return res.json({ found: false, reason: "MoySklad'da topilmadi" });
+    return res.json({
+      found: true,
+      uuid: rows[0].uuid,
+      name: rows[0].name,
+      entityType: rows[0].entity_type,
+      code: rows[0].code,
+      article: rows[0].article,
+      // Bir xil External ID ikki tovarda bo'lsa qaysi biri olinishi noaniq —
+      // bu ma'lumotdagi xato, ko'rinib turishi kerak.
+      ambiguous: rows.length > 1,
+    });
+  });
+
+  /**
    * Yangi bog'lama. Qator yaratilgach IKKI amal bajariladi: Uzum'dan SKU
    * ma'lumotini olish va barcode'ni MoySklad'ga qo'shish — v3 dagi AppSheet
    * automation'i kabi, jadval bo'yicha emas.
@@ -151,24 +189,36 @@ export function linkProductRouter() {
     const search = String(req.query.search || "").trim();
     const shopId = String(req.query.shop || "").trim();
 
+    // WHERE ikki so'rovda ishlatiladi: COUNT (jadvalning o'zi) va ro'yxat
+    // (JOIN bilan). JOIN'da ustun nomlari ikki jadvalda uchraydi, shuning
+    // uchun shart `lp.` bilan yasaladi va COUNT uchun taxallus beriladi.
     const where = [];
     const params = {};
     if (search) {
-      where.push("(sku_title LIKE @q OR product_title LIKE @q OR barcode LIKE @q OR mc_external_id LIKE @q)");
+      where.push(
+        "(lp.sku_title LIKE @q OR lp.product_title LIKE @q OR lp.barcode LIKE @q OR lp.mc_external_id LIKE @q)"
+      );
       params.q = `%${search}%`;
     }
     if (shopId) {
-      where.push("shop_id = @shop");
+      where.push("lp.shop_id = @shop");
       params.shop = shopId;
     }
     const sql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
 
-    const total = db.prepare(`SELECT COUNT(*) n FROM link_product${sql}`).get(params).n;
+    const total = db.prepare(`SELECT COUNT(*) n FROM link_product lp${sql}`).get(params).n;
+
+    // MoySklad tovarining NOMI ham qo'shiladi: "MC External ID" ni
+    // tahrirlashdan oldin qaysi tovar biriktirilganini ko'rish kerak.
     const rows = db
       .prepare(
-        `SELECT id, sku_id, sku_title, product_title, barcode, shop_id, status, stock_update,
-                mc_external_id, mc_uuid, card_quantity, legacy_divisor
-         FROM link_product${sql} ORDER BY id LIMIT @limit OFFSET @offset`
+        `SELECT lp.id, lp.sku_id, lp.sku_title, lp.product_title, lp.barcode, lp.shop_id,
+                lp.status, lp.stock_update, lp.mc_external_id, lp.mc_uuid,
+                lp.card_quantity, lp.legacy_divisor,
+                p.name AS mc_product_name, p.entity_type AS mc_entity_type
+         FROM link_product lp
+         LEFT JOIN mc_product p ON p.uuid = lp.mc_uuid${sql}
+         ORDER BY lp.id LIMIT @limit OFFSET @offset`
       )
       .all({ ...params, limit, offset });
 
@@ -204,6 +254,8 @@ export function linkProductRouter() {
         stockUpdate: r.stock_update === 1,
         mcExternalId: r.mc_external_id,
         mcUuid: r.mc_uuid,
+        mcProductName: r.mc_product_name,
+        mcEntityType: r.mc_entity_type,
         cardQuantity: r.card_quantity,
         legacyDivisor: r.legacy_divisor,
         hasRule: mods.has(r.sku_title),

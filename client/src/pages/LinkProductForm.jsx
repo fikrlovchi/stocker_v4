@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
+import { useMcProduct, McProductHint } from "../useMcProduct";
 
 // Yangi tovar bog'lamasi qo'shish — v3 dagi AppSheet formasining o'rni.
 // Maydonlar aynan o'sha: skuTitle · MC External ID · Do'kon · Kartochka
@@ -22,6 +23,10 @@ export default function LinkProductForm({ onClose, onCreated }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+
+  // v3 dagi `valid_if: ISNOTBLANK([mc_product])` — External ID MoySklad
+  // tovariga bog'lanmaguncha saqlash mumkin emas.
+  const mc = useMcProduct(form.mcExternalId);
 
   useEffect(() => {
     api.linkProductShops().then((r) => setShops(r.shops)).catch((e) => setError(e.message));
@@ -46,7 +51,11 @@ export default function LinkProductForm({ onClose, onCreated }) {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const filled =
-    form.skuTitle.trim() && form.mcExternalId.trim() && form.shopId && Number(form.cardQuantity) >= 1;
+    form.skuTitle.trim() &&
+    form.shopId &&
+    Number(form.cardQuantity) >= 1 &&
+    // Faqat "bo'sh emas" yetarli emas: tovar TOPILGAN bo'lishi kerak.
+    mc.state === "found";
 
   const submit = async () => {
     setBusy(true);
@@ -94,7 +103,15 @@ export default function LinkProductForm({ onClose, onCreated }) {
           </Field>
 
           <Field label={t("lp.externalId")} required hint={t("lp.externalIdHint")}>
-            <input value={form.mcExternalId} onChange={(e) => set("mcExternalId", e.target.value)} />
+            <input
+              value={form.mcExternalId}
+              onChange={(e) => set("mcExternalId", e.target.value)}
+              style={{ borderColor: mc.state === "missing" ? "var(--danger)" : undefined }}
+            />
+            {/* MoySklad tovarining nomi — saqlashdan OLDIN ko'rinadi. */}
+            <div style={{ marginTop: 4, fontSize: 13 }}>
+              <McProductHint result={mc} t={t} />
+            </div>
           </Field>
 
           <Field label={t("lp.shop")} required hint={t("lp.shopHint")}>

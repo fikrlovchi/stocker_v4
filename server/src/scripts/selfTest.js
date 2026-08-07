@@ -1364,6 +1364,45 @@ check("jurnal: tur bo'yicha filtr", lpCreate.recentEvents({ kind: "mc_barcode" }
 check("jurnal: skuTitle bo'yicha qidiruv", lpCreate.recentEvents({ skuTitle: "LOG" }).length, 2);
 check("jurnal: topilmaydigan qidiruv", lpCreate.recentEvents({ skuTitle: "YO'Q" }).length, 0);
 
+/* --- MC External ID sharti (v3: valid_if ISNOTBLANK([mc_product])) --- */
+
+// Interfeys shu endpoint orqali tovar nomini SAQLASHDAN OLDIN ko'rsatadi.
+// Serverdagi tekshiruv ham joyida qoladi — interfeys himoya emas.
+const lpApp = (await import("express")).default();
+lpApp.use((await import("express")).default.json());
+lpApp.use("/lp", (await import("../web/stock.js")).linkProductRouter());
+const lpServer = lpApp.listen(0, "127.0.0.1");
+await new Promise((r) => lpServer.once("listening", r));
+const lpBase = `http://127.0.0.1:${lpServer.address().port}`;
+
+const mcLookup = async (externalId) =>
+  (await fetch(`${lpBase}/lp/mc-product?externalId=${encodeURIComponent(externalId)}`)).json();
+
+db.prepare(
+  `INSERT INTO mc_product (uuid, entity_type, name, external_id, synced_at)
+   VALUES ('u-1', 'product', 'Sozlanadigan suv purkagich', 'ext-ok', datetime('now')),
+          ('u-2', 'variant', 'Ikkinchi tovar', 'ext-dup', datetime('now')),
+          ('u-3', 'product', 'Uchinchi tovar', 'ext-dup', datetime('now'))`
+).run();
+
+const okLookup = await mcLookup("ext-ok");
+check("valid_if: tovar topiladi", okLookup.found, true);
+check("valid_if: nom qaytadi", okLookup.name, "Sozlanadigan suv purkagich");
+check("valid_if: tur qaytadi", okLookup.entityType, "product");
+check("valid_if: bitta tovar — noaniqlik yo'q", okLookup.ambiguous, false);
+
+check("valid_if: topilmasa found=false", (await mcLookup("yo'q")).found, false);
+check("valid_if: bo'sh qiymat", (await mcLookup("")).reason, "bo'sh");
+// `@N` qo'shimchasi ATAYLAB kesilmaydi — yangi tartibda External ID toza.
+check("valid_if: qo'shimchali qiymat topilmaydi", (await mcLookup("ext-ok@3")).found, false);
+
+// Bir xil External ID ikki tovarda — ma'lumotdagi xato, ko'rinishi kerak.
+const dupLookup = await mcLookup("ext-dup");
+check("valid_if: noaniqlik belgilanadi", dupLookup.ambiguous, true);
+
+await new Promise((r) => lpServer.close(r));
+db.exec("DELETE FROM mc_product");
+
 db.exec("DELETE FROM link_product_events; DELETE FROM link_product; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
 
 /* ---------------- Yakun ---------------- */

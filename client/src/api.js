@@ -113,6 +113,8 @@ export const api = {
     return call(`/link-products?${q}`);
   },
   linkProductShops: () => call("/link-products/shops"),
+  // "MC External ID" maydonining sharti (v3: valid_if ISNOTBLANK([mc_product])).
+  mcProduct: (externalId) => call(`/link-products/mc-product?externalId=${encodeURIComponent(externalId)}`),
   addLinkProduct: (body) => call("/link-products", { method: "POST", body }),
   editLinkProduct: (id, body) => call(`/link-products/${id}`, { method: "PATCH", body }),
   retryLinkProduct: (id) => call(`/link-products/${id}/retry`, { method: "POST" }),
