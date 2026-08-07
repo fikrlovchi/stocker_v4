@@ -236,6 +236,20 @@ Qoldiq sinxronizatsiyalari tarixi va xulosa:
 cd /root/stocker/server && node src/scripts/stockLog.js
 ```
 
+**Yozuv oqimlari (4-bosqich).** Ikkalasi ham standart holatda hech narsa
+yozmaydi — bayroqsiz ishga tushirsa faqat nima bo'lishini ko'rsatadi:
+
+```bash
+cd /root/stocker/server && node src/scripts/pushStock.js
+```
+
+```bash
+cd /root/stocker/server && node src/scripts/barcodeSync.js
+```
+
+Yuborish/yozish uchun `--send` va `--write`. To'liq tartib
+[docs/V3-MIGRATION.md](docs/V3-MIGRATION.md) 4-bosqichida.
+
 Diagnostika (`TOKEN` = `.env` dagi `SERVICE_TOKEN`):
 
 ```bash

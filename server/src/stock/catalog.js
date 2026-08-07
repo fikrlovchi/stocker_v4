@@ -49,11 +49,38 @@ export function loadStockByExternalId() {
   return map;
 }
 
+/**
+ * shop_id → { name, cabinetId, token, stockUpdate }.
+ *
+ * v3 da token har `link_product` qatorida takrorlanardi (`link_product!G`) —
+ * bu yerda esa do'kon orqali kabinetdan olinadi, ya'ni token bitta joyda
+ * turadi (Konfiguratsiya → Uzum).
+ */
+export function loadShopTokens() {
+  const map = new Map();
+  const rows = db
+    .prepare(
+      `SELECT s.shop_id, s.name, s.stock_update, s.cabinet_id, c.token, c.name AS cabinet_name
+       FROM uzum_shops s JOIN uzum_cabinets c ON c.id = s.cabinet_id`
+    )
+    .all();
+  for (const r of rows) {
+    map.set(String(r.shop_id), {
+      name: r.name,
+      cabinetId: r.cabinet_id,
+      cabinetName: r.cabinet_name,
+      token: r.token,
+      stockUpdate: r.stock_update !== 0,
+    });
+  }
+  return map;
+}
+
 export function loadLinkProducts() {
   return db
     .prepare(
-      `SELECT id, sku_id, sku_title, shop_id, stock_update, mc_external_id, mc_uuid,
-              card_quantity, legacy_divisor
+      `SELECT id, sku_id, sku_title, product_title, barcode, shop_id, stock_update,
+              mc_external_id, mc_uuid, card_quantity, legacy_divisor
        FROM link_product ORDER BY id`
     )
     .all()
@@ -61,6 +88,8 @@ export function loadLinkProducts() {
       id: r.id,
       skuId: r.sku_id,
       skuTitle: r.sku_title,
+      productTitle: r.product_title,
+      barcode: r.barcode,
       shopId: r.shop_id,
       stockUpdate: Boolean(r.stock_update),
       mcExternalId: r.mc_external_id,

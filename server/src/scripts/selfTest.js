@@ -1070,6 +1070,133 @@ check(
 
 db.exec("DELETE FROM mc_stock_sync_log");
 
+/* ---------- 18. Uzumga qoldiq yuborish (4-bosqich) ---------- */
+
+const { buildPayloads } = await import("../stock/pushToUzum.js");
+
+// Do'kon → kabinet → token. Ikkita do'kon, ikkita kabinet: guruhlash
+// to'g'ri ishlashini ko'rish uchun.
+const SHOPS = new Map([
+  ["682", { name: "uzon.market", cabinetName: "UZON", token: "tok-uzon", stockUpdate: true }],
+  ["86488", { name: "BUYO", cabinetName: "BUYO", token: "tok-buyo", stockUpdate: true }],
+  ["999", { name: "Yopiq", cabinetName: "BUYO", token: "tok-buyo", stockUpdate: false }],
+  ["777", { name: "Tokensiz", cabinetName: "X", token: "", stockUpdate: true }],
+]);
+
+const pRow = (extra) => ({
+  skuId: 1,
+  skuTitle: "UZON-1",
+  productTitle: "Tovar",
+  barcode: "1000000000017",
+  shopId: "682",
+  stockUpdate: true,
+  mcExternalId: "ext-1",
+  mcUuid: "uuid-1",
+  cardQuantity: 1,
+  legacyDivisor: 1,
+  ...extra,
+});
+
+const STOCK = new Map([["ext-1", 100], ["ext-2", 5]]);
+const ctx = { mods: new Map(), defaults: DEFAULTS, stock: STOCK, shops: SHOPS };
+
+const built = buildPayloads([pRow()], ctx);
+check("push: bitta token guruhi", [...built.byToken.keys()], ["tok-uzon"]);
+check("push: payload shakli", built.byToken.get("tok-uzon")[0], {
+  skuId: 1,
+  skuTitle: "UZON-1",
+  productTitle: "Tovar",
+  barcode: "1000000000017",
+  amount: 100,
+  fbsLinked: true,
+  dbsLinked: false,
+});
+
+// Ikki do'kon → ikki token guruhi.
+const twoShops = buildPayloads([pRow(), pRow({ skuId: 2, skuTitle: "BUYO-1", shopId: "86488" })], ctx);
+check("push: token bo'yicha guruhlanadi", [...twoShops.byToken.keys()].sort(), ["tok-buyo", "tok-uzon"]);
+
+// Qator bayrog'i (link_product!J).
+check("push: qator bayrog'i o'chirilgan", buildPayloads([pRow({ stockUpdate: false })], ctx).skipped.stockUpdateOff.length, 1);
+
+// Do'kon bayrog'i (uzum_shop!E) — GAS bundan foydalanmagan, shuning uchun
+// alohida hisobda.
+const shopOff = buildPayloads([pRow({ shopId: "999" })], ctx);
+check("push: do'kon bayrog'i o'chirilgan", shopOff.skipped.shopStockOff.length, 1);
+check("push: bunda hech narsa yuborilmaydi", shopOff.byToken.size, 0);
+
+check("push: skuId yo'q", buildPayloads([pRow({ skuId: 0 })], ctx).skipped.noSkuId.length, 1);
+check("push: do'kon katalogda yo'q", buildPayloads([pRow({ shopId: "yo'q" })], ctx).skipped.unknownShop.length, 1);
+check("push: kabinet tokeni yo'q", buildPayloads([pRow({ shopId: "777" })], ctx).skipped.noToken.length, 1);
+check("push: skuTitle bo'sh bo'lsa qoldiq hisoblanmaydi", buildPayloads([pRow({ skuTitle: "" })], ctx).skipped.noAmount.length, 1);
+
+// Takroriy skuId — oxirgi qator g'olib (GAS'da ham shunday).
+const dup = buildPayloads([pRow({ mcExternalId: "ext-2" }), pRow()], ctx);
+check("push: takroriy skuId qayd etiladi", dup.skipped.duplicates.length, 1);
+check("push: oxirgi qator g'olib", dup.byToken.get("tok-uzon")[0].amount, 100);
+
+// Qoldiq qoidalari ishlaydi: 5 dona → standart qoida bo'yicha 0.
+check("push: standart qoida qo'llanadi", buildPayloads([pRow({ mcExternalId: "ext-2" })], ctx).byToken.get("tok-uzon")[0].amount, 0);
+
+// Kartochka miqdori: 100 / 3 → 33.
+check("push: kartochka miqdori", buildPayloads([pRow({ cardQuantity: 3 })], ctx).byToken.get("tok-uzon")[0].amount, 33);
+
+// Qoldiq topilmasa 0 ketadi (manfiy yoki bo'sh emas).
+check("push: qoldiq topilmadi → 0", buildPayloads([pRow({ mcExternalId: "yo'q" })], ctx).byToken.get("tok-uzon")[0].amount, 0);
+
+// Yuqori chegara: Uzum 100000 dan ko'pini qabul qilmaydi.
+check(
+  "push: 100000 dan yuqorisi cheklanadi",
+  buildPayloads([pRow({ mcExternalId: "ext-big" })], { ...ctx, stock: new Map([["ext-big", 999999]]) }).byToken.get("tok-uzon")[0].amount,
+  100000
+);
+
+/* ---------- 19. Barcode → MoySklad (4-bosqich) ---------- */
+
+const bc = await import("../stock/barcodeToMc.js");
+
+check("barcode: ean13 aniqlanadi", bc.detectBarcodeType("1000000856293"), "ean13");
+check("barcode: checksum mos kelmasa code128", bc.detectBarcodeType("1000000856294"), "code128");
+check("barcode: harfli kod code128", bc.detectBarcodeType("ABC-123"), "code128");
+check("barcode: raqam tipi matnga aylanadi", bc.normalizeCode(1000000856293), "1000000856293");
+check("barcode: ean8", bc.detectBarcodeType("96385074"), "ean8");
+check("barcode: GTIN tekshiruvi", bc.isValidGtin("1000000856293"), true);
+check("barcode: buzuq GTIN", bc.isValidGtin("1000000856292"), false);
+
+// Mavjudlar orasida borligini aniqlash — tur boshqa bo'lsa ham.
+check("barcode: mavjudligini topadi", bc.barcodeExists([{ ean13: "1000000856293" }], "1000000856293"), true);
+check("barcode: bo'shliqli qiymat ham topiladi", bc.barcodeExists([{ code128: " ABC1 " }], "ABC1"), true);
+check("barcode: boshqa kod topilmaydi", bc.barcodeExists([{ ean13: "1000000856293" }], "999"), false);
+
+// Bayroq qiymatlari — v3 dagi ro'yxat saqlanadi.
+check("barcode: TRUE bayroq", bc.isFlagged("TRUE"), true);
+check("barcode: ha bayroq", bc.isFlagged("ha"), true);
+check("barcode: ✓ bayroq", bc.isFlagged("✓"), true);
+check("barcode: bo'sh bayroq emas", bc.isFlagged(""), false);
+check("barcode: false bayroq emas", bc.isFlagged("false"), false);
+
+// Bayroqli qatorlarni bazadan topish + ma'lumot yetarsiz holat.
+db.prepare(
+  `INSERT INTO link_product (sku_title, barcode, mc_uuid, status, card_quantity)
+   VALUES ('BC-1', '1000000856293', 'uuid-bc', 'TRUE', 1),
+          ('BC-2', '1000000856293', NULL, 'TRUE', 1),
+          ('BC-3', '1000000856293', 'uuid-bc', NULL, 1)`
+).run();
+
+const pending = bc.pendingBarcodeRows();
+check("barcode: faqat bayroqli qatorlar", pending.map((r) => r.skuTitle), ["BC-1", "BC-2"]);
+
+// UUID yo'q qator: DRY-RUN da ham "ma'lumot yetarsiz" ga tushadi va
+// MoySklad'ga so'rov ketmaydi — shu sababdan test oflayn qoladi.
+const noUuid = await bc.addBarcodesToMoySklad([pending[1]], { dryRun: true });
+check("barcode: UUID yo'q → o'tkazib yuboriladi", noUuid.skipped.length, 1);
+check("barcode: bayroq qoladi (sabab ko'rsatiladi)", noUuid.skipped[0].reason, "barcode yoki MoySklad UUID yo'q");
+
+bc.clearFlag(pending[0].id);
+check("barcode: bayroq tozalanadi", bc.pendingBarcodeRows().map((r) => r.skuTitle), ["BC-2"]);
+
+db.exec("DELETE FROM link_product");
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();

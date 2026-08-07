@@ -133,10 +133,83 @@ topiladi. MoySklad tovari biriktirilmagan yoki topilmasa — bo'sh (0 emas).
 > son bilan bir xil natija beradi) va import hisobotida ro'yxat qilinadi —
 > ular tozalanishi kerak.
 
-### 4-bosqich — yozish
+### 4-bosqich — yozish ⏳ kod tayyor, sinov kutilmoqda (2026-08-07)
 
-Uzumga qoldiq yuborish (`stock_updater_v3`) va barcode→MoySklad
-(`addBarcodeToMC`) serverga o'tadi, jadvalga esa zaxira yoziladi.
+Ikkala yozuv oqimi serverga ko'chdi. **Ikkalasi ham standart holatda hech
+narsa yozmaydi** — yozish faqat ataylab berilgan bayroq bilan. Sababi
+oddiy: bu oqimlar tashqi natijaga olib keladi (Uzumda tovar sotuvdan
+chiqishi, MoySklad'da barcode o'zgarishi), shuning uchun "tasodifan ishga
+tushib ketdi" degan holat bo'lmasligi kerak.
+
+#### Uzumga qoldiq yuborish
+
+[`stock/pushToUzum.js`](../server/src/stock/pushToUzum.js) — v3 dagi
+`pushToUzumFast` ning o'rni. Payload shakli **aynan bir xil**
+(`skuId · skuTitle · productTitle · barcode · amount · fbsLinked · dbsLinked`),
+100 talik batch, 4 parallel to'lqin, 429/5xx da eksponensial backoff.
+
+```bash
+node src/scripts/pushStock.js                    # DRY-RUN
+node src/scripts/pushStock.js --send --shop=682 --limit=20   # ehtiyotkor sinov
+node src/scripts/pushStock.js --send             # to'liq
+```
+
+GAS'dan ikki farqi:
+
+* qoldiq jadvaldagi formuladan emas, `stock/rules.js` dan hisoblanadi;
+* token har qatorda takrorlanmaydi (`link_product!G`) — do'kon orqali
+  kabinetdan olinadi, ya'ni bitta joyda turadi.
+
+**Bitta xatti-harakat farqi bor va u ataylab:** do'kon darajasidagi
+`uzum_shop!E` ("Stock update") bayrog'i hisobga olinadi. GAS bu ustundan
+foydalanmagan. Dry-run hisobotida shu sababli o'tkazib yuborilgan qatorlar
+**alohida ko'rsatiladi** — sinovdan oldin ko'zdan kechirish kerak.
+
+#### Barcode → MoySklad
+
+[`stock/barcodeToMc.js`](../server/src/stock/barcodeToMc.js) — v3 dagi
+`addBarcodesToMoySklad`. Eng muhim qoida saqlangan: PUT'dan oldin tovarning
+hozirgi barcode'lari MoySklad'dan **jonli** o'qiladi va yangisi ularning
+ustiga qo'shiladi, shuning uchun eski barcode'lar yo'qolmaydi.
+
+```bash
+node src/scripts/barcodeSync.js                        # DRY-RUN
+node src/scripts/barcodeSync.js --write --keep-sheet-flag   # GAS yoqiq turganda
+node src/scripts/barcodeSync.js --write                # to'liq
+```
+
+Bayroq `link_product!H` da; qabul qilinadigan qiymatlar v3 dagidek
+(`TRUE`/`yes`/`ha`/`1`/`x`/`✓`/`yubor`). Muvaffaqiyatli qatorda bayroq
+tozalanadi — **jadvalda ham**, aks holda ish takrorlanardi. Jadvaldagi qator
+raqami bazada saqlanmaydi: har yozishdan oldin `skuTitle` bo'yicha joriy
+qator topiladi (AppSheet qatorlarni surishi mumkin), so'ng hammasi bitta
+`batchUpdate` bilan yoziladi.
+
+`--keep-sheet-flag` — MoySklad'ga yozadi, jadvaldagi bayroqqa tegmaydi. GAS
+trigger'i hali yoqiq turganda sinash uchun: server ishni bajaradi, GAS keyin
+"allaqachon bor" deb ko'radi va bayroqni o'zi tozalaydi. Takror barcode
+qo'shilmaydi, chunki mavjudligi qiymat bo'yicha tekshiriladi.
+
+#### Ko'chirish tartibi
+
+| # | Qadam |
+|---|---|
+| 1 | `pushStock.js` (dry-run) — GAS yuborayotgan son bilan solishtirish |
+| 2 | `pushStock.js --send --shop=<id> --limit=20` — bitta do'konda sinash |
+| 3 | Uzum kabinetida qoldiq to'g'ri o'zgarganini ko'rish |
+| 4 | GAS'da `pushToUzumFast` trigger'ini **o'chirish** |
+| 5 | `pushStock.js --send` — to'liq |
+| 6 | Xuddi shu tartib `barcodeSync.js` uchun |
+| 7 | Ikkalasi bir necha kun barqaror ishlagach — GAS kodlarini o'chirish |
+
+> 4-qadamgacha GAS ham yozib turadi. Natija bir xil bo'lgani uchun bu
+> xavfli emas, lekin so'rovlar ikki barobar bo'ladi.
+
+Xato bo'lganda Telegram'ga xabar ketadi (Konfiguratsiya → Telegram →
+"Uzumga qoldiq yuborish" va "Barcode → MoySklad" integratsiyalari).
+
+selfTest: 270 → **305** (payload yasash, guruhlash, bayroqlar, chegaralar,
+barcode turi va GTIN nazorat raqami).
 
 ### 5-bosqich — Uzum buyurtmalari
 
