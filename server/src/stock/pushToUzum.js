@@ -24,6 +24,43 @@ const TIMEOUT_MS = 30000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Yuborishdan OLDIN tekshiruv: qoldiq keshi ishonchlimi?
+ *
+ * NEGA KERAK — 2026-08-07 da yo'qotilgan vaqt. `mc_stock` jadvali migratsiya
+ * bilan qaytadan yaratilgan (bo'sh qolgan) va hech narsa uni to'ldirmagan.
+ * Natijada har qatorda "qoldiq topilmadi" → amount 0, va 20 ta SKU Uzumga
+ * NOL bilan ketdi. Hisobotda "3740/3740 nol" deb turgan edi, lekin buni
+ * odam ko'rishiga tayanish yetarli emas.
+ *
+ * Uchta shart. Har biri o'zi yetarli sabab — hech biri "ehtimol" emas:
+ *   • kesh bo'sh — hisoblash uchun ma'lumot yo'q;
+ *   • kesh eskirgan — qoldiq allaqachon o'zgargan bo'lishi mumkin;
+ *   • deyarli hammasi nol — bu haqiqiy holat bo'lishi ehtimoldan juda uzoq.
+ *
+ * Toza funksiya: bazani bilmaydi, testda tekshiriladi.
+ */
+export function checkBeforeSend({ stockRows, stockSyncedAt, zeroCount, totalCount }, opts = {}) {
+  const { maxAgeHours = 6, maxZeroRatio = 0.5, now = Date.now() } = opts;
+  const problems = [];
+
+  if (!stockRows) {
+    problems.push("qoldiq keshi (`mc_stock`) BO'SH — `v3Sync.js` ishga tushirilmagan");
+  } else if (stockSyncedAt) {
+    const ageHours = (now - new Date(stockSyncedAt + "Z").getTime()) / 3600000;
+    if (Number.isFinite(ageHours) && ageHours > maxAgeHours) {
+      problems.push(`qoldiq keshi ${Math.round(ageHours)} soat eskirgan (chegara ${maxAgeHours} soat)`);
+    }
+  }
+
+  if (totalCount && zeroCount / totalCount > maxZeroRatio) {
+    const pct = Math.round((zeroCount / totalCount) * 100);
+    problems.push(`SKU'larning ${pct}% i nol qoldiq bilan ketadi (chegara ${Math.round(maxZeroRatio * 100)}%)`);
+  }
+
+  return { ok: problems.length === 0, problems };
+}
+
+/**
  * Yuboriladigan payloadlarni yasaydi.
  *
  * Toza funksiya — tarmoq va bazani bilmaydi, shuning uchun testda to'liq
@@ -37,9 +74,11 @@ export function buildPayloads(rows, { mods, defaults, stock, shops }) {
   const byToken = new Map();
   const tokenLabel = new Map();
 
+  // Do'kon kesimidagi "Stock update" (v3 `uzum_shop!E`) ATAYLAB ishlatilmaydi:
+  // u eski mantiqning qoldig'i, qoldiq yuborishni faqat `link_product!J`
+  // boshqaradi.
   const skipped = {
     stockUpdateOff: [], // link_product!J = FALSE
-    shopStockOff: [], // do'kon bo'yicha qoldiq yangilash o'chirilgan
     noSkuId: [],
     unknownShop: [],
     noToken: [],
@@ -62,12 +101,6 @@ export function buildPayloads(rows, { mods, defaults, stock, shops }) {
     const shop = shops.get(String(row.shopId));
     if (!shop) {
       skipped.unknownShop.push({ skuTitle: row.skuTitle, shopId: row.shopId });
-      continue;
-    }
-    // Do'kon darajasidagi bayroq (v3 `uzum_shop!E`). GAS bundan
-    // foydalanmagan — shuning uchun hisobotda alohida ko'rsatiladi.
-    if (!shop.stockUpdate) {
-      skipped.shopStockOff.push({ skuTitle: row.skuTitle, shop: shop.name });
       continue;
     }
     if (!shop.token) {

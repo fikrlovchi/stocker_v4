@@ -18,8 +18,9 @@
 // GAS o'chirilmagan bo'lsa ikkalasi bir vaqtda yozadi — natija bir xil
 // bo'lgani uchun xavfli emas, lekin so'rovlar ikki barobar bo'ladi.
 import logger from "../logger.js";
+import { db } from "../db/index.js";
 import { loadMods, loadDefaults, loadStockByExternalId, loadLinkProducts, loadShopTokens } from "../stock/catalog.js";
-import { buildPayloads, sendPayloads } from "../stock/pushToUzum.js";
+import { buildPayloads, sendPayloads, checkBeforeSend } from "../stock/pushToUzum.js";
 import { notify } from "../telegram/index.js";
 
 const args = process.argv.slice(2);
@@ -27,6 +28,9 @@ const has = (name) => args.includes(name);
 const value = (name) => args.find((a) => a.startsWith(`${name}=`))?.split("=")[1];
 
 const send = has("--send");
+// Himoyani chetlab o'tish. Ataylab uzun nom: tasodifan yozilmaydi va
+// buyruq tarixida ko'rinib turadi.
+const force = has("--ignore-safety-checks");
 const onlyShop = value("--shop");
 const limit = Number(value("--limit")) || 0;
 
@@ -63,12 +67,7 @@ async function main() {
 
   console.log("\nO'tkazib yuborilganlar:");
   const s = skipped;
-  console.log(`   qoldiq yangilash o'chirilgan (qator): ${s.stockUpdateOff.length}`);
-  if (s.shopStockOff.length) {
-    // GAS bu bayroqni ISHLATMAGAN — farq bo'lsa aynan shu yerdan.
-    console.log(`   ⚠ do'kon bo'yicha o'chirilgan: ${s.shopStockOff.length} — ${list(s.shopStockOff)}`);
-    console.log(`     (v3 dagi GAS bu bayroqni hisobga olmagan)`);
-  }
+  console.log(`   qoldiq yangilash o'chirilgan (link_product!J): ${s.stockUpdateOff.length}`);
   if (s.noSkuId.length) console.log(`   skuId yo'q: ${s.noSkuId.length} — ${list(s.noSkuId)}`);
   if (s.unknownShop.length) console.log(`   ⚠ do'kon katalogda yo'q: ${s.unknownShop.length} — ${list(s.unknownShop)}`);
   if (s.noToken.length) console.log(`   ⚠ kabinet tokeni yo'q: ${s.noToken.length} — ${list(s.noToken)}`);
@@ -82,6 +81,29 @@ async function main() {
 
   const zeros = [...byToken.values()].flat().filter((p) => p.amount === 0).length;
   console.log(`\nNol qoldiq bilan ketadigan SKU: ${zeros} / ${totalToSend}`);
+
+  // Qoldiq keshining holati — yuborishdan oldin ko'rinib turishi kerak.
+  const cache = db.prepare("SELECT COUNT(*) n, MAX(synced_at) at FROM mc_stock").get();
+  console.log(`Qoldiq keshi: ${cache.n} qator${cache.at ? `, oxirgi yangilanish ${cache.at}` : " — HECH QACHON YANGILANMAGAN"}`);
+
+  const safety = checkBeforeSend({
+    stockRows: cache.n,
+    stockSyncedAt: cache.at,
+    zeroCount: zeros,
+    totalCount: totalToSend,
+  });
+
+  if (!safety.ok) {
+    console.log("\n⛔ TEKSHIRUV O'TMADI:");
+    for (const p of safety.problems) console.log(`   • ${p}`);
+    console.log("\nQoldiqni yangilash:  node src/scripts/v3Sync.js");
+    if (send) {
+      console.log("Yuborish TO'XTATILDI. Chindan ham shu holatda yuborish kerak bo'lsa:");
+      console.log("   --ignore-safety-checks");
+      if (!force) process.exit(2);
+      console.log("\n⚠ --ignore-safety-checks berilgan — davom etilmoqda.");
+    }
+  }
 
   if (!send) {
     console.log("\nHech narsa yuborilmadi. Yuborish uchun: --send");

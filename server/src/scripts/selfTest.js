@@ -1119,11 +1119,10 @@ check("push: token bo'yicha guruhlanadi", [...twoShops.byToken.keys()].sort(), [
 // Qator bayrog'i (link_product!J).
 check("push: qator bayrog'i o'chirilgan", buildPayloads([pRow({ stockUpdate: false })], ctx).skipped.stockUpdateOff.length, 1);
 
-// Do'kon bayrog'i (uzum_shop!E) — GAS bundan foydalanmagan, shuning uchun
-// alohida hisobda.
+// Do'kon kesimidagi "Stock update" (uzum_shop!E) ATAYLAB ishlatilmaydi —
+// qoldiq yuborishni faqat link_product!J boshqaradi.
 const shopOff = buildPayloads([pRow({ shopId: "999" })], ctx);
-check("push: do'kon bayrog'i o'chirilgan", shopOff.skipped.shopStockOff.length, 1);
-check("push: bunda hech narsa yuborilmaydi", shopOff.byToken.size, 0);
+check("push: do'kon bayrog'i qoldiqqa ta'sir qilmaydi", shopOff.byToken.get("tok-buyo").length, 1);
 
 check("push: skuId yo'q", buildPayloads([pRow({ skuId: 0 })], ctx).skipped.noSkuId.length, 1);
 check("push: do'kon katalogda yo'q", buildPayloads([pRow({ shopId: "yo'q" })], ctx).skipped.unknownShop.length, 1);
@@ -1149,6 +1148,52 @@ check(
   "push: 100000 dan yuqorisi cheklanadi",
   buildPayloads([pRow({ mcExternalId: "ext-big" })], { ...ctx, stock: new Map([["ext-big", 999999]]) }).byToken.get("tok-uzon")[0].amount,
   100000
+);
+
+/* --- Yuborishdan oldingi himoya (2026-08-07 dagi hodisa) --- */
+
+// Bo'sh kesh bilan yuborish 20 ta SKU'ni Uzumda nolga tushirdi. Endi kod
+// bunga yo'l qo'ymaydi.
+const { checkBeforeSend } = await import("../stock/pushToUzum.js");
+const SAFETY_NOW = Date.parse("2026-08-07T12:00:00Z");
+const fresh = "2026-08-07 11:30:00";
+
+check(
+  "himoya: sog'lom holat o'tadi",
+  checkBeforeSend({ stockRows: 2141, stockSyncedAt: fresh, zeroCount: 10, totalCount: 3740 }, { now: SAFETY_NOW }).ok,
+  true
+);
+
+const emptyCache = checkBeforeSend({ stockRows: 0, stockSyncedAt: null, zeroCount: 3740, totalCount: 3740 }, { now: SAFETY_NOW });
+check("himoya: bo'sh kesh bloklanadi", emptyCache.ok, false);
+// Ikkita sabab: kesh bo'sh VA hammasi nol — ikkalasi ham ko'rsatilishi kerak.
+check("himoya: sabablar sanaladi", emptyCache.problems.length, 2);
+
+check(
+  "himoya: eskirgan kesh bloklanadi",
+  checkBeforeSend({ stockRows: 2141, stockSyncedAt: "2026-08-06 11:00:00", zeroCount: 5, totalCount: 3740 }, { now: SAFETY_NOW }).ok,
+  false
+);
+
+check(
+  "himoya: ommaviy nol bloklanadi",
+  checkBeforeSend({ stockRows: 2141, stockSyncedAt: fresh, zeroCount: 2000, totalCount: 3740 }, { now: SAFETY_NOW }).ok,
+  false
+);
+
+// Chegara ostidagi nol — normal holat, bloklanmaydi.
+check(
+  "himoya: nol ulushi chegara ostida o'tadi",
+  checkBeforeSend({ stockRows: 2141, stockSyncedAt: fresh, zeroCount: 1800, totalCount: 3740 }, { now: SAFETY_NOW }).ok,
+  true
+);
+
+// Bitta do'konda 20 SKU sinaganda hammasi nol chiqishi ham to'xtatiladi —
+// aynan shu holat sodir bo'lgan edi.
+check(
+  "himoya: kichik partiyada ham ommaviy nol to'xtatiladi",
+  checkBeforeSend({ stockRows: 0, stockSyncedAt: null, zeroCount: 20, totalCount: 20 }, { now: SAFETY_NOW }).ok,
+  false
 );
 
 /* ---------- 19. Barcode → MoySklad (4-bosqich) ---------- */
