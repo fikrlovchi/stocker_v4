@@ -182,23 +182,41 @@ nomuvofiqlik.
 **Nega xavfli:** tovar bitta javobda ko'rinmasa, biz uni "qoldiq yo'q" deb
 Uzumga **0** yuborardik — sotuvdagi tovar do'kondan yo'qolardi.
 
-Tovar kesimida so'rov berish API xarajatini oshiradi, shuning uchun yechim
-javobning o'zida — **hamon bitta so'rov**, ikki qavat himoya
-([`moysklad/assortment.js`](../server/src/moysklad/assortment.js)):
+**Butun katalogni** tovar kesimida so'rash API xarajatini oshirib yuboradi,
+lekin **tushib qolgan 1-3 ta tovarni** alohida so'rash arzon. Shuning uchun
+uch qavat himoya ([`moysklad/assortment.js`](../server/src/moysklad/assortment.js)):
 
 1. **Butun javob rad etilishi mumkin.** Qatorlar soni oldingisidan
    `stockMinResponseRatio` (0.95) dan ko'proq kamaysa, hisobot umuman
    qo'llanmaydi va logga xato yoziladi. Bir necha tovar tushib qolishi
    normal, ommaviy kamayish — nosozlik.
-2. **Bitta javob yetarli emas.** Ko'rinmagan tovarning oxirgi ma'lum
-   qoldig'i saqlanadi va `missing_count` oshadi; u ketma-ket
-   `stockMissingConfirmations` (3) marta kelmagandagina 0 deb belgilanadi.
-   Qaytib kelsa hisob nollanadi. Hisobotda **aniq 0** kelgan bo'lsa —
-   darhol 0, kutilmaydi.
+2. **Maqsadli qayta so'rov.** Hisobotda ko'rinmagan tovarlar `filter=
+   assortmentId=…` bilan alohida so'raladi — bittalab emas,
+   `stockRecheckBatch` (50) tacha birga, ya'ni odatda **qo'shimcha bitta
+   so'rov**. Javob kelsa (0 ham javob) qoldiq darhol aniqlanadi va kutish
+   kerak bo'lmaydi. `stockRecheckMax` (200) dan ko'p bo'lsa o'tkazib
+   yuboriladi — bu allaqachon nosozlik belgisi.
+3. **Kutish (zaxira).** Maqsadli so'rov ham topmasa yoki xato bersa,
+   tovarning oxirgi ma'lum qoldig'i saqlanadi va `missing_count` oshadi; u
+   ketma-ket `stockMissingConfirmations` (3) marta kelmagandagina 0 deb
+   belgilanadi. Qaytib kelsa hisob nollanadi.
 
-Ikkala chegara `config.json` da (`moysklad.stockMinResponseRatio`,
-`moysklad.stockMissingConfirmations`). Har sinxronizatsiyada nechta tovar
-saqlanib qolgani va nechtasi 0 bo'lgani logga yoziladi.
+Nega uchinchi qavat kerak: agar nomuvofiqlik MoySklad tomonidagi keshdan
+bo'lsa, maqsadli so'rov ham o'sha noto'g'ri javobni qaytarishi mumkin. Buni
+o'lchash uchun diagnostika bor:
+
+```bash
+cd /root/stocker/server && node src/scripts/stockProbe.js
+```
+
+Skript hisobotni bir necha marta so'raydi, beqaror tovarlarni ajratadi, so'ng
+ularni maqsadli so'rov bilan **ikki marta** so'rab, maqsadli so'rovning o'zi
+barqarormi degan savolga javob beradi. Yon tekshiruv sifatida
+`stockMode=all` ham sinaladi — u nol qoldiqlarni qaytarsa, "tushib qolish"
+o'rniga 0 ko'rinadi va muammo ildizidan yopiladi.
+
+Barcha chegaralar `config.json` → `moysklad` da. Har sinxronizatsiyada
+nechtasi so'ralgani, tiklangani va 0 deb belgilangani logga yoziladi.
 
 ## MoySklad havolalari (MC href)
 

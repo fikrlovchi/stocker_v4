@@ -224,6 +224,12 @@ v3 bazasini serverga ko'chirish va natijani jadval bilan solishtirish
 cd /root/stocker/server && node src/scripts/v3Sync.js
 ```
 
+MoySklad qoldiq hisobotining barqarorligini o'lchash (faqat o'qiydi):
+
+```bash
+cd /root/stocker/server && node src/scripts/stockProbe.js
+```
+
 Diagnostika (`TOKEN` = `.env` dagi `SERVICE_TOKEN`):
 
 ```bash

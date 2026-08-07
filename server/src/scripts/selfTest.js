@@ -989,6 +989,45 @@ check("qoldiq: o'sish qabul qilinadi", mergeStockReport(prev(["a"]), rep(["a", "
 const explicitZero = mergeStockReport(prev(["a"]), [{ uuid: "a", stock: 0 }], OPTS);
 check("qoldiq: aniq 0 darhol qo'llanadi", explicitZero.rows[0].stock, 0);
 
+/* --- Maqsadli qayta so'rov: tushib qolgan tovarni alohida so'rash --- */
+
+const { applyRecheck } = await import("../moysklad/assortment.js");
+
+// Tovar tushib qoldi, maqsadli so'rov uni topdi → darhol tiklanadi,
+// 3 tsikl kutilmaydi.
+const missed = mergeStockReport(prev(["a", "b", "c"]), rep(["a", "b"]), { ...OPTS, minResponseRatio: 0.5 });
+const restored = applyRecheck(missed, new Map([["c", 7]]));
+check("qayta so'rov: topilgan tovar tiklanadi", restored.restored, ["c"]);
+check("qayta so'rov: kutish ro'yxatidan chiqadi", restored.kept, []);
+check("qayta so'rov: qoldiq yangilanadi", restored.rows.find((r) => r.uuid === "c").stock, 7);
+check("qayta so'rov: hisob nollanadi", restored.rows.find((r) => r.uuid === "c").missingCount, 0);
+
+// Maqsadli so'rov 0 qaytardi — bu ham javob, kutilmaydi.
+const zeroed = applyRecheck(missed, new Map([["c", 0]]));
+check("qayta so'rov: aniq 0 ham javob", zeroed.rows.find((r) => r.uuid === "c").stock, 0);
+check("qayta so'rov: 0 kelganda ham tiklangan hisoblanadi", zeroed.restored, ["c"]);
+
+// Maqsadli so'rov ham topmadi → himoya (kutish) o'z kuchida qoladi.
+const stillGone = applyRecheck(missed, new Map());
+check("qayta so'rov: topilmasa kutish davom etadi", stillGone.kept, ["c"]);
+check("qayta so'rov: topilmagani ro'yxatga tushadi", stillGone.stillMissing, ["c"]);
+check("qayta so'rov: oxirgi qoldiq saqlanib qoladi", stillGone.rows.find((r) => r.uuid === "c").stock, 10);
+
+// Uchinchi martada o'chirilishi kerak edi, lekin maqsadli so'rov topdi →
+// O'CHIRILMAYDI. Aynan shu joyda nol yuborish xatosi oldi olinadi.
+const aboutToDrop = mergeStockReport(
+  [...prev(["a", "b"]), { uuid: "c", stock: 10, missingCount: 2 }],
+  rep(["a", "b"]),
+  { ...OPTS, minResponseRatio: 0.5 }
+);
+check("qayta so'rov: o'chirishga tayyor edi", aboutToDrop.dropped, ["c"]);
+const saved = applyRecheck(aboutToDrop, new Map([["c", 4]]));
+check("qayta so'rov: o'chirishdan saqlab qoladi", saved.dropped, []);
+check("qayta so'rov: saqlangan tovar qatorda", saved.rows.find((r) => r.uuid === "c").stock, 4);
+
+// Hisobotda bo'lgan tovarlarga qayta so'rov ta'sir qilmaydi.
+check("qayta so'rov: boshqa qatorlar tegilmaydi", restored.rows.filter((r) => r.uuid === "a")[0].stock, 10);
+
 /* ---------------- Yakun ---------------- */
 
 const stats = getStats();
