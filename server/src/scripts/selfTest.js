@@ -1721,6 +1721,21 @@ check("import: holat — keshdagilar", impStatus.inCache > 0, true);
 const badRows = [orderRows[0], row({ B: "status-only" })];
 check("import: ID siz qator o'tkazib yuboriladi", importOrders({ orderRows: badRows, detailRows: [] }).skipped.orders, 1);
 
+// ⚠ ASOSIY KAFOLAT: kesh qaytadan qurilganda doimiy nusxa TEGILMAYDI.
+//
+// `applyRefresh` har tsiklda `orders`/`items` ni butunlay o'chirib qaytadan
+// yozadi va saqlash oynasidan eski buyurtmani umuman saqlamaydi. Agar
+// `uzum_orders` ham shu yo'l bilan ketsa, 3 kundan keyin tarix yo'qolardi —
+// aynan shundan qochish uchun alohida jadval qilingan.
+const beforeRefresh = db.prepare("SELECT COUNT(*) n FROM uzum_orders").get().n;
+const oldItemsBefore = db.prepare("SELECT COUNT(*) n FROM uzum_order_items").get().n;
+applyRefresh({ orderRows, detailRows, packingRows, canceled, nowMs: NOW });
+check("import: kesh qayta qurilgach buyurtmalar joyida", db.prepare("SELECT COUNT(*) n FROM uzum_orders").get().n, beforeRefresh);
+check("import: qatorlar ham joyida", db.prepare("SELECT COUNT(*) n FROM uzum_order_items").get().n, oldItemsBefore);
+// Saqlash oynasidan eski buyurtma keshda YO'Q, doimiy nusxada esa BOR.
+check("import: eski buyurtma keshda yo'q", db.prepare("SELECT COUNT(*) n FROM orders WHERE order_id = 'OLD'").get().n, 0);
+check("import: eski buyurtma nusxada bor", db.prepare("SELECT COUNT(*) n FROM uzum_orders WHERE order_id = 'OLD'").get().n, 1);
+
 // `sinceMs` — har 60 soniyalik tsiklda 8000+ qatorni qayta yozmaslik uchun.
 // Eski VA allaqachon bazada bor buyurtma tegilmaydi.
 const recentOnly = importOrders({ orderRows, detailRows, sinceMs: NOW - 3 * 3600 * 1000 });
