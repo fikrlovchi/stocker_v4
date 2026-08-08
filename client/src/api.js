@@ -82,6 +82,11 @@ export const api = {
   syncUzumShops: (id) => call(`/variables/uzum/cabinets/${id}/sync`, { method: "POST" }),
   editShop: (id, body) => call(`/variables/uzum/shops/${id}`, { method: "PATCH", body }),
   editCabinet: (id, body) => call(`/variables/uzum/cabinets/${id}`, { method: "PATCH", body }),
+  // Do'kon guruhlari — ID qo'lda beriladigan butun son (mobil ilovada
+  // operator shu raqamni ko'radi).
+  addShopGroup: (id, name) => call("/variables/uzum/groups", { method: "POST", body: { id, name } }),
+  editShopGroup: (id, name) => call(`/variables/uzum/groups/${id}`, { method: "PATCH", body: { name } }),
+  deleteShopGroup: (id) => call(`/variables/uzum/groups/${id}`, { method: "DELETE" }),
   deleteVar: (kind, id) => call(`/variables/${kind}/${id}`, { method: "DELETE" }),
   addBinding: (payload) => call("/variables/bindings", { method: "POST", body: payload }),
   deleteBinding: (id) => call(`/variables/bindings/${id}`, { method: "DELETE" }),

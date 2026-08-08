@@ -16,12 +16,14 @@ export default function UzumConfig() {
 
   return (
     <SectionBody data={data} error={error} note={note}>
+      <ShopGroups groups={data?.shopGroups || []} cabinets={data?.cabinets || []} run={run} />
+
       <div className="card">
         <h2>{t("vars.uzum")}</h2>
         <p className="muted" style={{ marginTop: 0 }}>{t("vars.uzumHint")}</p>
 
         {data?.cabinets.map((cab) => (
-          <Cabinet key={cab.id} cab={cab} run={run} />
+          <Cabinet key={cab.id} cab={cab} groups={data.shopGroups || []} run={run} />
         ))}
 
         <AddForm
@@ -37,7 +39,7 @@ export default function UzumConfig() {
   );
 }
 
-function Cabinet({ cab, run }) {
+function Cabinet({ cab, groups, run }) {
   const { t } = useTranslation();
   const [org, setOrg] = useState(cab.mc_organization_href || "");
 
@@ -85,13 +87,14 @@ function Cabinet({ cab, run }) {
               <th>{t("vars.shopName")}</th>
               <th>shop_id</th>
               <th>{t("vars.skuCode")}</th>
+              <th title={t("vars.groupHint")}>{t("vars.group")}</th>
               <th>{t("vars.mcSaleschannel")}</th>
               <th />
             </tr>
           </thead>
           <tbody>
             {cab.shops.map((shop) => (
-              <ShopRow key={shop.id} shop={shop} onRun={run} />
+              <ShopRow key={shop.id} shop={shop} groups={groups} onRun={run} />
             ))}
           </tbody>
         </table>
@@ -100,7 +103,7 @@ function Cabinet({ cab, run }) {
   );
 }
 
-function ShopRow({ shop, onRun }) {
+function ShopRow({ shop, groups, onRun }) {
   const { t } = useTranslation();
   const initial = {
     name: shop.name || "",
@@ -130,6 +133,20 @@ function ShopRow({ shop, onRun }) {
         <input value={draft.skuCode} onChange={(e) => set("skuCode", e.target.value)} style={{ width: 80 }} />
       </td>
       <td>
+        {/* Guruh — mobil ilovada operator shu RAQAMNI ko'radi. Tanlangan
+            zahoti saqlanadi: alohida "Saqlash" bosish esdan chiqadi. */}
+        <select
+          value={shop.group_id || ""}
+          onChange={(e) => onRun(() => api.editShop(shop.id, { groupId: e.target.value || null }))}
+          style={{ width: 150 }}
+        >
+          <option value="">—</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>{g.id} · {g.name}</option>
+          ))}
+        </select>
+      </td>
+      <td>
         <input
           value={draft.mcSaleschannelHref}
           onChange={(e) => set("mcSaleschannelHref", e.target.value)}
@@ -143,6 +160,100 @@ function ShopRow({ shop, onRun }) {
             {t("vars.save")}
           </button>
           <button className="link" onClick={() => onRun(() => api.deleteVar("shop", shop.id))}>
+            {t("vars.remove")}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Do'kon guruhlari.
+ *
+ * Bir necha do'kon amalda BITTA ombordan yig'iladi (Uzon home · Fashion ·
+ * accessories · Auto). Operator mobil ilovada guruh RAQAMINI ko'radi va
+ * yig'ilganini shu bo'yicha saralaydi — shuning uchun ID qo'lda beriladi
+ * va butun son bo'ladi. Avtomatik ID bo'lsa raqamlar tasodifiy bo'lib
+ * qolardi va yodda qolmasdi.
+ */
+function ShopGroups({ groups, cabinets, run }) {
+  const { t } = useTranslation();
+
+  // Har guruhda nechta do'kon bor — biriktirish to'g'ri ketayotganini
+  // shu yerda ko'rish mumkin.
+  const shopCount = new Map();
+  for (const cab of cabinets) {
+    for (const shop of cab.shops || []) {
+      if (shop.group_id) shopCount.set(shop.group_id, (shopCount.get(shop.group_id) || 0) + 1);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>{t("vars.groups")}</h2>
+      <p className="muted" style={{ marginTop: 0 }}>{t("vars.groupsHint")}</p>
+
+      {groups.length === 0 ? (
+        <div className="muted">{t("vars.noGroups")}</div>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>{t("vars.groupName")}</th>
+              <th>{t("vars.groupShops")}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <GroupRow key={g.id} group={g} shops={shopCount.get(g.id) || 0} onRun={run} />
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <AddForm
+        fields={[
+          { key: "id", placeholder: "ID (1, 2, 3…)" },
+          { key: "name", placeholder: t("vars.groupName") },
+        ]}
+        label={t("vars.addGroup")}
+        onSubmit={(v) => run(() => api.addShopGroup(Number(v.id), v.name), t("vars.added"))}
+      />
+    </div>
+  );
+}
+
+function GroupRow({ group, shops, onRun }) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(group.name);
+
+  useEffect(() => setName(group.name), [group.name]);
+
+  return (
+    <tr>
+      <td><b style={{ fontSize: 18 }}>{group.id}</b></td>
+      <td>
+        <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: 200 }} />
+      </td>
+      <td className="muted">{shops}</td>
+      <td>
+        <div className="row">
+          <button
+            disabled={name === group.name || !name.trim()}
+            onClick={() => onRun(() => api.editShopGroup(group.id, name), t("vars.saved"))}
+          >
+            {t("vars.save")}
+          </button>
+          <button
+            className="link"
+            onClick={() =>
+              confirm(`${group.id} · ${group.name} — ${t("vars.confirmRemove")}`) &&
+              onRun(() => api.deleteShopGroup(group.id))
+            }
+          >
             {t("vars.remove")}
           </button>
         </div>
