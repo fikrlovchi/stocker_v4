@@ -317,18 +317,39 @@ export function variablesRouter() {
     res.json({ ok: true });
   });
 
-  // Kabinetning MoySklad yuridik shaxsi (v3: uzum_token!D).
+  /**
+   * Kabinetning MoySklad yuridik shaxsi (v3: `uzum_token!D`) va API kaliti.
+   *
+   * Token do'kon ko'chirilganda ALMASHADI: Uzum do'konni ko'chirgach,
+   * qabul qiluvchi kabinetda yangi API kalit yaratilib, unga barcha do'konlar
+   * belgilanadi. Eski kalit bilan "Do'konlarni yangilash" yangi do'konni
+   * ko'rmaydi — shuning uchun kalitni interfeysdan almashtirish kerak
+   * (ilgari faqat SSH orqali bazadan bo'lardi).
+   *
+   * Bo'sh qiymat tokenni O'CHIRMAYDI: forma har saqlaganda tokenni bo'shatib
+   * yuborsa, kabinet Uzum'ga ulanolmay qolardi. Token hech qachon qaytarilmaydi.
+   */
   router.patch("/uzum/cabinets/:id", (req, res) => {
-    const { mcOrganizationHref } = req.body || {};
+    const { mcOrganizationHref, token } = req.body || {};
     const id = Number(req.params.id);
     if (!db.prepare("SELECT 1 FROM uzum_cabinets WHERE id = ?").get(id)) {
       return res.status(404).json({ error: "Kabinet topilmadi" });
     }
-    db.prepare("UPDATE uzum_cabinets SET mc_organization_href = ? WHERE id = ?").run(
-      mcOrganizationHref?.trim() || null,
-      id
-    );
-    res.json({ ok: true });
+
+    if (mcOrganizationHref !== undefined) {
+      db.prepare("UPDATE uzum_cabinets SET mc_organization_href = ? WHERE id = ?").run(
+        mcOrganizationHref?.trim() || null,
+        id
+      );
+    }
+
+    const newToken = String(token || "").trim();
+    if (newToken) {
+      db.prepare("UPDATE uzum_cabinets SET token = ? WHERE id = ?").run(newToken, id);
+      logger.info(`Uzum kabinet tokeni almashtirildi: #${id} (${req.user?.login || "—"})`);
+    }
+
+    res.json({ ok: true, tokenChanged: Boolean(newToken) });
   });
 
   /* ---------- loyihaning .env bog'lamalari ---------- */

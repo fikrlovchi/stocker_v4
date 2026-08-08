@@ -532,6 +532,25 @@ Ko'chish endi jim o'tmaydi:
 * **`orderSync.js`** farq chiqqanda ikkala yuridik shaxsning nomini
   MoySklad'dan so'raydi va ko'chish tarixini ko'rsatadi.
 
+##### Ko'chirish tartibi (amaliyot)
+
+| # | Qadam | Qayerda |
+|---|---|---|
+| 1 | Uzum'ga ariza yuboriladi; do'konni **Uzum o'zi** ko'chiradi (ma'lum vaqt ichida) | Uzum |
+| 2 | Qabul qiluvchi kabinetda **yangi API kalit** yaratiladi va unga **barcha do'konlar** belgilanadi | Uzum kabineti |
+| 3 | Yangi kalit Stocker'ga qo'yiladi | Konfiguratsiya → Uzum → kabinet → **API kalit** |
+| 4 | **"Do'konlarni yangilash"** bosiladi — do'kon ko'chgani aniqlanadi va tarixga yoziladi | Konfiguratsiya → Uzum |
+
+3-qadam **majburiy**: ko'chishdan keyin eski kalit yangi do'konni ko'rmaydi,
+ya'ni "Yangilash" hech narsa topmaydi. Ilgari kalitni faqat SSH orqali
+bazadan almashtirish mumkin edi — endi kabinet kartasidan. Saqlangan kalit
+hech qachon qaytarilmaydi, maydon bo'sh qoldirilsa eskisi o'z joyida qoladi.
+
+Ko'chishdan keyin **yuridik shaxsni tekshiring**: `organization_href` kabinetga
+bog'langan, ya'ni do'kon yangi kabinetning firmasiga o'tadi. Agar u firma
+MoySklad'da boshqacha bo'lsa — kabinet kartasidagi "MoySklad yuridik shaxsi"
+ni tuzatish kerak, aks holda yangi buyurtmalar noto'g'ri firmada yaratiladi.
+
 Solishtirish (hech narsa yozmaydi, farq bo'lsa exit kodi 1):
 
 ```bash

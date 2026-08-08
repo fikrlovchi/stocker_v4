@@ -249,6 +249,11 @@ const uz = {
     uzum: "Uzum kabinetlari va do'konlari",
     uzumHint: "Do'kon nomlari mobil ilovada ham ko'rinadi — o'zgartirsangiz operator ekranida ham o'zgaradi.",
     sync: "Do'konlarni yangilash",
+    apiKey: "API kalit",
+    apiKeyPlaceholder: "yangi kalit (bo'sh qoldirilsa o'zgarmaydi)",
+    apiKeySaved: "API kalit almashtirildi",
+    apiKeyHint:
+      "Do'kon boshqa kabinetga ko'chirilganda Uzumda yangi kalit yaratiladi va unga barcha do'konlar belgilanadi — kalitni shu yerga qo'ying, so'ng \"Do'konlarni yangilash\" ni bosing.",
     shopMoves: "Do'kon ko'chishlari",
     shopMovesHint:
       "Do'kon boshqa kabinetga o'tkazilgan. Kabinet — MoySklad'dagi yuridik shaxs, ya'ni bundan keyin buyurtma boshqa firma nomida yaratiladi; eski buyurtmalar o'sha paytdagi firmada qoladi.",
@@ -665,6 +670,11 @@ const ru = {
     uzum: "Кабинеты и магазины Uzum",
     uzumHint: "Названия магазинов видны и в мобильном приложении — изменение отразится у оператора.",
     sync: "Обновить магазины",
+    apiKey: "API-ключ",
+    apiKeyPlaceholder: "новый ключ (пусто — не менять)",
+    apiKeySaved: "API-ключ заменён",
+    apiKeyHint:
+      "При переводе магазина в другой кабинет в Uzum создаётся новый ключ со всеми магазинами — вставьте его сюда, затем нажмите \"Обновить магазины\".",
     shopMoves: "Переносы магазинов",
     shopMovesHint:
       "Магазин переведён в другой кабинет. Кабинет — это юридическое лицо в МойСклад, то есть дальнейшие заказы создаются от другой фирмы; старые заказы остаются за прежней.",

@@ -77,6 +77,9 @@ function ShopMoves({ moves }) {
 function Cabinet({ cab, groups, run }) {
   const { t } = useTranslation();
   const [org, setOrg] = useState(cab.mc_organization_href || "");
+  // Do'kon ko'chirilganda Uzum tomonda YANGI API kalit yaratiladi — eski
+  // kalit bilan "Do'konlarni yangilash" yangi do'konni ko'rmaydi.
+  const [token, setToken] = useState("");
 
   useEffect(() => setOrg(cab.mc_organization_href || ""), [cab.mc_organization_href]);
 
@@ -112,6 +115,31 @@ function Cabinet({ cab, groups, run }) {
           {t("vars.save")}
         </button>
       </div>
+
+      {/* API kalit: saqlangani hech qachon qaytarilmaydi, faqat yangisini
+          kiritish mumkin. Bo'sh qoldirilsa eskisi o'z joyida qoladi. */}
+      <div className="row" style={{ marginTop: 8 }}>
+        <span className="muted" style={{ minWidth: 150 }}>{t("vars.apiKey")}</span>
+        <input
+          type="password"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder={t("vars.apiKeyPlaceholder")}
+          style={{ width: 420, fontSize: 13 }}
+        />
+        <button
+          disabled={!token.trim()}
+          onClick={() =>
+            run(async () => {
+              await api.editCabinet(cab.id, { token });
+              setToken("");
+            }, t("vars.apiKeySaved"))
+          }
+        >
+          {t("vars.save")}
+        </button>
+      </div>
+      <div className="muted" style={{ marginTop: 2, marginBottom: 8 }}>{t("vars.apiKeyHint")}</div>
 
       {cab.shops.length === 0 ? (
         <div className="muted" style={{ marginTop: 8 }}>{t("vars.noShops")}</div>
