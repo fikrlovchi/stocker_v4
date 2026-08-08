@@ -10,13 +10,16 @@ export function loadCatalogs() {
   const shops = new Map();
   for (const r of db
     .prepare(
-      `SELECT s.shop_id, s.mc_saleschannel_href, c.mc_organization_href
+      `SELECT s.shop_id, s.name, s.mc_saleschannel_href, c.name AS cabinet_name, c.mc_organization_href
        FROM uzum_shops s JOIN uzum_cabinets c ON c.id = s.cabinet_id`
     )
     .all()) {
     shops.set(String(r.shop_id), {
       salesChannelHref: r.mc_saleschannel_href || null,
       organizationHref: r.mc_organization_href || null,
+      // Faqat hisobot uchun: farq chiqqanda UUID emas, NOM ko'rinishi kerak.
+      name: r.name || null,
+      cabinetName: r.cabinet_name || null,
     });
   }
 
