@@ -11,6 +11,7 @@ import { login, logout, resolveToken } from "../auth/operators.js";
 import { FLAGS, SECTIONS } from "../auth/sections.js";
 import * as users from "../auth/users.js";
 import * as batches from "../packing/batches.js";
+import { pendingOrders, pendingSummary, comparePending } from "../packing/pending.js";
 import { labelsRouter } from "./labels.js";
 import { projectsRouter } from "./projects.js";
 import { variablesRouter } from "./variables.js";
@@ -153,6 +154,23 @@ export function webRouter() {
   /* ---------- yig'ish: partiyalar ---------- */
 
   const packing = [requireWeb, requireSection("packing")];
+
+  /**
+   * Yig'ilishi kerak buyurtmalar — 5-bosqich.
+   *
+   * Ro'yxat o'zi chiqadi: partiyaga ID joylash shart emas. `orders`
+   * maydoni berilsa — SOLISHTIRISH natijasi ham qaytadi.
+   */
+  router.post("/packing/pending", ...packing, (req, res) => {
+    const { orders, groupId, shop } = req.body || {};
+    const pending = pendingOrders({ groupId: groupId || null, shopId: shop || null });
+
+    const result = { pending, summary: pendingSummary(pending), total: pending.length };
+    if (orders && String(orders).trim()) {
+      result.compare = comparePending(batches.parseOrderIds(orders), pending);
+    }
+    res.json(result);
+  });
 
   router.get("/batches", ...packing, (req, res) => {
     res.json({ batches: batches.listBatches(), open: batches.openBatch() });

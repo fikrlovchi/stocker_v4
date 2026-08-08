@@ -1495,7 +1495,88 @@ db.exec("DELETE FROM mc_product");
 
 db.exec("DELETE FROM link_product_events; DELETE FROM link_product; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
 
-/* ---------- 23. ShK yorliqlari soni (uzumPDFs) ---------- */
+/* ---------- 23. Yig'ilishi kerak buyurtmalar (5-bosqich) ---------- */
+
+// Ro'yxat ENDI O'ZI chiqadi: partiyaga ID joylash shart emas. "Buyurtma
+// ID'lari" maydoni esa solishtirish uchun qoladi.
+const { pendingOrders, pendingSummary, comparePending } = await import("../packing/pending.js");
+
+resetSessions();
+db.exec("DELETE FROM canceled_orders; DELETE FROM packed_orders");
+
+const pendingIds = () => pendingOrders().map((o) => o.orderId).sort();
+
+// Fixture'da yig'ishga tayyor (eligible) buyurtmalar: OK1, OK2, CANCELED,
+// PACKED, VSET, BADQTY, NOBC, NOBC2, NOITEMS… — `eligible` ustuni
+// applyRefresh hisoblab qo'ygan.
+const eligibleCount = db.prepare("SELECT COUNT(*) n FROM orders WHERE eligible = 1").get().n;
+check("kutilayotgan: boshida hammasi ro'yxatda", pendingOrders().length, eligibleCount);
+
+// Hozir yig'ilayotgani chiqmaydi — ikki operator bir buyurtmani olmasligi
+// kerak. OK1 da 3 birlik, shuning uchun bitta skandan keyin sessiya OCHIQ
+// qoladi (bir birlikli buyurtma darhol yakunlanib "done" bo'lardi).
+await scan({ barcode: "1000111953348", operator: "aziz" });
+check("kutilayotgan: ochiq sessiyali chiqmaydi", pendingIds().includes("OK1"), false);
+// Sessiya bekor qilinsa buyurtma ro'yxatga QAYTADI.
+cancelSession("aziz");
+check("kutilayotgan: bekor qilingan sessiyadan keyin qaytadi", pendingIds().includes("OK1"), true);
+
+// Bekor qilingani chiqib ketadi.
+db.prepare("INSERT INTO canceled_orders (order_id, seen_at) VALUES ('OK2', datetime('now'))").run();
+check("kutilayotgan: bekor qilingani chiqmaydi", pendingIds().includes("OK2"), false);
+
+// Yig'ilgani ham chiqmaydi (uzum_packing keshi).
+db.prepare("INSERT INTO packed_orders (order_id, packed_at) VALUES ('OK1', datetime('now'))").run();
+check("kutilayotgan: yig'ilgani chiqmaydi", pendingIds().includes("OK1"), false);
+
+// Do'kon va guruh ma'lumoti ro'yxatda bo'ladi — ekranda shu bo'yicha
+// guruhlanadi.
+const cabP = db.prepare("INSERT INTO uzum_cabinets (name, token) VALUES ('K', 't')").run().lastInsertRowid;
+db.prepare("INSERT INTO uzum_shop_groups (id, name) VALUES (7, 'Uzon')").run();
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id, group_id) VALUES (?, 'Uzon Auto', '9001', 7)").run(cabP);
+const { clearShopNameCache: clearP } = await import("../packing/shops.js");
+clearP();
+
+const withShops = pendingOrders();
+check("kutilayotgan: do'kon nomi bor", withShops[0].shopName, "Uzon Auto");
+check("kutilayotgan: guruh raqami bor", withShops[0].groupId, 7);
+
+const pendSummary = pendingSummary(withShops);
+check("yig'ma: bitta guruh", pendSummary.length, 1);
+check("yig'ma: guruhdagi soni", pendSummary[0].total, withShops.length);
+check("yig'ma: do'kon kesimi", pendSummary[0].shops[0].shopName, "Uzon Auto");
+
+/* --- Solishtirish: qo'lda joylangan ro'yxat vs haqiqiy holat --- */
+
+const all = pendingOrders();
+// Ro'yxatning YARMINI joylaymiz — qolgani "ro'yxatga kirmagan" bo'lishi kerak.
+const someIds = all.slice(0, Math.max(1, Math.floor(all.length / 2))).map((o) => o.orderId);
+
+const cmp = comparePending(someIds, all);
+check("solishtirish: mos kelganlar", cmp.matched.map((o) => o.orderId).sort(), [...someIds].sort());
+check("solishtirish: ro'yxatga kirmaganlar", cmp.missing.length, all.length - someIds.length);
+check("solishtirish: ortiqcha yo'q", cmp.extra.length, 0);
+
+// Ortiqcha ID'lar — har biri SABABI bilan. Sabab aniq bo'lmasa operator
+// nima qilishini bilmaydi.
+const withExtra = comparePending([...someIds, "OK1", "OK2", "YO'Q-ID"], all);
+const reasons = Object.fromEntries(withExtra.extra.map((e) => [e.orderId, e.reason]));
+check("solishtirish: yig'ilgani sababi bilan", reasons["OK1"], "yig'ilgan");
+check("solishtirish: bekor qilingani sababi bilan", reasons["OK2"], "bekor qilingan");
+check("solishtirish: keshda yo'q", reasons["YO'Q-ID"], "keshda yo'q");
+
+// Yig'ishga chiqmaydigan buyurtma ham sababi bilan chiqadi.
+const notEligible = db.prepare("SELECT order_id, reason FROM orders WHERE eligible = 0 LIMIT 1").get();
+if (notEligible) {
+  const r = comparePending([notEligible.order_id], all).extra[0];
+  check("solishtirish: yig'ishga chiqmaydi — sabab ko'rsatiladi", Boolean(r.reason), true);
+}
+
+db.exec("DELETE FROM canceled_orders; DELETE FROM packed_orders; DELETE FROM uzum_shops; DELETE FROM uzum_shop_groups; DELETE FROM uzum_cabinets");
+clearP();
+resetSessions();
+
+/* ---------- 24. ShK yorliqlari soni (uzumPDFs) ---------- */
 
 // 2026-08-07 da topilgan xato: YANGI (40×30) formatda yorliq soni
 // `Quantity for mc` (K) ni hisobga olmasdi — har qator uchun faqat `copies`

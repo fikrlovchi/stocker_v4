@@ -67,6 +67,9 @@ export const api = {
   logout: () => call("/auth/logout", { method: "POST" }),
   me: () => call("/auth/me"),
 
+  // Yig'ilishi kerak buyurtmalar. `orders` berilsa solishtirish ham qaytadi.
+  pendingOrders: (body = {}) => call("/packing/pending", { method: "POST", body }),
+
   listBatches: () => call("/batches"),
   createBatch: (name, orders) => call("/batches", { method: "POST", body: { name, orders } }),
   getBatch: (id, shop) => call(`/batches/${id}${shop ? `?shop=${encodeURIComponent(shop)}` : ""}`),

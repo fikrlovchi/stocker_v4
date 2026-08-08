@@ -306,7 +306,36 @@ Xato bo'lganda Telegram'ga xabar ketadi (Konfiguratsiya → Telegram →
 selfTest: 270 → **305** (payload yasash, guruhlash, bayroqlar, chegaralar,
 barcode turi va GTIN nazorat raqami).
 
-### 5-bosqich — Uzum buyurtmalari
+### 5-bosqich — yig'ilishi kerak buyurtmalar ✅ (2026-08-08)
+
+Ilgari qaysi buyurtmalar yig'ilishini **admin** belgilardi: partiyaga ID
+ro'yxati joylanardi. Bu ortiqcha qadam edi — "yig'ilishi kerak" degan holat
+allaqachon ma'lum.
+
+**Yig'ish → "Yig'ilishi kerak"** varag'i endi ro'yxatni o'zi chiqaradi:
+`eligible = 1`, ochiq/tugagan sessiyasi yo'q, bekor qilinmagan va
+`uzum_packing` da yo'q. Guruh → do'kon kesimida yig'ma jadval ham bor.
+
+**"Buyurtma ID'lari" maydoni qoldi** — endi u solishtirish quroli
+([`packing/pending.js`](../server/src/packing/pending.js)). Qo'lda tuzilgan
+ro'yxatni joylasangiz uch xil natija chiqadi, har biri boshqa harakat
+talab qiladi:
+
+| Natija | Ma'nosi |
+|---|---|
+| **mos keldi** | ro'yxatda ham bor, yig'ilishi ham kerak |
+| **ortiqcha** | ro'yxatda bor, lekin yig'ish kerak emas — **sababi bilan** (yig'ilgan · bekor qilingan · hozir yig'ilmoqda · keshda yo'q · yig'ishga chiqmaydi) |
+| **kirmagan** | yig'ilishi kerak, lekin ro'yxatga tushmagan |
+
+Sabab ko'rsatilishi muhim: "bu ID nega ortiqcha" degan savolga javob
+bo'lmasa operator nima qilishini bilmaydi.
+
+Guruhsiz do'konlar ro'yxatda **qizil** bilan ko'rinadi — bu sozlash kerak
+bo'lgan holat, jim o'tmasligi kerak.
+
+selfTest: 389 → **406**.
+
+### 6-bosqich — Uzum buyurtmalari serverga ⏳
 
 Server Uzum API'dan buyurtmalarni tortadi (hozir `uzum-order-to-mc` va
 `orders` keshi qiladigan ish), Google Sheets zaxira nusxa bo'lib qoladi.

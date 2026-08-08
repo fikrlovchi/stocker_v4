@@ -37,7 +37,7 @@ cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart sto
 | Bo'lim | Holat | Izoh |
 |---|---|---|
 | Kirish, foydalanuvchilar va ruxsatlar | ✅ | `users` + bo'lim ruxsatlari + `mobile` bayrog'i |
-| Yig'ish (partiyalar) | ✅ | ID ro'yxati, do'kon bo'yicha 2/22, skan doirasi |
+| Yig'ish | ✅ | **Yig'ilishi kerak** ro'yxati o'zi chiqadi + ID solishtirish; partiyalar alohida varaqda |
 | Yorliqlar | ✅ | SPA ichida; Yangi (40×30) / Eski format; umumiy standart o'lchamlar |
 | Integratsiyalar (ex "Uzum order to MC") | ✅ | systemd loyihalari + **Qoldiq oqimlari** (holat, jadval, tarix) |
 | Tovar bog'lamalari (`link_product`) | ✅ | qo'shish formasi (AppSheet kabi), hisoblangan qoldiq, tahrirlash |

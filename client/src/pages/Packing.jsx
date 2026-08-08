@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
+import PendingOrders from "./PendingOrders";
 
 // Yig'ish bo'limi = partiyalar. Bu yerda admin buyurtma ID ro'yxatini
 // joylaydi; telefon faqat OCHIQ partiyadagi buyurtmalarni ko'radi.
@@ -11,6 +12,10 @@ export default function Packing() {
   const [shop, setShop] = useState(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null); // yangi partiya natijasi
+  // Ikki ko'rinish: yig'ilishi kerak buyurtmalar (o'zi chiqadi) va
+  // partiyalar (qo'lda tuzilgan ro'yxatlar). Birinchisi standart —
+  // 5-bosqichda asosiy ish shu bo'ldi.
+  const [tab, setTab] = useState("pending");
 
   const loadList = () =>
     api
@@ -46,8 +51,19 @@ export default function Packing() {
 
   return (
     <div className="content">
-      <h1>{t("packing.title")}</h1>
-      <p className="page-sub">{t("packing.sub")}</p>
+      <h1>{tab === "pending" ? t("pend.title") : t("packing.title")}</h1>
+      <p className="page-sub">{tab === "pending" ? t("pend.sub") : t("packing.sub")}</p>
+
+      <div className="row tabs" style={{ marginBottom: 16 }}>
+        <button className={tab === "pending" ? "" : "ghost"} onClick={() => setTab("pending")}>
+          {t("pend.tab")}
+        </button>
+        <button className={tab === "batches" ? "" : "ghost"} onClick={() => setTab("batches")}>
+          {t("packing.tab")}
+        </button>
+      </div>
+
+      {tab === "pending" ? <PendingOrders /> : <>
 
       {error && <div className="card error">{error}</div>}
       {openCount > 1 && <div className="card" style={{ color: "var(--warn)" }}>{t("packing.warnMany")}</div>}
@@ -122,6 +138,7 @@ export default function Packing() {
           onRemoveOrder={(orderId) => run(() => api.removeBatchOrder(selected.batch.id, orderId))}
         />
       )}
+      </>}
     </div>
   );
 }
