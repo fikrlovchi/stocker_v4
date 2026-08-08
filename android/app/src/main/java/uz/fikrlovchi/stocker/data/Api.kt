@@ -108,11 +108,17 @@ class Api(private val config: () -> Config) {
         call("/api/auth/logout", buildJsonObject { })
     }
 
-    suspend fun scan(barcode: String): ScanResponse {
+    /**
+     * Skan. `shopId` — ekranda tanlangan do'kon: skan doirasi shu do'kon
+     * bilan cheklanadi, aks holda boshqa do'konning buyurtmasi ochilib
+     * ketardi.
+     */
+    suspend fun scan(barcode: String, shopId: String? = null): ScanResponse {
         val cfg = config()
         val body = buildJsonObject {
             put("barcode", barcode)
             if (cfg.stationId.isNotBlank()) put("stationId", cfg.stationId)
+            if (!shopId.isNullOrBlank()) put("shopId", shopId)
         }
         return json.decodeFromString(call("/api/scan", body))
     }
@@ -128,6 +134,25 @@ class Api(private val config: () -> Config) {
     suspend fun printBig(sessionId: String): PrintResponse {
         val body = buildJsonObject { put("sessionId", sessionId) }
         return json.decodeFromString(call("/api/session/print", body))
+    }
+
+    /**
+     * ShK yorliqlarini chiqarish ("ShK" tugmasi). Skan paytida avtomatik
+     * chiqmaydi — operator o'zi bosadi. Server hali chiqarilmagan
+     * yorliqlarni hisoblab beradi, shuning uchun takror bosish zararsiz.
+     */
+    suspend fun printShk(sessionId: String): PrintResponse {
+        val body = buildJsonObject { put("sessionId", sessionId) }
+        return json.decodeFromString(call("/api/session/print-shk", body))
+    }
+
+    /** Tarixdan qayta chiqarish: "shk" | "big" | "both". */
+    suspend fun reprintSession(sessionId: String, target: String): PrintResponse {
+        val body = buildJsonObject {
+            put("sessionId", sessionId)
+            put("target", target)
+        }
+        return json.decodeFromString(call("/api/session/reprint", body))
     }
 
     /** Operator yig'gan buyurtmalar tarixi. */

@@ -94,6 +94,7 @@ fun ScanScreen(
 
     var confirmCancel by remember { mutableStateOf(false) }
     var reprintJobs by remember { mutableStateOf<List<PrintJob>?>(null) }
+    var printingShk by remember { mutableStateOf(false) }
 
     var lastCode by remember { mutableStateOf("") }
     var lastCodeAt by remember { mutableLongStateOf(0L) }
@@ -158,7 +159,8 @@ fun ScanScreen(
         if (code.isEmpty() || busy) return
         busy = true
         scope.launch {
-            runCatching { api.scan(code) }
+            // Tanlangan do'kon skan doirasini cheklaydi.
+            runCatching { api.scan(code, config.shopId.ifBlank { null }) }
                 .onSuccess { r ->
                     offline = false
                     r.session?.let { session = it }
@@ -417,6 +419,35 @@ fun ScanScreen(
         // Faqat buyurtmadagi hamma tovar skanerlangach faollashadi: yorliq
         // yarim yig'ilgan qopga chiqib ketmasin.
         Column(Modifier.padding(horizontal = 14.dp).padding(bottom = 20.dp)) {
+            // ShK — skan paytida AVTOMATIK chiqmaydi, operator o'zi bosadi.
+            // Server hali chiqarilmagan yorliqlarni hisoblab beradi, shuning
+            // uchun bir necha tovarni ketma-ket skanerlab, so'ng bir marta
+            // bosish ham yetarli.
+            GhostButton(
+                text = s.printShk,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = current != null && !printingShk,
+                onClick = {
+                    val id = current?.id ?: return@GhostButton
+                    printingShk = true
+                    scope.launch {
+                        runCatching { api.printShk(id) }
+                            .onSuccess {
+                                feedback.buzz(Buzz.DONE)
+                                banner = Banner(
+                                    p.done,
+                                    s.printShk,
+                                    if (it.printed > 0) "${it.printed} ${s.printShkSent}" else s.printShkNothing,
+                                )
+                                bannerAt = System.currentTimeMillis()
+                            }
+                            .onFailure { fail(it) }
+                        printingShk = false
+                    }
+                },
+            )
+            Spacer(Modifier.height(10.dp))
+
             PrimaryButton(
                 text = s.print,
                 modifier = Modifier.fillMaxWidth(),

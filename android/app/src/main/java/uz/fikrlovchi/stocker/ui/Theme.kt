@@ -82,6 +82,8 @@ fun resultStyle(result: String, p: Palette, s: Strings): ResultStyle = when (res
     ScanResult.ALREADY_COMPLETE -> ResultStyle(p.warn, s.resultAlready)
     ScanResult.UNKNOWN_BARCODE -> ResultStyle(p.err, s.resultUnknown)
     ScanResult.NO_AVAILABLE_ORDER -> ResultStyle(p.warn, s.resultNoOrder)
+    // Tanlangan do'kon noto'g'ri — xato emas, lekin diqqat talab qiladi.
+    ScanResult.OTHER_SHOP -> ResultStyle(p.warn, s.otherShop)
     else -> ResultStyle(p.muted, result.uppercase())
 }
 

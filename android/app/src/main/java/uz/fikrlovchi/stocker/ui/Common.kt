@@ -106,18 +106,24 @@ fun GhostButton(
     modifier: Modifier = Modifier,
     borderColor: Color? = null,
     textColor: Color? = null,
+    enabled: Boolean = true,
 ) {
     val p = LocalPalette.current
     Box(
         modifier
             .height(48.dp)
             .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, borderColor ?: p.line, RoundedCornerShape(10.dp))
+            .border(1.dp, if (enabled) borderColor ?: p.line else p.line, RoundedCornerShape(10.dp))
             .background(Color.Transparent)
-            .clickable(onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = textColor ?: p.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            text,
+            color = if (enabled) textColor ?: p.text else p.muted,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 

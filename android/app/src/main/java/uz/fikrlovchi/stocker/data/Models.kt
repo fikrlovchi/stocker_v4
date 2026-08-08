@@ -59,7 +59,13 @@ data class ScanResponse(
     val result: String,
     val message: String? = null,
     val session: Session? = null,
+    /** `other_shop` natijasida: tovar qaysi do'kon(lar)da bor. */
+    val shops: List<ScanShop> = emptyList(),
 )
+
+/** `other_shop` natijasidagi do'kon — operatorga qaysi do'konni tanlash kerakligini aytadi. */
+@Serializable
+data class ScanShop(val shopId: String, val name: String? = null)
 
 /** `GET /api/shops` — ochiq partiyadagi do'konlar va qoldiq. */
 @Serializable
@@ -99,6 +105,8 @@ data class PackedItem(
 
 @Serializable
 data class PackedOrder(
+    /** Qayta chiqarish shu ID bo'yicha ishlaydi. */
+    val sessionId: String? = null,
     val orderId: String,
     val stationId: String? = null,
     val startedAt: String? = null,
@@ -115,6 +123,8 @@ data class PackedResponse(val orders: List<PackedOrder> = emptyList())
 data class PrintResponse(
     val ok: Boolean = false,
     val reused: Boolean = false,
+    /** Nechta yorliq navbatga qo'yildi (0 — qarz qolmagan). */
+    val printed: Int = 0,
     val jobs: List<PrintJob> = emptyList(),
 )
 
@@ -141,4 +151,7 @@ object ScanResult {
     const val ALREADY_COMPLETE = "already_complete"
     const val UNKNOWN_BARCODE = "unknown_barcode"
     const val NO_AVAILABLE_ORDER = "no_available_order"
+
+    /** Tovar bor, lekin BOSHQA do'konda — tanlangan do'kon noto'g'ri. */
+    const val OTHER_SHOP = "other_shop"
 }
