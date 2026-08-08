@@ -6,7 +6,12 @@
 //
 // HECH NARSA YOZMAYDI — na jadvalga, na bazaga, na Uzumga. Vazifasi bitta:
 // server hisobi bugungi jadval qiymati bilan AYNAN bir xilmi degan savolga
-// javob berish. Farq bo'lsa exit kodi 1.
+// javob berish.
+//
+// Hukm IKKI toifada (`FROZEN` ga qarang): hisoblanadigan ustunlar (R·I·J·K·L)
+// aynan mos kelishi SHART — farq bo'lsa exit kodi 1. Muzlatiladigan ustunlar
+// (O·P) esa buyurtma bilan saqlanadi va migratsiyada jadvaldan ko'chiriladi,
+// shuning uchun ulardagi farq ogohlantirish (⚠) bo'lib qoladi.
 //
 // Nega kerak: Sheets bilan aloqani uzishdan oldin, formulalar to'g'ri
 // ko'chganiga ishonch bo'lishi kerak. `link_product!L`/`!F` uchun xuddi shu
@@ -314,16 +319,28 @@ async function main() {
 
   /* ---------- hisobot ---------- */
 
+  // Ikki toifa, ikki xil hukm:
+  //   HISOBLANADIGAN (R·I·J·K·L) — server ularni o'zi hisoblaydi, shuning
+  //     uchun jadval bilan AYNAN bir xil bo'lishi shart;
+  //   MUZLATILADIGAN (O·P) — buyurtma bilan birga saqlanadi va migratsiyada
+  //     jadvaldan ko'chiriladi. Do'kon boshqa kabinetga ko'chsa bugungi
+  //     hisob eski buyurtmanikidan farq qiladi va bu TO'G'RI: eski buyurtma
+  //     o'sha paytdagi yuridik shaxsda qolishi kerak.
+  const FROZEN = new Set(["O", "P"]);
+
   let failed = 0;
-  for (const col of Object.values(cols)) {
+  let frozenDiff = 0;
+  for (const [key, col] of Object.entries(cols)) {
     const total = col.same + col.unlinked + col.diff;
-    const mark = col.diff === 0 ? "✅" : "❌";
+    const frozen = FROZEN.has(key);
+    const mark = col.diff === 0 ? "✅" : frozen ? "⚠" : "❌";
     console.log(
       `${mark} ${col.name.padEnd(38)} mos ${String(col.same).padStart(5)} · ` +
         `bog'lanmagan ${String(col.unlinked).padStart(4)} · farq ${String(col.diff).padStart(4)} / ${total}`
     );
     if (col.diff) {
-      failed++;
+      if (frozen) frozenDiff++;
+      else failed++;
       if (col.onlySheet) console.log(`     faqat jadvalda: ${col.onlySheet}`);
       if (col.onlyServer) console.log(`     faqat serverda: ${col.onlyServer}`);
 
@@ -366,10 +383,18 @@ async function main() {
   }
 
   if (failed) {
-    console.log(`\n❌ ${failed} ta ustunda farq bor — ko'chirishdan oldin hal qilinishi kerak.`);
+    console.log(`\n❌ Hisoblanadigan ustunlarning ${failed} tasida farq bor — ko'chirishdan oldin hal qilinishi kerak.`);
     process.exitCode = 1;
   } else {
-    console.log("\n✅ Hamma hisoblanadigan ustun jadval bilan bir xil.");
+    console.log("\n✅ Hisoblanadigan ustunlar (R · I · J · K · L) jadval bilan AYNAN bir xil.");
+  }
+
+  if (frozenDiff) {
+    console.log(
+      `⚠ Muzlatiladigan ustunlarning ${frozenDiff} tasida farq bor (O · P) — bu ko'chishga\n` +
+        "  to'sqinlik qilmaydi: ular buyurtma bilan saqlanadi va migratsiyada JADVALDAN\n" +
+        "  ko'chiriladi. Sabab odatda do'konning boshqa kabinetga ko'chgani."
+    );
   }
 }
 
