@@ -35,6 +35,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import uz.fikrlovchi.stocker.data.Api
 import uz.fikrlovchi.stocker.data.PackedOrder
@@ -175,18 +178,21 @@ fun HistoryScreen(api: Api, onBack: () -> Unit) {
 }
 
 /**
- * Sana kaliti. Server ISO beradi ("2026-08-08T09:12:33.123Z") — undan
- * `8/8/2026` ko'rinishi yasaladi (namunadagi kabi).
+ * Server vaqtni UTC ISO'da beradi ("2026-08-08T09:12:33.123Z").
+ *
+ * Ilgari undan matn kesib olinardi (`take(10)`, `drop(11).take(5)`) va
+ * ekranda UTC ko'rinardi — Toshkent vaqtidan 5 soat orqada. Endi haqiqiy
+ * vaqt zonasiga o'giriladi.
  */
-private fun dayOf(order: PackedOrder): String {
-    val iso = order.finishedAt ?: order.startedAt ?: return "—"
-    val date = iso.take(10)                       // 2026-08-08
-    val parts = date.split("-")
-    if (parts.size != 3) return date
-    val day = parts[2].trimStart('0').ifEmpty { "0" }
-    val month = parts[1].trimStart('0').ifEmpty { "0" }
-    return "$day/$month/${parts[0]}"
-}
+private fun localTime(iso: String?): java.time.ZonedDateTime? =
+    runCatching { Instant.parse(iso).atZone(ZoneId.systemDefault()) }.getOrNull()
+
+private val DAY_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("d/M/yyyy")
+private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+/** Guruh sarlavhasi uchun sana — namunadagi `8/8/2026` ko'rinishi. */
+private fun dayOf(order: PackedOrder): String =
+    localTime(order.finishedAt ?: order.startedAt)?.format(DAY_FMT) ?: "—"
 
 @Composable
 private fun DayGroup(day: String, count: Int, open: Boolean, onToggle: () -> Unit, p: Palette) {
@@ -230,8 +236,8 @@ private fun HistoryCard(order: PackedOrder, p: Palette, s: Strings, onReprint: (
             Text("${order.items.size} ${s.historyItems}", color = p.muted, fontSize = 13.sp)
         }
         Text(
-            // Kun sarlavhada ko'rinadi, bu yerda faqat soat kerak.
-            (order.finishedAt ?: "").drop(11).take(5) +
+            // Kun sarlavhada ko'rinadi, bu yerda faqat soat — MAHALLIY vaqtda.
+            (localTime(order.finishedAt)?.format(TIME_FMT) ?: "—") +
                 (order.batch?.let { "  ·  $it" } ?: "") +
                 (order.stationId?.let { "  ·  $it" } ?: ""),
             color = p.muted,

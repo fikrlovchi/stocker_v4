@@ -406,6 +406,34 @@ check(
 db.prepare("UPDATE orders SET shop_id = '9001' WHERE order_id = 'OK2'").run();
 resetSessions();
 
+/* --- Do'kon guruhi: operator ekranda guruh raqamini ko'radi --- */
+
+// Bir necha do'kon amalda bitta ombordan yig'iladi (Uzon home/Fashion/
+// accessories/Auto). Operator do'kon tanlamaydi — buyurtma ochilgach uning
+// guruh RAQAMI va do'koni ekranda ko'rinadi va u shu bo'yicha saralaydi.
+const { shopGroup, clearShopNameCache: clearGroups } = await import("../packing/shops.js");
+
+const cabG = db.prepare("INSERT INTO uzum_cabinets (name, token) VALUES ('Kab', 't')").run().lastInsertRowid;
+db.prepare("INSERT INTO uzum_shop_groups (id, name) VALUES (1, 'Uzon')").run();
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id, group_id) VALUES (?, 'Uzon Auto', '9001', 1)").run(cabG);
+db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (?, 'Guruhsiz', '9003')").run(cabG);
+clearGroups();
+
+check("guruh: do'konning guruhi topiladi", shopGroup("9001"), { groupId: 1, groupName: "Uzon" });
+check("guruh: biriktirilmagan do'kon", shopGroup("9003"), null);
+check("guruh: noma'lum do'kon", shopGroup("yo'q"), null);
+
+// Sessiya javobida guruh va do'kon nomi bo'ladi — ilova shundan ko'rsatadi.
+resetSessions();
+r = await scan({ barcode: "1000111953348", operator: "aziz" });
+check("guruh: sessiyada guruh raqami", r.session.groupId, 1);
+check("guruh: sessiyada do'kon nomi", r.session.shopName, "Uzon Auto");
+check("guruh: sessiyada guruh nomi", r.session.groupName, "Uzon");
+
+db.exec("DELETE FROM uzum_shops; DELETE FROM uzum_shop_groups; DELETE FROM uzum_cabinets");
+clearGroups();
+resetSessions();
+
 // --- Miqdor to'lganda ---
 resetSessions();
 await scan({ barcode: "1000222953348", operator: "aziz" });
@@ -821,7 +849,7 @@ if (!fs.existsSync(PANEL_MIGRATIONS)) {
   if (empty.status !== 200) {
     console.log("\n(katalog o'qilmadi — qolgan tekshiruvlar o'tkazib yuborildi)");
   } else {
-    check("vars: javob kalitlari", Object.keys(empty.body).sort(), ["cabinets", "sheets", "sources", "telegramBots"]);
+    check("vars: javob kalitlari", Object.keys(empty.body).sort(), ["cabinets", "sheets", "shopGroups", "sources", "telegramBots"]);
 
     check("vars: sheet qo'shildi", (await vars("/variables/sheets", "POST", { name: "Buyurtmalar", sheetId: "abc" })).status, 200);
     check("vars: list qo'shildi", (await vars("/variables/sheets/1/lists", "POST", { name: "uzum_order" })).status, 200);

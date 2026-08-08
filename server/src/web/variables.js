@@ -77,11 +77,13 @@ export function variablesRouter() {
       cabinets: all("SELECT id, name, mc_organization_href FROM uzum_cabinets ORDER BY name").map((c) => ({
         ...c,
         shops: all(
-          `SELECT id, name, shop_id, sku_code, mc_saleschannel_href
+          `SELECT id, name, shop_id, sku_code, mc_saleschannel_href, group_id
            FROM uzum_shops WHERE cabinet_id = ? ORDER BY name`,
           c.id
         ),
       })),
+      // Do'kon guruhlari — bir necha do'kon bitta ombordan yig'ilsa.
+      shopGroups: all("SELECT id, name FROM uzum_shop_groups ORDER BY id"),
       // Manbalar ro'yxati — `.env` bog'lash oynasi shundan to'ladi.
       sources: Object.entries(SOURCES).map(([key, s]) => ({ key, label: s.label })),
     });
@@ -181,20 +183,54 @@ export function variablesRouter() {
   // Do'kon nomini qo'lda tuzatish — mobil ilovada ham shu nom ko'rinadi.
   // Shu bilan birga MoySklad havolasi, SKU prefiksi va qoldiq bayrog'i.
   router.patch("/uzum/shops/:id", (req, res) => {
-    const { name, mcSaleschannelHref, skuCode } = req.body || {};
+    const { name, mcSaleschannelHref, skuCode, groupId } = req.body || {};
     const id = Number(req.params.id);
     const shop = db.prepare("SELECT * FROM uzum_shops WHERE id = ?").get(id);
     if (!shop) return res.status(404).json({ error: "Do'kon topilmadi" });
     if (name !== undefined && !name?.trim()) return res.status(400).json({ error: "Nom kerak" });
 
     db.prepare(
-      `UPDATE uzum_shops SET name = ?, mc_saleschannel_href = ?, sku_code = ? WHERE id = ?`
+      `UPDATE uzum_shops SET name = ?, mc_saleschannel_href = ?, sku_code = ?, group_id = ? WHERE id = ?`
     ).run(
       name?.trim() || shop.name,
       mcSaleschannelHref === undefined ? shop.mc_saleschannel_href : mcSaleschannelHref?.trim() || null,
       skuCode === undefined ? shop.sku_code : skuCode?.trim() || null,
+      groupId === undefined ? shop.group_id : Number(groupId) || null,
       id
     );
+    clearShopNameCache();
+    res.json({ ok: true });
+  });
+
+  /* ---------- do'kon guruhlari ---------- */
+
+  // ID QO'LDA beriladi va butun son bo'ladi: operator mobil ilovada shu
+  // raqamni ko'radi va buyurtmalarni shu bo'yicha saralaydi.
+  router.post("/uzum/groups", (req, res) => {
+    const { id, name } = req.body || {};
+    const num = Number(id);
+    if (!Number.isInteger(num) || num < 1) return res.status(400).json({ error: "ID butun son bo'lishi kerak (1 dan)" });
+    if (!name?.trim()) return res.status(400).json({ error: "Nom kerak" });
+    if (db.prepare("SELECT 1 FROM uzum_shop_groups WHERE id = ?").get(num)) {
+      return res.status(400).json({ error: `${num} ID li guruh allaqachon bor` });
+    }
+    db.prepare("INSERT INTO uzum_shop_groups (id, name) VALUES (?, ?)").run(num, name.trim());
+    clearShopNameCache();
+    res.json({ ok: true });
+  });
+
+  router.patch("/uzum/groups/:id", (req, res) => {
+    const { name } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: "Nom kerak" });
+    db.prepare("UPDATE uzum_shop_groups SET name = ? WHERE id = ?").run(name.trim(), Number(req.params.id));
+    clearShopNameCache();
+    res.json({ ok: true });
+  });
+
+  router.delete("/uzum/groups/:id", (req, res) => {
+    // Do'konlar `ON DELETE SET NULL` bilan guruhsiz qoladi — o'chirish
+    // ma'lumot yo'qotmaydi.
+    db.prepare("DELETE FROM uzum_shop_groups WHERE id = ?").run(Number(req.params.id));
     clearShopNameCache();
     res.json({ ok: true });
   });

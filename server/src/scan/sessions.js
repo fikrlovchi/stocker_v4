@@ -20,7 +20,7 @@ import { normalizeBarcode } from "../util/sheetValues.js";
 import { getOrderStateHref } from "../moysklad/client.js";
 import { createJob, listJobs } from "../print/jobs.js";
 import { hasOpenBatch, isInOpenBatch, markPacked } from "../packing/batches.js";
-import { shopName } from "../packing/shops.js";
+import { shopName, shopGroup } from "../packing/shops.js";
 import { dispatchTo } from "../print/hub.js";
 
 const PK = config.packing;
@@ -60,11 +60,21 @@ function shapeSession(s) {
     .all(s.id);
   const scanned = items.reduce((n, i) => n + i.scanned, 0);
   const total = items.reduce((n, i) => n + i.needed, 0);
+  // Buyurtmaning do'koni va GURUHI. Operator ekranda guruh raqamini
+  // ko'radi va yig'ilgan buyurtmalarni shu bo'yicha saralaydi — shuning
+  // uchun do'kon tanlash endi kerak emas.
+  const shopId = db.prepare("SELECT shop_id FROM orders WHERE order_id = ?").get(s.order_id)?.shop_id || null;
+  const group = shopGroup(shopId);
+
   return {
     id: s.id,
     orderId: s.order_id,
     operator: s.operator,
     stationId: s.station_id,
+    shopId,
+    shopName: shopId ? shopName(shopId) : null,
+    groupId: group?.groupId ?? null,
+    groupName: group?.groupName ?? null,
     status: s.status,
     startedAt: s.started_at,
     lastScanAt: s.last_scan_at,
@@ -111,8 +121,12 @@ function addPrintJob({ sessionId, orderId, itemId, target, copies, stationId }) 
   if (!stationId) {
     logger.warn(`Ish joyi ko'rsatilmagan (${target} ${orderId}) — job navbatda kutadi.`);
   }
-  const job = createJob({ sessionId, orderId, itemId, target, copies, stationId });
-  return { id: job.id, target: job.target, itemId: job.itemId, copies: job.copies };
+  // TO'LIQ shakl qaytadi. Ilgari bu yerda `{id, target, itemId, copies}`
+  // qisqartmasi qaytardi va mobil ilova javobni o'qiy olmasdi:
+  // "Field 'orderId' is required ... at path: $.jobs[0]". Chop etish
+  // ishlagani uchun xato faqat ekranda ko'rinardi — takror bosilganda esa
+  // mavjud joblar to'liq shaklda qaytib, xato yo'qolardi ("ba'zan").
+  return createJob({ sessionId, orderId, itemId, target, copies, stationId });
 }
 
 export function sessionJobs(sessionId) {
@@ -161,10 +175,15 @@ function findCandidates(barcode, shopId = null) {
   // Partiya yo'q bo'lsa eski xatti-harakat: keshdagi barcha mos buyurtmalar.
   const scoped = hasOpenBatch();
 
-  // DO'KON DOIRASI. Operator ekranda do'kon tanlaydi va `2/22` o'sha do'kon
-  // bo'yicha hisoblanadi — demak skan ham shu doirada bo'lishi kerak.
-  // Ilgari bu shart yo'q edi: tanlangan do'konda bo'lmagan tovar skanerlansa
-  // BOSHQA do'konning buyurtmasi ochilib, uning yorlig'i chop etilardi.
+  // Do'kon bo'yicha cheklov ATAYLAB olib tashlandi: bir necha do'kon amalda
+  // bitta ombordan yig'iladi (do'kon guruhi), shuning uchun operator do'kon
+  // tanlamaydi va skan hamma do'kondan qidiradi. Buyurtma ochilgach uning
+  // guruh raqami va do'koni ekranda ko'rinadi — operator shu bo'yicha
+  // saralaydi.
+  //
+  // `shopId` parametri saqlanib qoldi: kelajakda guruh bo'yicha cheklash
+  // kerak bo'lsa shu joy tayyor, va eski client'lar uzatsa ham buziladigan
+  // narsa yo'q.
   const where = shopId ? " AND o.shop_id = @shopId" : "";
   const rows = db
     .prepare(

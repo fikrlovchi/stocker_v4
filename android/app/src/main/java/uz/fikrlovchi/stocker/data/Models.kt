@@ -30,6 +30,11 @@ data class SessionItem(
 
 @Serializable
 data class Session(
+    /** Buyurtma qaysi do'kon guruhida — operator ekranda shu raqamni ko'radi. */
+    val groupId: Int? = null,
+    val groupName: String? = null,
+    val shopId: String? = null,
+    val shopName: String? = null,
     val id: String,
     val orderId: String,
     val operator: String? = null,
@@ -45,8 +50,11 @@ data class Session(
 @Serializable
 data class PrintJob(
     val id: String,
-    val orderId: String,
-    val target: String,
+    // Hamma maydonga standart qiymat: server javobida bittasi yetishmasa
+    // ham ilova yiqilmasin. Chop etish ishlab turib ekranda qizil xato
+    // chiqishi eng chalkashtiradigan holat.
+    val orderId: String? = null,
+    val target: String = "",
     val copies: Int = 1,
     val status: String = "pending",
 )

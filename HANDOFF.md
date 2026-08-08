@@ -21,7 +21,7 @@ stocker_v4/
 ├─ panel/             ESKI EJS panel (systemd, 3000) — tashqariga chiqarilmagan, o'chirishga tayyor
 ├─ pdfs/              uzumPDFs (pm2, 4040) — yorliq PDF'lari
 ├─ uzum-order-to-mc/  buyurtma tortish (systemd timer)
-├─ android/ desktop/  operator ilovasi (v0.6.2) va print client (v0.4.0)
+├─ android/ desktop/  operator ilovasi (v0.6.3) va print client (v0.4.0)
 ├─ brand/ deploy/ docs/ web/
 └─ data/stocker.db    YAGONA baza (panel + yig'ish jadvallar bir joyda)
 ```
@@ -44,7 +44,7 @@ cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart sto
 | Barcode va SKU jurnali | ✅ | Integratsiyalar ichida — qator qo'shilganda bajarilgan amallar natijasi |
 | Konfiguratsiya | ✅ | Uzum · MoySklad token · Telegram · Google Sheets · Qoldiq modifikatsiyasi (bo'sh) |
 | Uzum buyurtmalari | ⏳ | karkas bor, ma'lumot 5-bosqichda ([docs/V3-MIGRATION.md](docs/V3-MIGRATION.md)) |
-| Mobil ilova | ✅ | v0.6.2 — skan do'kon doirasida, ShK qo'lda, tarix kunlar bo'yicha + qayta chiqarish |
+| Mobil ilova | ✅ | v0.6.3 — do'kon guruhi sarlavhada, ShK+PRINT yonma-yon, tarix mahalliy vaqtda |
 | Desktop client | ✅ | v0.4.0 — navbatni tozalash, uz/ru |
 | **`panel/` ni o'chirish** | ⏳ | **keyingi ish** — hamma bo'lim ko'chdi, sinovdan keyin o'chiriladi |
 | 4-bosqich: bitta API jarayoni | ⏳ | panel + pdfs marshrutlari `server/` ga |

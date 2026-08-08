@@ -86,14 +86,12 @@ fun ScanScreen(
 
     var shops by remember { mutableStateOf<List<Shop>>(emptyList()) }
     var batchName by remember { mutableStateOf<String?>(null) }
-    var shopPicker by remember { mutableStateOf(false) }
 
     val mode = ScanMode.from(config.scanMode)
     var torchOn by remember { mutableStateOf(false) }
     var torchAvailable by remember { mutableStateOf(false) }
 
     var confirmCancel by remember { mutableStateOf(false) }
-    var reprintJobs by remember { mutableStateOf<List<PrintJob>?>(null) }
     var printingShk by remember { mutableStateOf(false) }
 
     var lastCode by remember { mutableStateOf("") }
@@ -159,8 +157,10 @@ fun ScanScreen(
         if (code.isEmpty() || busy) return
         busy = true
         scope.launch {
-            // Tanlangan do'kon skan doirasini cheklaydi.
-            runCatching { api.scan(code, config.shopId.ifBlank { null }) }
+            // Do'kon bo'yicha cheklov yo'q: guruh mantiqi joriy qilingach
+            // operator do'kon tanlamaydi, buyurtma qaysi do'konda ekani
+            // ochilgandan keyin sarlavhada ko'rinadi.
+            runCatching { api.scan(code) }
                 .onSuccess { r ->
                     offline = false
                     r.session?.let { session = it }
@@ -174,7 +174,6 @@ fun ScanScreen(
     }
 
     val current = session
-    val selectedShop = shops.firstOrNull { it.shopId == config.shopId }
     val readyToPrint = current != null && current.progress.remaining == 0
 
     Column(Modifier.fillMaxSize().background(p.bg)) {
@@ -185,36 +184,32 @@ fun ScanScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Chapda — do'kon tanlash (yig'ilmagan buyurtmalar soni bilan).
+            // Chapda — ochiq buyurtmaning GURUH raqami va do'koni.
+            // Do'kon tanlash olib tashlandi: bir necha do'kon amalda bitta
+            // ombordan yig'iladi, operator esa yig'ilganini guruh raqami
+            // bo'yicha saralaydi.
             Column(
                 Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { shopPicker = true }
                     .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
                 Text(
-                    selectedShop?.title ?: (if (shops.isEmpty()) s.noBatch else s.chooseShop),
-                    color = p.text,
-                    fontSize = 18.sp,
+                    current?.groupId?.let { "${s.group} $it" } ?: s.scanToStart,
+                    color = if (current?.groupId != null) p.accent else p.muted,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    current?.shopName ?: (if (config.stationId.isNotBlank()) "📍 ${config.stationId}" else "⚠ ${s.noStation}"),
+                    color = if (current?.shopName != null) p.text else p.muted,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    (if (config.stationId.isNotBlank()) "📍 ${config.stationId}" else "⚠ ${s.noStation}") +
+                    (if (config.stationId.isNotBlank()) "📍 ${config.stationId}" else "") +
                         "  ·  v${BuildConfig.VERSION_NAME}",
-                    color = if (config.stationId.isNotBlank()) p.muted else p.warn,
-                    fontSize = 12.sp,
-                )
-            }
-
-            // O'rtada — tanlangan do'kon bo'yicha "2/22".
-            selectedShop?.let { shop ->
-                Text(
-                    "${shop.packed}/${shop.total}",
-                    color = if (shop.pending == 0) p.done else p.accent,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 10.dp),
+                    color = p.muted,
+                    fontSize = 11.sp,
                 )
             }
 
@@ -379,28 +374,17 @@ fun ScanScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // "Qayta chiqarish" bu yerdan olib tashlandi — u tarix
+                    // ekranida, buyurtma bo'yicha va ShK/BIG tanlovi bilan.
+                    if (!current.isClosed) {
+                        Spacer(Modifier.height(14.dp))
                         GhostButton(
-                            s.reprint,
-                            onClick = {
-                                scope.launch {
-                                    runCatching { api.jobs(current.id) }
-                                        .onSuccess { reprintJobs = it.jobs }
-                                        .onFailure { fail(it) }
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
+                            s.cancelSession,
+                            onClick = { confirmCancel = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            borderColor = p.err,
+                            textColor = p.err,
                         )
-                        if (!current.isClosed) {
-                            GhostButton(
-                                s.cancelSession,
-                                onClick = { confirmCancel = true },
-                                modifier = Modifier.weight(1f),
-                                borderColor = p.err,
-                                textColor = p.err,
-                            )
-                        }
                     }
                 }
             } else {
@@ -423,9 +407,10 @@ fun ScanScreen(
             // Server hali chiqarilmagan yorliqlarni hisoblab beradi, shuning
             // uchun bir necha tovarni ketma-ket skanerlab, so'ng bir marta
             // bosish ham yetarli.
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             GhostButton(
                 text = s.printShk,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f).height(58.dp),
                 enabled = current != null && !printingShk,
                 onClick = {
                     val id = current?.id ?: return@GhostButton
@@ -446,11 +431,10 @@ fun ScanScreen(
                     }
                 },
             )
-            Spacer(Modifier.height(10.dp))
 
             PrimaryButton(
                 text = s.print,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 enabled = readyToPrint,
                 loading = printing,
                 height = 58,
@@ -469,6 +453,7 @@ fun ScanScreen(
                     }
                 },
             )
+            }
             if (!readyToPrint) {
                 Text(
                     s.printNotComplete,
@@ -482,41 +467,6 @@ fun ScanScreen(
     }
 
     /* ---------- Dialoglar ---------- */
-
-    if (shopPicker) {
-        AlertDialog(
-            onDismissRequest = { shopPicker = false },
-            containerColor = p.panel,
-            title = { Text(batchName ?: s.noBatch, color = p.text) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    if (shops.isEmpty()) Text(s.noBatch, color = p.muted, fontSize = 15.sp)
-                    shops.forEach { shop ->
-                        TextButton(
-                            onClick = {
-                                onShopChange(shop.shopId)
-                                shopPicker = false
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(shop.title, color = p.text, fontSize = 16.sp)
-                                Text(
-                                    "${shop.packed}/${shop.total}",
-                                    color = if (shop.pending == 0) p.done else p.accent,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { shopPicker = false }) { Text(s.back, color = p.muted) }
-            },
-        )
-    }
 
     if (confirmCancel) {
         AlertDialog(
@@ -536,47 +486,6 @@ fun ScanScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmCancel = false }) { Text(s.back, color = p.muted) }
-            },
-        )
-    }
-
-    reprintJobs?.let { jobs ->
-        AlertDialog(
-            onDismissRequest = { reprintJobs = null },
-            containerColor = p.panel,
-            title = { Text(s.reprint, color = p.text) },
-            text = {
-                Column {
-                    if (jobs.isEmpty()) Text("—", color = p.muted, fontSize = 15.sp)
-                    jobs.forEach { job ->
-                        TextButton(
-                            onClick = {
-                                reprintJobs = null
-                                scope.launch {
-                                    runCatching { api.reprint(job.id) }
-                                        .onSuccess {
-                                            feedback.buzz(Buzz.OK)
-                                            banner = Banner(p.accent, s.reprint, s.printSent)
-                                            bannerAt = System.currentTimeMillis()
-                                        }
-                                        .onFailure { fail(it) }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                (if (job.target == "big") "BIG" else "ShK") +
-                                    (if (job.copies > 1) " ×${job.copies}" else "") +
-                                    " · ${job.orderId} · ${job.status}",
-                                color = p.text,
-                                fontSize = 15.sp,
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { reprintJobs = null }) { Text(s.back, color = p.muted) }
             },
         )
     }
