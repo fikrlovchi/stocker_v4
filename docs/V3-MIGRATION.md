@@ -488,6 +488,50 @@ sifatida ko'chirildi:
 `R` ning shakli muhim: **hech qanday tashqi manbaga bog'liq emas**, ya'ni
 buyurtma Uzum API'dan kelishi bilan tracking raqami ma'lum bo'ladi.
 
+#### ⚠ `O` va `P` — buyurtma bilan MUZLATILADI
+
+Do'konlar vaqti-vaqti bilan boshqa kabinetga o'tkaziladi (`uzon.market`
+ИП SHINGARYOVA dan ИП Софья Кокчан ga ko'chgan). Kabinet — MoySklad'dagi
+**yuridik shaxs**, ya'ni ko'chishdan keyin buyurtma **boshqa firma** nomida
+yaratiladi.
+
+Shundan kelib chiqadigan qoida:
+
+> `organization_href` va `saleschannel_href` buyurtma **yaratilayotgan
+> paytda** hisoblanadi va buyurtma bilan birga **saqlanadi**. Keyin qayta
+> hisoblanmaydi.
+
+Jadvaldagi `ARRAYFORMULA` bu qoidani buzadi: u butun ustunni **bugungi**
+spravochnik bo'yicha qayta hisoblaydi, ya'ni 2024-yilgi buyurtma ham
+bugungi firmani ko'rsatib turadi. Xato ko'rinmay turadi — do'kon ko'chmaguncha.
+
+Amaliy natijasi:
+
+* **migratsiyada** `O` va `P` jadvaldan **ko'chiriladi**, qayta hisoblanmaydi;
+* **yangi** buyurtmalar uchun bugungi kabinet ishlatiladi;
+* `orderSync.js` dagi 224 ta farq (`do'kon 682`) aynan shundan — bu **xato
+  emas**, ikki tomon ikki xil vaqtdagi holatni ko'rsatmoqda.
+
+#### Do'kon ko'chishi ✅ (2026-08-08)
+
+Ko'chish endi jim o'tmaydi:
+
+* **`019_shop_moves.sql`** — `uzum_shop_moves` tarixi (qaysi do'kon, qaysi
+  kabinetdan qaysisiga, qachon) va `uzum_shops(shop_id)` bo'yicha **yagona**
+  indeks. Ilgari yagonalik `(cabinet_id, shop_id)` juftligida edi, ya'ni
+  ko'chgan do'kon eski kabinetda ham qolib ketardi va `organization_href`
+  ikkitasidan tasodifiy birini olardi. Migratsiya mavjud takrorlarni
+  tozalaydi (eng oxirgi qator qoladi).
+* **`applyShops`** ([`web/variables.js`](../server/src/web/variables.js)) —
+  sinxronizatsiya uchta holatni ajratadi: yangi · ko'chgan · o'zgarmagan.
+  Ko'chganda qator **ko'chiriladi**, tarixga yoziladi va logga chiqadi.
+  Do'konning `mc_saleschannel_href` i saqlanadi (u do'konniki), yuridik shaxs
+  esa kabinet bilan o'zgaradi.
+* **Konfiguratsiya → Uzum** da "Do'kon ko'chishlari" kartasi — ko'chish
+  bo'lmasa chizilmaydi.
+* **`orderSync.js`** farq chiqqanda ikkala yuridik shaxsning nomini
+  MoySklad'dan so'raydi va ko'chish tarixini ko'rsatadi.
+
 Solishtirish (hech narsa yozmaydi, farq bo'lsa exit kodi 1):
 
 ```bash
@@ -529,8 +573,8 @@ Manba — `items.product_ref`: `uzum_order_detail!I` mos topmasa `null` bo'ladi.
 `uzum-order-to-mc` dagi topic'ga yuborish mantiqi **o'zgarmadi** (o'sha bot,
 guruh va 24 soatlik sovish davri).
 
-selfTest: 406 → **449** (bog'lanmagan SKU, buyurtma formulalari, `.env`
-tahriri).
+selfTest: 406 → **464** (bog'lanmagan SKU, buyurtma formulalari, `.env`
+tahriri, do'kon ko'chishi).
 
 ## Buyruqlar
 

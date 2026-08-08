@@ -48,6 +48,60 @@ const SOURCES = {
 
 const all = (sql, ...params) => db.prepare(sql).all(...params);
 
+/**
+ * Uzum'dan kelgan do'kon ro'yxatini kabinetga qo'llaydi.
+ *
+ * Uch xil holat, uchtasi ham boshqacha ma'noga ega:
+ *   yangi    — do'kon hali bazada yo'q;
+ *   ko'chgan — do'kon BOSHQA kabinetda edi. Kabinet = MoySklad'dagi yuridik
+ *              shaxs, ya'ni bundan keyin buyurtma boshqa firma nomida
+ *              yaratiladi. Qator ko'chiriladi va hodisa tarixga yoziladi;
+ *   o'zgarmagan — faqat nomi yangilanadi.
+ *
+ * Eski kod ko'chishni ko'rmasdi: yagona indeks `(cabinet_id, shop_id)`
+ * juftligida bo'lgani uchun do'kon eski kabinetda ham qolib ketardi va
+ * `organization_href` ikkitasidan tasodifiy birini olardi.
+ */
+export function applyShops(cab, shops) {
+  const moved = [];
+  let added = 0;
+
+  db.transaction(() => {
+    for (const s of shops) {
+      const shopId = String(s.shopId);
+      const existing = db
+        .prepare("SELECT id, cabinet_id, name FROM uzum_shops WHERE shop_id = ?")
+        .get(shopId);
+
+      if (!existing) {
+        db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (?, ?, ?)")
+          .run(cab.id, s.name, shopId);
+        added++;
+        continue;
+      }
+
+      if (existing.cabinet_id !== cab.id) {
+        const from = db.prepare("SELECT name FROM uzum_cabinets WHERE id = ?").get(existing.cabinet_id);
+        db.prepare(
+          `INSERT INTO uzum_shop_moves
+             (shop_id, from_cabinet_id, to_cabinet_id, from_cabinet_name, to_cabinet_name, source)
+           VALUES (?, ?, ?, ?, ?, 'sync')`
+        ).run(shopId, existing.cabinet_id, cab.id, from?.name || null, cab.name);
+        // Sotuv kanali (`mc_saleschannel_href`) do'konning O'ZINIKI va
+        // ko'chishda saqlanadi; yuridik shaxs kabinetniki, ya'ni o'zgaradi.
+        db.prepare("UPDATE uzum_shops SET cabinet_id = ?, name = ? WHERE id = ?")
+          .run(cab.id, s.name, existing.id);
+        moved.push({ shopId, name: s.name, from: from?.name || null, to: cab.name });
+        continue;
+      }
+
+      db.prepare("UPDATE uzum_shops SET name = ? WHERE id = ?").run(s.name, existing.id);
+    }
+  })();
+
+  return { added, moved };
+}
+
 export function variablesRouter() {
   const router = express.Router();
 
@@ -84,6 +138,15 @@ export function variablesRouter() {
       })),
       // Do'kon guruhlari — bir necha do'kon bitta ombordan yig'ilsa.
       shopGroups: all("SELECT id, name FROM uzum_shop_groups ORDER BY id"),
+      // Oxirgi ko'chishlar. Ko'rinib turishi kerak: kabinet o'zgarishi
+      // buyurtma QAYSI FIRMA nomida yaratilishini o'zgartiradi.
+      shopMoves: all(
+        `SELECT m.shop_id AS shopId, s.name AS shopName,
+                m.from_cabinet_name AS fromName, m.to_cabinet_name AS toName,
+                m.detected_at AS detectedAt
+         FROM uzum_shop_moves m LEFT JOIN uzum_shops s ON s.shop_id = m.shop_id
+         ORDER BY m.detected_at DESC, m.id DESC LIMIT 10`
+      ),
       // Manbalar ro'yxati — `.env` bog'lash oynasi shundan to'ladi.
       sources: Object.entries(SOURCES).map(([key, s]) => ({ key, label: s.label })),
     });
@@ -132,6 +195,7 @@ export function variablesRouter() {
 
   /* ---------- Uzum ---------- */
 
+
   router.post("/uzum/cabinets", async (req, res) => {
     const { name, token } = req.body || {};
     if (!name?.trim() || !token?.trim()) return res.status(400).json({ error: "Nom va token kerak" });
@@ -144,40 +208,58 @@ export function variablesRouter() {
     // baribir saqlanadi — do'konlarni keyin "Yangilash" bilan olish mumkin.
     try {
       const shops = await fetchUzumShops(token.trim());
-      const insert = db.prepare(
-        "INSERT OR IGNORE INTO uzum_shops (cabinet_id, name, shop_id) VALUES (?, ?, ?)"
-      );
-      for (const s of shops) insert.run(id, s.name, s.shopId);
+      // Yangi kabinetdagi do'kon eskisida ham bo'lishi mumkin — bu KO'CHISH,
+      // shuning uchun "Yangilash" bilan bir xil mantiq ishlatiladi.
+      const result = applyShops({ id, name: name.trim() }, shops);
       clearShopNameCache();
-      res.json({ ok: true, shops: shops.length });
+      res.json({ ok: true, shops: shops.length, ...result });
     } catch (e) {
       res.json({ ok: true, shops: 0, warning: e.message });
     }
   });
 
-  // Do'konlarni Uzum'dan qayta o'qish (nom o'zgargan yoki yangi do'kon qo'shilgan).
+  // Do'konlarni Uzum'dan qayta o'qish (nom o'zgargan, yangi do'kon qo'shilgan
+  // yoki do'kon BOSHQA KABINETGA ko'chgan).
+  //
+  // Ko'chish alohida ishlanadi: ilgari do'kon eski kabinetda ham qolib
+  // ketardi (yagona indeks `(cabinet_id, shop_id)` juftligida edi), natijada
+  // bitta shop_id ikki kabinetda turib, `organization_href` tasodifiy
+  // tanlanardi. Endi qator KO'CHIRILADI va hodisa tarixga yoziladi —
+  // kabinet = MoySklad'dagi yuridik shaxs, ya'ni bu buyurtma qaysi firma
+  // nomida yaratilishini o'zgartiradi.
   router.post("/uzum/cabinets/:id/sync", async (req, res) => {
     const cab = db.prepare("SELECT * FROM uzum_cabinets WHERE id = ?").get(Number(req.params.id));
     if (!cab) return res.status(404).json({ error: "Kabinet topilmadi" });
     try {
       const shops = await fetchUzumShops(cab.token);
-      const upsert = db.transaction(() => {
-        for (const s of shops) {
-          const existing = db
-            .prepare("SELECT id FROM uzum_shops WHERE cabinet_id = ? AND shop_id = ?")
-            .get(cab.id, s.shopId);
-          if (existing) db.prepare("UPDATE uzum_shops SET name = ? WHERE id = ?").run(s.name, existing.id);
-          else db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (?, ?, ?)")
-            .run(cab.id, s.name, s.shopId);
-        }
-      });
-      upsert();
+      const { added, moved } = applyShops(cab, shops);
       clearShopNameCache();
-      logger.info(`Uzum do'konlari yangilandi: ${cab.name} — ${shops.length} ta`);
-      res.json({ ok: true, shops: shops.length });
+
+      logger.info(
+        `Uzum do'konlari yangilandi: ${cab.name} — ${shops.length} ta` +
+          (added ? `, ${added} yangi` : "") +
+          (moved.length ? `, ${moved.length} ta ko'chdi` : "")
+      );
+      for (const m of moved) {
+        logger.info(`Do'kon ko'chdi: ${m.name} (${m.shopId}) ${m.from || "?"} → ${m.to}`);
+      }
+
+      res.json({ ok: true, shops: shops.length, added, moved });
     } catch (e) {
       res.status(502).json({ error: e.message });
     }
+  });
+
+  // Do'kon ko'chishlari tarixi — "nega bu buyurtma boshqa firma nomida?"
+  // degan savolga javob shu yerda.
+  router.get("/uzum/shop-moves", (req, res) => {
+    res.json({
+      moves: all(
+        `SELECT shop_id AS shopId, from_cabinet_name AS fromName, to_cabinet_name AS toName,
+                detected_at AS detectedAt, source
+         FROM uzum_shop_moves ORDER BY detected_at DESC, id DESC LIMIT 50`
+      ),
+    });
   });
 
   // Do'kon nomini qo'lda tuzatish — mobil ilovada ham shu nom ko'rinadi.

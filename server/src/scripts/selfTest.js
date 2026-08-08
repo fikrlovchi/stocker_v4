@@ -849,7 +849,14 @@ if (!fs.existsSync(PANEL_MIGRATIONS)) {
   if (empty.status !== 200) {
     console.log("\n(katalog o'qilmadi — qolgan tekshiruvlar o'tkazib yuborildi)");
   } else {
-    check("vars: javob kalitlari", Object.keys(empty.body).sort(), ["cabinets", "sheets", "shopGroups", "sources", "telegramBots"]);
+    check("vars: javob kalitlari", Object.keys(empty.body).sort(), [
+      "cabinets",
+      "sheets",
+      "shopGroups",
+      "shopMoves",
+      "sources",
+      "telegramBots",
+    ]);
 
     check("vars: sheet qo'shildi", (await vars("/variables/sheets", "POST", { name: "Buyurtmalar", sheetId: "abc" })).status, 200);
     check("vars: list qo'shildi", (await vars("/variables/sheets/1/lists", "POST", { name: "uzum_order" })).status, 200);
@@ -1668,6 +1675,83 @@ check("formula K: miqdor bo'sh → null", detailRefs({ skuTitle: "UZON-1", amoun
 check("formula K: miqdor matn → null", detailRefs({ skuTitle: "UZON-1", amount: "ha" }, fCat).quantityForMc, null);
 // skuTitle bo'sh — `IF(C="", "", …)`
 check("formula: bo'sh skuTitle", detailRefs({ skuTitle: "", amount: 2 }, fCat).productRef, null);
+
+/* --- Do'konning kabinetdan kabinetga ko'chishi --- */
+
+// Amaliyotda do'konlar boshqa kabinetga o'tkaziladi. Kabinet = MoySklad'dagi
+// YURIDIK SHAXS, ya'ni ko'chishdan keyin buyurtma boshqa firma nomida
+// yaratiladi. Ilgari eski qator qolib ketardi (yagona indeks
+// `(cabinet_id, shop_id)` juftligida edi) va `organization_href` ikkitasidan
+// tasodifiy birini olardi.
+// `applyShops` ATAYLAB to'g'ridan-to'g'ri chaqiriladi: HTTP endpoint avval
+// Uzum API'ga chiqadi va test tarmoqqa bog'liq bo'lib qolardi.
+const { applyShops } = await import("../web/variables.js");
+
+db.exec("DELETE FROM uzum_shop_moves; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
+const cabA = db
+  .prepare("INSERT INTO uzum_cabinets (name, token, mc_organization_href) VALUES ('Eski kabinet', 't1', 'org-eski')")
+  .run().lastInsertRowid;
+const cabB = db
+  .prepare("INSERT INTO uzum_cabinets (name, token, mc_organization_href) VALUES ('Yangi kabinet', 't2', 'org-yangi')")
+  .run().lastInsertRowid;
+db.prepare(
+  "INSERT INTO uzum_shops (cabinet_id, name, shop_id, mc_saleschannel_href) VALUES (?, 'uzon.market', '682', 'kanal-682')"
+).run(cabA);
+
+// Bitta shop_id ikki kabinetda tura olmaydi — 019 dagi yagona indeks.
+const dupInsert = (() => {
+  try {
+    db.prepare("INSERT INTO uzum_shops (cabinet_id, name, shop_id) VALUES (?, 'takror', '682')").run(cabB);
+    return "(xato bo'lmadi)";
+  } catch (e) {
+    return e.message.includes("UNIQUE") ? "UNIQUE" : e.message;
+  }
+})();
+check("ko'chish: bitta do'kon ikki kabinetda tura olmaydi", dupInsert, "UNIQUE");
+
+// Do'kon endi B kabinetida ko'rinadi → qator KO'CHADI, takrorlanmaydi.
+const uzumShops = [{ shopId: "682", name: "uzon.market" }];
+const moveRes = applyShops({ id: cabB, name: "Yangi kabinet" }, uzumShops);
+check("ko'chish: bitta do'kon ko'chdi", moveRes.moved?.length, 1);
+check("ko'chish: qayerdan", moveRes.moved?.[0]?.from, "Eski kabinet");
+check("ko'chish: qayerga", moveRes.moved?.[0]?.to, "Yangi kabinet");
+check("ko'chish: yangi do'kon qo'shilmadi", moveRes.added, 0);
+check(
+  "ko'chish: do'kon nusxalanmadi",
+  db.prepare("SELECT COUNT(*) n FROM uzum_shops WHERE shop_id = '682'").get().n,
+  1
+);
+check(
+  "ko'chish: yangi kabinetda",
+  db.prepare("SELECT cabinet_id FROM uzum_shops WHERE shop_id = '682'").get().cabinet_id,
+  cabB
+);
+// Sotuv kanali DO'KONNIKI — ko'chishda yo'qolmasligi kerak.
+check(
+  "ko'chish: sotuv kanali saqlanadi",
+  db.prepare("SELECT mc_saleschannel_href FROM uzum_shops WHERE shop_id = '682'").get().mc_saleschannel_href,
+  "kanal-682"
+);
+check("ko'chish: tarixga yozildi", db.prepare("SELECT COUNT(*) n FROM uzum_shop_moves").get().n, 1);
+
+// Yuridik shaxs endi yangi kabinetniki — buyurtma shu firma nomida yoziladi.
+const { loadCatalogs: loadCat } = await import("../orders/catalogs.js");
+const { orderRefs: refs } = await import("../orders/formulas.js");
+check("ko'chish: organization_href yangilandi", refs("682", loadCat()).organizationHref, "org-yangi");
+check("ko'chish: saleschannel_href o'zgarmadi", refs("682", loadCat()).salesChannelHref, "kanal-682");
+
+// Takroriy sinxronizatsiya yangi ko'chish yozmaydi (idempotent).
+const resync = applyShops({ id: cabB, name: "Yangi kabinet" }, uzumShops);
+check("ko'chish: takror sinxronizatsiya yozmaydi", resync.moved.length, 0);
+check("ko'chish: tarix takrorlanmaydi", db.prepare("SELECT COUNT(*) n FROM uzum_shop_moves").get().n, 1);
+
+// Orqaga ko'chish ham hodisa — tarixda ikkalasi ham turishi kerak.
+applyShops({ id: cabA, name: "Eski kabinet" }, uzumShops);
+check("ko'chish: orqaga ko'chish yoziladi", db.prepare("SELECT COUNT(*) n FROM uzum_shop_moves").get().n, 2);
+check("ko'chish: yangi do'kon qo'shiladi", applyShops({ id: cabA, name: "Eski kabinet" }, [{ shopId: "999", name: "yangi" }]).added, 1);
+
+db.exec("DELETE FROM uzum_shop_moves; DELETE FROM uzum_shops; DELETE FROM uzum_cabinets");
+clearShopNameCache();
 
 /* --- Kutish oynasi: .env tahriri (interfeysdan boshqariladi) --- */
 

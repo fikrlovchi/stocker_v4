@@ -16,6 +16,7 @@ export default function UzumConfig() {
 
   return (
     <SectionBody data={data} error={error} note={note}>
+      <ShopMoves moves={data?.shopMoves || []} />
       <ShopGroups groups={data?.shopGroups || []} cabinets={data?.cabinets || []} run={run} />
 
       <div className="card">
@@ -36,6 +37,40 @@ export default function UzumConfig() {
         />
       </div>
     </SectionBody>
+  );
+}
+
+/**
+ * Do'konning kabinetdan kabinetga ko'chishi.
+ *
+ * Bu oddiy "sozlama o'zgardi" emas: kabinet — MoySklad'dagi YURIDIK SHAXS,
+ * ya'ni ko'chishdan keyin buyurtma boshqa firma nomida yaratiladi. Eski
+ * buyurtmalar esa o'sha paytdagi firmada qoladi — shuning uchun hodisa
+ * ko'rinib turishi kerak, aks holda "nega bu buyurtma boshqa firmada?"
+ * degan savolga javob topilmaydi.
+ *
+ * Hech qanday ko'chish bo'lmagan bo'lsa karta chizilmaydi.
+ */
+function ShopMoves({ moves }) {
+  const { t } = useTranslation();
+  if (!moves.length) return null;
+
+  return (
+    <div className="card">
+      <h2>{t("vars.shopMoves")}</h2>
+      <p className="muted" style={{ marginTop: 0 }}>{t("vars.shopMovesHint")}</p>
+      <table>
+        <tbody>
+          {moves.map((m, i) => (
+            <tr key={`${m.shopId}-${m.detectedAt}-${i}`}>
+              <td>{m.shopName || m.shopId}</td>
+              <td className="muted">{m.fromName || "—"} → <b>{m.toName}</b></td>
+              <td className="muted">{m.detectedAt}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

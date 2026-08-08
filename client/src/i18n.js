@@ -249,6 +249,9 @@ const uz = {
     uzum: "Uzum kabinetlari va do'konlari",
     uzumHint: "Do'kon nomlari mobil ilovada ham ko'rinadi — o'zgartirsangiz operator ekranida ham o'zgaradi.",
     sync: "Do'konlarni yangilash",
+    shopMoves: "Do'kon ko'chishlari",
+    shopMovesHint:
+      "Do'kon boshqa kabinetga o'tkazilgan. Kabinet — MoySklad'dagi yuridik shaxs, ya'ni bundan keyin buyurtma boshqa firma nomida yaratiladi; eski buyurtmalar o'sha paytdagi firmada qoladi.",
     synced: "Do'konlar Uzum'dan yangilandi",
     noShops: "Do'kon yo'q — \"Do'konlarni yangilash\" ni bosing",
     shopName: "Do'kon nomi",
@@ -662,6 +665,9 @@ const ru = {
     uzum: "Кабинеты и магазины Uzum",
     uzumHint: "Названия магазинов видны и в мобильном приложении — изменение отразится у оператора.",
     sync: "Обновить магазины",
+    shopMoves: "Переносы магазинов",
+    shopMovesHint:
+      "Магазин переведён в другой кабинет. Кабинет — это юридическое лицо в МойСклад, то есть дальнейшие заказы создаются от другой фирмы; старые заказы остаются за прежней.",
     synced: "Магазины обновлены из Uzum",
     noShops: "Магазинов нет — нажмите «Обновить магазины»",
     shopName: "Название магазина",
