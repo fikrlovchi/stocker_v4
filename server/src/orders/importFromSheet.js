@@ -70,10 +70,28 @@ const flag = (row, i) => {
 /**
  * Jadvaldagi qatorlarni bazaga yozadi (upsert).
  *
+ * `sinceMs` — shu vaqtdan OLDIN tushgan buyurtmalar o'tkazib yuboriladi.
+ * Har yangilanish tsiklida (60 soniya) 8000+ qatorni qayta yozish behuda:
+ * eski buyurtmaning bayroqlari (`Q·S·T·U·V`) endi o'zgarmaydi —
+ * `uzum-order-to-mc` faqat yaqindagilarga tegadi. Bir martalik to'liq
+ * ko'chirish uchun `sinceMs` berilmaydi (`importOrders.js`).
+ *
+ * Bazada hali yo'q buyurtma `sinceMs` dan eski bo'lsa ham yoziladi —
+ * aks holda birinchi ko'chirishdan keyin qo'shilgan eski qator abadiy
+ * tushib qolardi.
+ *
  * Qaytaradi: {orders, items, skipped} — `skipped` ID si yo'q qatorlar.
  */
-export function importOrders({ orderRows, detailRows }) {
+export function importOrders({ orderRows, detailRows, sinceMs = null }) {
   const now = new Date().toISOString();
+  // Qaysi buyurtmalar yozildi — detal qatorlarini ham shular bo'yicha
+  // filtrlaymiz, aks holda o'tkazib yuborilgan buyurtmaning tovarlari
+  // baribir qayta yozilardi.
+  const touched = new Set();
+  const known =
+    sinceMs === null
+      ? null
+      : new Set(db.prepare("SELECT order_id FROM uzum_orders").all().map((r) => r.order_id));
 
   const upsertOrder = db.prepare(`
     INSERT INTO uzum_orders (
@@ -156,6 +174,10 @@ export function importOrders({ orderRows, detailRows }) {
         parseSheetTimeToEpochMs(cell(row, ORD.arrivedAt)) ??
         parseSheetTimeToEpochMs(cell(row, ORD.dateCreated));
 
+      // Eski va allaqachon bazada bor buyurtmaga tegmaymiz.
+      if (sinceMs !== null && arrivedMs !== null && arrivedMs < sinceMs && known.has(orderId)) continue;
+
+      touched.add(orderId);
       upsertOrder.run({
         order_id: orderId,
         uzum_status: text(row, ORD.uzumStatus),
@@ -196,6 +218,8 @@ export function importOrders({ orderRows, detailRows }) {
         skipped.items++;
         continue;
       }
+      // Buyurtmasi o'tkazib yuborilgan bo'lsa tovarlari ham tegilmaydi.
+      if (sinceMs !== null && !touched.has(orderId)) continue;
 
       const flagTotal = cell(row, ITM.priceIsTotal);
       upsertItem.run({

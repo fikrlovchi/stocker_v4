@@ -366,7 +366,14 @@ export async function refreshCache() {
   // Xatosi butun tsiklni to'xtatmasligi kerak: yig'ish oqimi undan
   // mustaqil va u muhimroq.
   try {
-    const imported = importOrders({ orderRows, detailRows });
+    // Faqat saqlash oynasidagi (va bazada hali yo'q) buyurtmalar — eski
+    // qatorning bayroqlari endi o'zgarmaydi. To'liq ko'chirish bir marta,
+    // `importOrders.js` skripti bilan.
+    const imported = importOrders({
+      orderRows,
+      detailRows,
+      sinceMs: startedMs - config.cache.retentionDays * 86400 * 1000,
+    });
     result.importedOrders = imported.orders;
   } catch (e) {
     logger.error(`Buyurtmalarni doimiy nusxaga ko'chirishda xato: ${e.message}`);

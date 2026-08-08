@@ -1721,6 +1721,23 @@ check("import: holat — keshdagilar", impStatus.inCache > 0, true);
 const badRows = [orderRows[0], row({ B: "status-only" })];
 check("import: ID siz qator o'tkazib yuboriladi", importOrders({ orderRows: badRows, detailRows: [] }).skipped.orders, 1);
 
+// `sinceMs` — har 60 soniyalik tsiklda 8000+ qatorni qayta yozmaslik uchun.
+// Eski VA allaqachon bazada bor buyurtma tegilmaydi.
+const recentOnly = importOrders({ orderRows, detailRows, sinceMs: NOW - 3 * 3600 * 1000 });
+check("import: eski qatorlar o'tkazib yuboriladi", recentOnly.orders < orderRows.length - 1, true);
+check("import: yaqindagilar yoziladi", recentOnly.orders > 0, true);
+
+// Bazada YO'Q buyurtma eski bo'lsa ham yoziladi — aks holda birinchi
+// ko'chirishdan keyin qo'shilgan eski qator abadiy tushib qolardi.
+db.prepare("DELETE FROM uzum_orders WHERE order_id = 'OLD'").run();
+const withOld = importOrders({ orderRows, detailRows, sinceMs: NOW - 3 * 3600 * 1000 });
+check(
+  "import: bazada yo'q eski qator baribir yoziladi",
+  db.prepare("SELECT COUNT(*) n FROM uzum_orders WHERE order_id = 'OLD'").get().n,
+  1
+);
+check("import: qo'shilgani sanaladi", withOld.orders > recentOnly.orders, true);
+
 db.exec("DELETE FROM uzum_order_items; DELETE FROM uzum_orders");
 
 /* --- Buyurtma statusi (hisoblanadi, saqlanmaydi) --- */
