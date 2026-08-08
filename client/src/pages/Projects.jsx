@@ -153,6 +153,13 @@ export default function Projects() {
             />
           )}
 
+          {data.sheetsWrite && (
+            <SheetsWrite
+              value={data.sheetsWrite}
+              onToggle={(enabled) => act(() => api.projectSheetsWrite(slug, enabled))}
+            />
+          )}
+
           {data.envBindings.length > 0 && (
             <div className="card">
               <h2>{t("projects.env")}</h2>
@@ -225,6 +232,41 @@ function HoldWindow({ value, onSave }) {
             {t("projects.holdWindowDefault", { start: value.defaults.start, end: value.defaults.end })}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Google Sheets'ga yozish — ko'chish davrining OXIRGI kaliti.
+ *
+ * O'chirilsa integratsiya tsikli UMUMAN bajarilmaydi: uning butun holati
+ * jadvalda (Q·S·T·U·V). Yarim ishlash bo'lsa har tsiklda o'sha buyurtmalarni
+ * qaytadan yaratardi. Shuning uchun o'chirishdan oldin tasdiq so'raladi.
+ */
+function SheetsWrite({ value, onToggle }) {
+  const { t } = useTranslation();
+
+  return (
+    <div className={`card ${value.enabled ? "" : "error"}`}>
+      <h2>{t("projects.sheetsWrite")}</h2>
+      <div className="muted" style={{ marginBottom: 8 }}>{t("projects.sheetsWriteHint")}</div>
+
+      {value.error && <div className="error">{value.error}</div>}
+
+      <div className="row">
+        <span className={`badge ${value.enabled ? "on" : "danger"}`}>
+          {value.enabled ? t("projects.sheetsWriteOn") : t("projects.sheetsWriteOff")}
+        </span>
+        <button
+          className="ghost"
+          onClick={() => {
+            if (value.enabled && !confirm(t("projects.sheetsWriteConfirm"))) return;
+            onToggle(!value.enabled);
+          }}
+        >
+          {value.enabled ? t("projects.sheetsWriteDisable") : t("projects.sheetsWriteEnable")}
+        </button>
       </div>
     </div>
   );

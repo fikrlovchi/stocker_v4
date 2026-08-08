@@ -31,6 +31,8 @@ const UNITS = {
     envPath: "/root/stocker/uzum-order-to-mc/.env",
     // Kutish oynasi (Toshkent vaqti) — interfeysdan tahrirlanadi.
     holdWindow: true,
+    // Google Sheets'ga yozishni o'chirish belgisi (ko'chish davri uchun).
+    sheetsWrite: true,
   },
   "mc-stock-to-uzum": {
     serviceUnit: "mc-stock.service",
@@ -98,6 +100,28 @@ function withEnvValue(text, key, value) {
     return text.replace(new RegExp(`^${key}=.*$`, "m"), line);
   }
   return `${text}${text.endsWith("\n") || text === "" ? "" : "\n"}${line}\n`;
+}
+
+/**
+ * Google Sheets'ga yozish yoqilganmi (`.env: SHEETS_WRITE`).
+ *
+ * Ko'chish davri uchun: buyurtmalar allaqachon serverda saqlanadi, lekin
+ * `uzum-order-to-mc` hozircha jadvalga ham yozib boradi. Yozishni o'chirish
+ * — ATAYLAB qilinadigan qadam, shuning uchun standart qiymat YOQIQ.
+ *
+ * ⚠ Bugun o'chirib bo'lmaydi: integratsiyaning butun holati jadvalda
+ * (`Q·S·T·U·V` ustunlari). O'chirish server buyurtmalarni Uzum'dan o'zi
+ * tortib, MoySklad'ga o'zi yozadigan bo'lgandan keyin ma'noli.
+ */
+function sheetsWrite(slug) {
+  const unit = UNITS[slug];
+  if (!unit?.sheetsWrite || !unit.envPath) return null;
+  try {
+    const value = readEnvValue(fs.readFileSync(unit.envPath, "utf8"), "SHEETS_WRITE");
+    return { enabled: value === null ? true : value !== "0", explicit: value !== null };
+  } catch (e) {
+    return { enabled: true, explicit: false, error: e.message };
+  }
 }
 
 function holdWindow(slug) {
@@ -180,6 +204,7 @@ export function projectsRouter() {
       status: await unitStatus(row.slug),
       intervalSeconds: intervalSeconds(row.slug),
       holdWindow: holdWindow(row.slug),
+      sheetsWrite: sheetsWrite(row.slug),
       envBindings: bindings,
     });
   });
@@ -310,6 +335,38 @@ export function projectsRouter() {
 
       logger.info(`Kutish oynasi o'zgardi: ${req.params.slug} → ${start}–${end} (${req.user.login})`);
       res.json({ ok: true, start, end });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  /**
+   * Google Sheets'ga yozishni yoqish/o'chirish.
+   *
+   * O'chirish — ko'chishning OXIRGI qadami. Bugun o'chirilsa integratsiya
+   * ishlamay qoladi: uning holati (`Q·S·T·U·V`) jadvalda saqlanadi. Shuning
+   * uchun o'chirishda javobda ogohlantirish qaytadi va interfeys tasdiq
+   * so'raydi.
+   */
+  router.put("/:slug/sheets-write", (req, res) => {
+    const unit = unitOr404(req, res);
+    if (!unit) return;
+    if (!unit.sheetsWrite || !unit.envPath) {
+      return res.status(400).json({ error: "Bu loyihada Sheets yozuvi yo'q" });
+    }
+
+    const enabled = req.body?.enabled !== false;
+    try {
+      const text = fs.readFileSync(unit.envPath, "utf8");
+      const next = withEnvValue(text, "SHEETS_WRITE", enabled ? "1" : "0");
+      const tmp = `${unit.envPath}.tmp`;
+      fs.writeFileSync(tmp, next, { mode: 0o600 });
+      fs.renameSync(tmp, unit.envPath);
+
+      logger.info(
+        `Sheets yozuvi ${enabled ? "yoqildi" : "O'CHIRILDI"}: ${req.params.slug} (${req.user.login})`
+      );
+      res.json({ ok: true, enabled });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

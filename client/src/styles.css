@@ -154,6 +154,8 @@ button.link { background: none; border: none; color: var(--danger); padding: 0; 
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .badge.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .badge.off { background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
+/* Bekor bo'lgan / e'tibor talab qiladigan holat — "off" dan ajralib tursin. */
+.badge.danger { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
 
 /* Konfiguratsiya tablari — bo'limlar bir sahifada, ostidagi chiziq ularni
    sahifa mazmunidan ajratadi. */

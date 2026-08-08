@@ -201,10 +201,30 @@ async function computeBlockedOrderIds(sheets, details) {
   return blocked;
 }
 
+// `SHEETS_WRITE=0` — ko'chish davrining OXIRGI qadami (Konfiguratsiya emas,
+// Integratsiyalar bo'limidan qo'yiladi).
+//
+// Yarim ishlash MUMKIN EMAS: bu integratsiyaning butun holati jadvalda
+// (`Q` MoySklad'da yaratilgan · `S` MoySklad ID · `T` tasdiqlangan ·
+// `U` holat · `V` bekor belgisi). Yozmasdan ishlasa har tsiklda o'sha
+// buyurtmalarni qaytadan yaratardi. Shuning uchun bayroq o'chirilganda
+// tsikl UMUMAN bajarilmaydi — server bu ishni o'z zimmasiga olgan bo'ladi.
+function sheetsWriteEnabled() {
+  return String(process.env.SHEETS_WRITE ?? "1").trim() !== "0";
+}
+
 async function createMoySkladOrders() {
   const startedAt = new Date().toISOString();
   let successCount = 0;
   let errorCount = 0;
+
+  if (!sheetsWriteEnabled()) {
+    logger.info(
+      "SHEETS_WRITE=0 — Google Sheets yozuvi o'chirilgan, tsikl bajarilmadi. " +
+        "Buyurtmalarni server o'zi tortadi (docs/V3-MIGRATION.md, 6-bosqich)."
+    );
+    return { startedAt, successCount: 0, errorCount: 0, skipped: true };
+  }
 
   // Google Sheets'ga barcha o'qish/yozishlar uzbuyo@gmail.com (OAuth) nomidan
   // amalga oshadi — service account (credentials.json) endi sheet uchun
@@ -344,14 +364,16 @@ async function createMoySkladOrders() {
 }
 
 createMoySkladOrders()
-  .then(async ({ startedAt, successCount, errorCount }) => {
-    logger.info("Ish yakunlandi.");
+  .then(async ({ startedAt, successCount, errorCount, skipped }) => {
+    logger.info(skipped ? "Ish o'tkazib yuborildi (Sheets yozuvi o'chirilgan)." : "Ish yakunlandi.");
     await reporter.reportRun({
       startedAt,
       status: deriveStatus(successCount, errorCount),
       successCount,
       errorCount,
-      summary: `${successCount} muvaffaqiyat, ${errorCount} xato`,
+      summary: skipped
+        ? "Sheets yozuvi o'chirilgan — tsikl bajarilmadi"
+        : `${successCount} muvaffaqiyat, ${errorCount} xato`,
     });
   })
   .catch(async (e) => {

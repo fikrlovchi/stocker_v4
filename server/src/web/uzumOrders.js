@@ -5,9 +5,30 @@
 // jadvaldagi bayroqlar (Q·T·U·V) va MoySklad havolalari ham ko'rinadi,
 // tarkibini ochib tovarlarini ko'rish mumkin.
 import express from "express";
+import fs from "node:fs";
 import { db } from "../db/index.js";
 import { shopName } from "../packing/shops.js";
 import { importStatus } from "../orders/importFromSheet.js";
+import { orderStatus, parseHHMM } from "../orders/status.js";
+import { UNITS, readEnvValue } from "./projects.js";
+
+// Kutish oynasi `uzum-order-to-mc/.env` da — status aynan shu oraliqqa
+// tayanadi, shuning uchun ikkinchi joyda takrorlanmasligi kerak. Standart
+// qiymatlar `orderStatusSync.js` dagi bilan bir xil.
+function holdWindowMinutes() {
+  const fallback = { holdStartMin: parseHHMM("06:10"), holdEndMin: parseHHMM("11:00") };
+  const envPath = UNITS["uzum-order-to-mc"]?.envPath;
+  if (!envPath) return fallback;
+  try {
+    const text = fs.readFileSync(envPath, "utf8");
+    return {
+      holdStartMin: parseHHMM(readEnvValue(text, "WINDOW_HOLD_START")) ?? fallback.holdStartMin,
+      holdEndMin: parseHHMM(readEnvValue(text, "WINDOW_HOLD_END")) ?? fallback.holdEndMin,
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 export function uzumOrdersRouter() {
   const router = express.Router();
@@ -47,12 +68,16 @@ export function uzumOrdersRouter() {
       .prepare(
         `SELECT o.*,
                 (SELECT COUNT(*) FROM uzum_order_items i WHERE i.order_id = o.order_id) AS itemCount,
-                EXISTS (SELECT 1 FROM orders c WHERE c.order_id = o.order_id) AS inCache
+                EXISTS (SELECT 1 FROM orders c WHERE c.order_id = o.order_id) AS inCache,
+                EXISTS (SELECT 1 FROM canceled_orders x WHERE x.order_id = o.order_id) AS canceledInMc,
+                EXISTS (SELECT 1 FROM packed_orders p WHERE p.order_id = o.order_id) AS packed
          FROM uzum_orders o${sql}
          ORDER BY o.arrived_at_ms DESC, o.order_id DESC
          LIMIT @limit OFFSET @offset`
       )
       .all({ ...params, limit, offset });
+
+    const window = holdWindowMinutes();
 
     res.json({
       items: rows.map((r) => ({
@@ -64,8 +89,19 @@ export function uzumOrdersRouter() {
         arrivedAtMs: r.arrived_at_ms,
         price: r.price,
         itemCount: r.itemCount,
-        // Jadvaldagi bayroqlar: "nega bu buyurtma yig'ishga chiqmagan"
-        // degan savolga javob shu to'rttasida.
+        // Status SAQLANMAYDI — har so'rovda hisoblanadi.
+        status: orderStatus(
+          {
+            arrivedAtMs: r.arrived_at_ms,
+            uzumConfirmed: r.uzum_confirmed === 1,
+            mcState: r.mc_state,
+            canceledInMc: Boolean(r.canceledInMc),
+            packed: Boolean(r.packed),
+          },
+          window
+        ),
+        // Bayroqlar ustun bo'lib chiqmaydi, lekin javobda qoladi: interfeys
+        // ularni izoh sifatida ko'rsatadi ("nega shu status?").
         sentToMc: r.sent_to_mc,
         uzumConfirmed: r.uzum_confirmed,
         mcState: r.mc_state,
@@ -90,13 +126,20 @@ export function uzumOrdersRouter() {
     const order = db.prepare("SELECT order_id FROM uzum_orders WHERE order_id = ?").get(String(req.params.orderId));
     if (!order) return res.status(404).json({ error: "Buyurtma topilmadi" });
 
+    // MoySklad tovarining NOMI qo'shiladi: UUID hech kimga hech narsa
+    // aytmaydi, nom esa darhol tanitadi. `mc_product` serverda allaqachon
+    // bor (assortiment MoySklad'dan o'qiladi) — qo'shimcha import kerak emas.
     res.json({
       items: db
         .prepare(
-          `SELECT item_id AS itemId, barcode, sku_title AS skuTitle, title, price, amount,
-                  product_ref AS productRef, entity_type AS entityType,
-                  quantity_for_mc AS quantityForMc, price_is_total AS priceIsTotal, sheet_row AS sheetRow
-           FROM uzum_order_items WHERE order_id = ? ORDER BY sheet_row`
+          `SELECT i.item_id AS itemId, i.barcode, i.sku_title AS skuTitle, i.price, i.amount,
+                  i.product_ref AS productRef, i.entity_type AS entityType,
+                  i.quantity_for_mc AS quantityForMc, i.price_is_total AS priceIsTotal,
+                  i.sheet_row AS sheetRow,
+                  p.name AS mcProductName, p.external_id AS mcExternalId
+           FROM uzum_order_items i
+           LEFT JOIN mc_product p ON p.uuid = i.product_ref
+           WHERE i.order_id = ? ORDER BY i.sheet_row`
         )
         .all(String(req.params.orderId)),
     });

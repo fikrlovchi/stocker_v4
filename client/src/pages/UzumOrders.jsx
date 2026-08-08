@@ -120,7 +120,7 @@ export default function UzumOrders() {
                   <th>{t("uzumOrders.arrivedAt")}</th>
                   <th>{t("uzumOrders.items")}</th>
                   <th>{t("uzumOrders.price")}</th>
-                  <th title={t("uzumOrders.flagsHint")}>{t("uzumOrders.flags")}</th>
+                  <th>{t("uzumOrders.status")}</th>
                   <th>{t("uzumOrders.moyskladId")}</th>
                   <th>{t("uzumOrders.tracking")}</th>
                 </tr>
@@ -147,6 +147,18 @@ export default function UzumOrders() {
     </div>
   );
 }
+
+// Statusning ko'rinishi: yakuniy holatlar (yig'ildi) yashil, bekor bo'lganlar
+// va e'tibor talab qiladiganlar qizil, oraliq holatlar neytral.
+const STATUS_CLASS = {
+  packed: "on",
+  packing: "off",
+  new: "off",
+  auto_canceled: "danger",
+  cancel_pending: "danger",
+  build_error: "danger",
+  canceled: "danger",
+};
 
 function Row({ order }) {
   const { t } = useTranslation();
@@ -180,12 +192,16 @@ function Row({ order }) {
         <td className="muted">{order.arrivedAt || "—"}</td>
         <td>{order.itemCount}</td>
         <td>{order.price ?? "—"}</td>
-        {/* Q·T·U·V — buyurtmaning quvurdagi holati. Bo'sh bayroq "hali
-            bajarilmagan" degani, shuning uchun "—" bilan ko'rsatiladi. */}
+        {/* Status HISOBLANADI. Uni keltirib chiqargan bayroqlar (Q·T·U·V)
+            izohda qoladi — "nega shu status?" degan savol javobsiz
+            qolmasin. */}
         <td>
-          <code>
-            Q{order.sentToMc ?? "—"} T{order.uzumConfirmed ?? "—"} U:{order.mcState || "—"} V{order.cancelHandled ?? "—"}
-          </code>
+          <span
+            className={`badge ${STATUS_CLASS[order.status] || "off"}`}
+            title={`Q${order.sentToMc ?? "—"} · T${order.uzumConfirmed ?? "—"} · U:${order.mcState || "—"} · V${order.cancelHandled ?? "—"}`}
+          >
+            {t(`uzumOrders.st.${order.status}`)}
+          </span>
         </td>
         <td className="muted">{order.moyskladId || "—"}</td>
         <td className="muted">{order.trackingNumber || "—"}</td>
@@ -203,10 +219,9 @@ function Row({ order }) {
                 <thead>
                   <tr>
                     <th>SKU</th>
-                    <th>{t("uzumOrders.title")}</th>
                     <th>Barcode</th>
                     <th>{t("uzumOrders.amount")}</th>
-                    <th title={t("uzumOrders.qtyMcHint")}>K</th>
+                    <th title={t("uzumOrders.qtyMcHint")}>{t("uzumOrders.qtyMc")}</th>
                     <th>{t("uzumOrders.productRef")}</th>
                   </tr>
                 </thead>
@@ -214,13 +229,20 @@ function Row({ order }) {
                   {items.map((it) => (
                     <tr key={it.itemId}>
                       <td><code>{it.skuTitle || "—"}</code></td>
-                      <td>{it.title || "—"}</td>
                       <td className="muted">{it.barcode || "—"}</td>
                       <td>{it.amount ?? "—"}</td>
                       <td>{it.quantityForMc ?? "—"}</td>
-                      {/* Bog'lanmagan SKU — buyurtma MoySklad'ga o'tmaydi. */}
-                      <td className={it.productRef ? "muted" : "error"}>
-                        {it.productRef || t("uzumOrders.noRef")}
+                      {/* MoySklad tovarining NOMI — UUID emas. Bog'lanmagan
+                          bo'lsa buyurtma MoySklad'ga umuman o'tmaydi. */}
+                      <td className={it.productRef ? "" : "error"}>
+                        {it.productRef ? (
+                          <>
+                            {it.mcProductName || <span className="muted">{it.productRef}</span>}
+                            {it.mcExternalId && <div className="muted">{it.mcExternalId}</div>}
+                          </>
+                        ) : (
+                          t("uzumOrders.noRef")
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -162,6 +162,9 @@ export const api = {
   // Kutish oynasi (Toshkent vaqti) — `.env` dagi WINDOW_HOLD_START/END.
   projectHoldWindow: (slug, start, end) =>
     call(`/projects/${encodeURIComponent(slug)}/hold-window`, { method: "PUT", body: { start, end } }),
+  // Google Sheets'ga yozish — ko'chish davrining oxirgi kaliti.
+  projectSheetsWrite: (slug, enabled) =>
+    call(`/projects/${encodeURIComponent(slug)}/sheets-write`, { method: "PUT", body: { enabled } }),
 
   labelsConfig: () => call("/labels/config"),
   saveLabelsConfig: (config) => call("/labels/config", { method: "PUT", body: config }),

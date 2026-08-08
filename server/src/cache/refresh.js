@@ -13,6 +13,7 @@ import { config } from "../config.js";
 import { db, setMeta, getMeta } from "../db/index.js";
 import logger from "../logger.js";
 import { readSheets } from "./readSheets.js";
+import { importOrders } from "../orders/importFromSheet.js";
 import { evaluateOrder, REASONS } from "./eligibility.js";
 import { fetchCanceledOrderIds } from "../moysklad/canceledOrders.js";
 import {
@@ -356,6 +357,21 @@ export async function refreshCache() {
   }
 
   const result = applyRefresh({ orderRows, detailRows, packingRows, canceled, nowMs: startedMs });
+
+  // Doimiy nusxa (`uzum_orders`) — kesh bilan BIR O'QISHDAN to'ladi.
+  // Kesh 3 kunlik oynani saqlaydi va qaytadan quriladi, bu esa hammasini
+  // saqlaydi. Alohida jadval bo'yicha ishlatilsa Sheets kvotasi ikki
+  // barobar sarflanardi.
+  //
+  // Xatosi butun tsiklni to'xtatmasligi kerak: yig'ish oqimi undan
+  // mustaqil va u muhimroq.
+  try {
+    const imported = importOrders({ orderRows, detailRows });
+    result.importedOrders = imported.orders;
+  } catch (e) {
+    logger.error(`Buyurtmalarni doimiy nusxaga ko'chirishda xato: ${e.message}`);
+  }
+
   pruneCanceled();
   await maybeFullAssortmentSync();
 

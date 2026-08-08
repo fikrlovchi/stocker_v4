@@ -1723,6 +1723,62 @@ check("import: ID siz qator o'tkazib yuboriladi", importOrders({ orderRows: badR
 
 db.exec("DELETE FROM uzum_order_items; DELETE FROM uzum_orders");
 
+/* --- Buyurtma statusi (hisoblanadi, saqlanmaydi) --- */
+
+const { orderStatus, STATUS, arrivedInHoldWindow, parseHHMM: parseWin } = await import("../orders/status.js");
+
+const WIN = { holdStartMin: parseWin("06:10"), holdEndMin: parseWin("11:00") };
+// Toshkent vaqti bo'yicha aniq soatlar (UTC dan +5).
+const atTashkent = (h, m = 0) => Date.UTC(2026, 7, 8, h - 5, m);
+
+check("status: oyna ichida tushgan", arrivedInHoldWindow(atTashkent(8), WIN.holdStartMin, WIN.holdEndMin), true);
+check("status: oyna boshi kiradi", arrivedInHoldWindow(atTashkent(6, 10), WIN.holdStartMin, WIN.holdEndMin), true);
+// Yarim ochiq oraliq [start, end) — tugash daqiqasi KIRMAYDI.
+check("status: oyna oxiri kirmaydi", arrivedInHoldWindow(atTashkent(11, 0), WIN.holdStartMin, WIN.holdEndMin), false);
+check("status: oynadan oldin", arrivedInHoldWindow(atTashkent(5, 0), WIN.holdStartMin, WIN.holdEndMin), false);
+check("status: vaqt yo'q", arrivedInHoldWindow(null, WIN.holdStartMin, WIN.holdEndMin), false);
+
+const st = (o) => orderStatus(o, WIN);
+
+// Oynada tushgan va hali ishlanmagan — "Yangi".
+check("status: oynada tushgan → Yangi", st({ arrivedAtMs: atTashkent(8), mcState: "" }), STATUS.NEW);
+check("status: oynada, hold holatida → Yangi", st({ arrivedAtMs: atTashkent(8), mcState: "hold" }), STATUS.NEW);
+// Ishlov tugagan (U = done) — endi "Yangi" emas, garchi oynada tushgan bo'lsa ham.
+check("status: ishlangan → Yig'ilmoqda", st({ arrivedAtMs: atTashkent(8), mcState: "done" }), STATUS.PACKING);
+check("status: oynadan tashqarida → Yig'ilmoqda", st({ arrivedAtMs: atTashkent(14), mcState: "" }), STATUS.PACKING);
+
+// Yig'ilgan — boshqa hamma narsadan ustun (bekor qilingandan tashqari).
+check("status: yig'ilgan", st({ arrivedAtMs: atTashkent(14), mcState: "done", packed: true }), STATUS.PACKED);
+
+// MoySklad'da bekor: tasdiqlanmagan bo'lsa tizim o'zi bekor qilgan.
+check(
+  "status: tasdiqlanmasdan bekor → Avtomatik",
+  st({ arrivedAtMs: atTashkent(8), canceledInMc: true, uzumConfirmed: false }),
+  STATUS.AUTO_CANCELED
+);
+check(
+  "status: tasdiqlangandan keyin bekor → Bekor qilindi",
+  st({ arrivedAtMs: atTashkent(8), canceledInMc: true, uzumConfirmed: true }),
+  STATUS.CANCELED
+);
+// Yig'ilgan bo'lsa ham bekor qilingani ustun turadi.
+check(
+  "status: bekor yig'ilgandan ustun",
+  st({ arrivedAtMs: atTashkent(8), canceledInMc: true, uzumConfirmed: true, packed: true }),
+  STATUS.CANCELED
+);
+
+// Uzum'da bekor, MoySklad'da hali emas — qo'lda bekor qilish kutilmoqda.
+check(
+  "status: Uzumda bekor → kutilmoqda",
+  st({ arrivedAtMs: atTashkent(14), mcState: "done", canceledOnUzum: true }),
+  STATUS.CANCEL_PENDING
+);
+
+// Endpoint belgilari — hammasidan ustun.
+check("status: canceluzum belgisi", st({ arrivedAtMs: atTashkent(8), packed: true, markBuildError: true }), STATUS.BUILD_ERROR);
+check("status: mccanceled belgisi", st({ arrivedAtMs: atTashkent(8), packed: true, markCanceled: true }), STATUS.CANCELED);
+
 /* --- Do'konning kabinetdan kabinetga ko'chishi --- */
 
 // Amaliyotda do'konlar boshqa kabinetga o'tkaziladi. Kabinet = MoySklad'dagi
