@@ -16,21 +16,33 @@ import { clearBarcodeFlags } from "./sheetWriteback.js";
 import { getSheetsClient } from "../google/sheetsClient.js";
 import { notify } from "../telegram/index.js";
 
-export const KINDS = ["sync", "push", "barcode"];
+export const KINDS = ["sync", "push", "barcode", "cycle"];
 
-// Jadval bo'yicha takrorlanadigan oqimlar. `barcode` bu ro'yxatda YO'Q:
-// u endi yangi tovar bog'lamasi qo'shilganda bajariladi (v3 dagi AppSheet
-// automation'i kabi), takrorlanadigan ish emas. Ko'chish davrida jadvalda
-// bayroq qolgan qatorlar uchun `barcodeSync.js` skripti qoladi.
-export const SCHEDULABLE = ["sync", "push"];
+/**
+ * Jadval bo'yicha takrorlanadigan oqim — FAQAT `cycle`.
+ *
+ * Ilgari `sync` va `push` alohida jadval bilan ishlardi va oralarida oyna
+ * qolardi: qoldiq o'qilgandan keyin yuborishgacha o'tgan vaqtda MoySklad'da
+ * hamma narsa o'zgarishi mumkin. Bundan ham yomoni — hisobot RAD ETILGAN
+ * bo'lsa (`assortment.js` qatorlar 5% dan ko'p kamayganda butun javobni
+ * qo'llamaydi) `push` buni bilmasdan eski qoldiqni yuborardi.
+ *
+ * Endi ikkalasi bitta runda: o'qish → (qo'llandimi?) → yuborish.
+ *
+ * `sync` va `push` KINDS da qoladi — ular qo'lda ishga tushiriladi
+ * (sinov, bitta do'konda tekshirish), lekin jadval bilan emas.
+ *
+ * `barcode` ham jadvalda yo'q: u yangi tovar bog'lamasi qo'shilganda
+ * bajariladi (v3 dagi AppSheet automation'i kabi), takrorlanadigan ish emas.
+ */
+export const SCHEDULABLE = ["cycle"];
 
 export const SCHEDULE_KEY = "stock.schedule";
 
-// STANDART HOLAT — HAMMASI O'CHIRILGAN. Yangilanishdan keyin server o'z-o'zidan
+// STANDART HOLAT — O'CHIRILGAN. Yangilanishdan keyin server o'z-o'zidan
 // Uzumga yozib yubormasligi kerak: yoqish ataylab, interfeysdan qilinadi.
 export const DEFAULT_SCHEDULE = {
-  sync: { enabled: false, intervalMinutes: 30 },
-  push: { enabled: false, intervalMinutes: 30 },
+  cycle: { enabled: false, intervalMinutes: 30 },
 };
 
 export function getSchedule() {
@@ -178,6 +190,42 @@ async function runPush({ dryRun, force, shopId, limit }) {
   };
 }
 
+/**
+ * To'liq tsikl: MoySklad'dan o'qish → Uzumga yuborish, BITTA runda.
+ *
+ * Eng muhim qoida: yuborish faqat sinxronizatsiya HAQIQATAN QO'LLANGANDA
+ * bajariladi. "Ishga tushdi" yetarli emas — hisobot rad etilgan bo'lsa
+ * `mc_stock` da eski qiymatlar qoladi va ular "yangi" deb yuborilardi.
+ * Bu birlashtirishning butun ma'nosini yo'qqa chiqarardi.
+ *
+ * `runPush` ichidagi himoya (bo'sh kesh · eskirgan · 50% nol) o'z joyida
+ * qoladi — u ikkinchi qavat.
+ */
+export function syncApplied(sync) {
+  return sync?.summary?.stock?.applied === true;
+}
+
+async function runCycle(opts) {
+  // `runSync` xato bersa u yuqoriga chiqadi va tsikl "error" bo'ladi —
+  // yuborish baribir bajarilmaydi. Ya'ni qoida ikki yo'l bilan ham ishlaydi.
+  const sync = await runSync();
+
+  if (!syncApplied(sync) && !opts.force) {
+    const reason = "MoySklad qoldiq hisoboti qo'llanmadi — eski qoldiq yuborilmaydi";
+    logger.error(`Qoldiq tsikli TO'XTATILDI: ${reason}`);
+    await notify("uzum_stock", `⛔️ <b>Qoldiq tsikli to'xtatildi</b>\n• ${reason}`);
+    return { status: "blocked", summary: { sync: sync.summary, push: null, reason } };
+  }
+
+  const push = await runPush(opts);
+  return {
+    // Ikkala bosqichning eng "yomon" natijasi butun tsiklniki bo'ladi:
+    // yuborish qisman bo'lsa tsikl ham qisman.
+    status: push.status === "success" ? sync.status : push.status,
+    summary: { sync: sync.summary, push: push.summary },
+  };
+}
+
 async function runBarcode({ dryRun, keepSheetFlag }) {
   const rows = pendingBarcodeRows();
   if (!rows.length) return { status: "success", summary: { pending: 0 } };
@@ -222,22 +270,29 @@ async function runBarcode({ dryRun, keepSheetFlag }) {
 /** Bir vaqtda bitta oqim — ikkita `push` parallel ketmasin. */
 const running = new Set();
 
+// `cycle` ichida `sync` va `push` bajariladi, shuning uchun u ularning
+// qulfini ham oladi: jadval bo'yicha tsikl ketayotganda qo'lda "push"
+// bosilsa ikkalasi bir vaqtda Uzumga yozardi.
+const LOCKS = { sync: ["sync"], push: ["push"], barcode: ["barcode"], cycle: ["cycle", "sync", "push"] };
+
 /**
  * Oqimni ishga tushiradi va natijani `stock_runs` ga yozadi.
  *
- * @param {"sync"|"push"|"barcode"} kind
+ * @param {"sync"|"push"|"barcode"|"cycle"} kind
  * @param {object} opts trigger · startedBy · dryRun · force · shopId · limit · keepSheetFlag
  */
 export async function runStockJob(kind, opts = {}) {
   if (!KINDS.includes(kind)) throw new Error(`Noma'lum oqim: ${kind}`);
-  if (running.has(kind)) throw new Error(`"${kind}" allaqachon ishlab turibdi`);
+  const locks = LOCKS[kind];
+  const busy = locks.find((l) => running.has(l));
+  if (busy) throw new Error(`"${busy}" allaqachon ishlab turibdi`);
 
-  running.add(kind);
+  for (const l of locks) running.add(l);
   const id = startRun({ kind, trigger: opts.trigger || "manual", startedBy: opts.startedBy, dryRun: opts.dryRun });
 
   try {
-    const result =
-      kind === "sync" ? await runSync(opts) : kind === "push" ? await runPush(opts) : await runBarcode(opts);
+    const runners = { sync: runSync, push: runPush, barcode: runBarcode, cycle: runCycle };
+    const result = await runners[kind](opts);
     finishRun(id, result);
     return { id, ...result };
   } catch (e) {
@@ -245,7 +300,7 @@ export async function runStockJob(kind, opts = {}) {
     finishRun(id, { status: "error", error: e.message });
     return { id, status: "error", error: e.message };
   } finally {
-    running.delete(kind);
+    for (const l of locks) running.delete(l);
   }
 }
 

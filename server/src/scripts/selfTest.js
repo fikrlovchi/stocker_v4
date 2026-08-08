@@ -1343,27 +1343,30 @@ db.exec("DELETE FROM link_product");
 
 const runner = await import("../stock/runner.js");
 
-// Standart holat: HAMMASI o'chirilgan. Yangilanishdan keyin server o'z-o'zidan
+// Jadval bo'yicha FAQAT `cycle` ishlaydi: `sync` va `push` alohida
+// takrorlansa oralarida oyna qolardi va eski qoldiq yuborilishi mumkin edi.
+check("jadval: faqat cycle takrorlanadi", runner.SCHEDULABLE, ["cycle"]);
+
+// Standart holat: O'CHIRILGAN. Yangilanishdan keyin server o'z-o'zidan
 // Uzumga yozib yubormasligi kerak.
 const sched = runner.getSchedule();
-check("jadval: standartda push o'chirilgan", sched.push.enabled, false);
-check("jadval: standartda sync o'chirilgan", sched.sync.enabled, false);
-check("jadval: standart interval", sched.push.intervalMinutes, 30);
+check("jadval: standartda cycle o'chirilgan", sched.cycle.enabled, false);
+check("jadval: standart interval", sched.cycle.intervalMinutes, 30);
+check("jadval: push alohida takrorlanmaydi", sched.push, undefined);
 
-runner.setSchedule({ push: { enabled: true, intervalMinutes: 45 } }, "root");
-check("jadval: yoqildi", runner.getSchedule().push.enabled, true);
-check("jadval: interval saqlandi", runner.getSchedule().push.intervalMinutes, 45);
-check("jadval: boshqa oqim tegilmadi", runner.getSchedule().sync.enabled, false);
+runner.setSchedule({ cycle: { enabled: true, intervalMinutes: 45 } }, "root");
+check("jadval: yoqildi", runner.getSchedule().cycle.enabled, true);
+check("jadval: interval saqlandi", runner.getSchedule().cycle.intervalMinutes, 45);
 
 // Interval chegarasi: har daqiqada butun katalogni yuborish xavfli.
 let schedErr = "";
 try {
-  runner.setSchedule({ push: { intervalMinutes: 1 } }, "root");
+  runner.setSchedule({ cycle: { intervalMinutes: 1 } }, "root");
 } catch (e) {
   schedErr = e.message;
 }
 check("jadval: juda kichik interval rad etiladi", schedErr, "Interval 5–1440 daqiqa orasida bo'lishi kerak");
-check("jadval: rad etilgach eski qiymat qoladi", runner.getSchedule().push.intervalMinutes, 45);
+check("jadval: rad etilgach eski qiymat qoladi", runner.getSchedule().cycle.intervalMinutes, 45);
 
 // Bo'sh keshda `push` YUBORMAYDI — `blocked` bo'ladi. Bu xato emas: tizim
 // ataylab hech narsa yubormadi. Aynan shu 2026-08-07 dagi hodisaning
@@ -1391,6 +1394,27 @@ check("oqim: dry-run muvaffaqiyatli", dry.status, "success");
 check("oqim: dry-run belgisi", dry.summary.dryRun, true);
 
 check("oqim: noma'lum oqim rad etiladi", await runner.runStockJob("xyz").catch((e) => e.message), "Noma'lum oqim: xyz");
+
+// ⚠ TSIKL QOIDASI: yuborish faqat sinxronizatsiya HAQIQATAN QO'LLANGANDA.
+// "Ishga tushdi" yetarli emas — hisobot rad etilsa `mc_stock` da eski
+// qiymatlar qoladi va ular "yangi" deb ketardi. Qoidaning o'zi toza
+// funksiya, shuning uchun ikkala tarmoq ham sinaladi.
+check("tsikl: qo'llangan sinxronizatsiya", runner.syncApplied({ summary: { stock: { applied: true } } }), true);
+check("tsikl: rad etilgan hisobot", runner.syncApplied({ summary: { stock: { applied: false } } }), false);
+check("tsikl: natija yo'q", runner.syncApplied(undefined), false);
+check("tsikl: stock maydoni yo'q", runner.syncApplied({ summary: {} }), false);
+
+// Uchidan uchiga: MoySklad tokeni yo'q → sinxronizatsiya yiqiladi → tsikl
+// "error", yuborish esa UMUMAN bajarilmaydi (yangi `push` yozuvi yo'q).
+const pushRunsBefore = runner.recentRuns({ kind: "push", limit: 50 }).length;
+const cycleFailed = await runner.runStockJob("cycle", { trigger: "manual", startedBy: "root" });
+check("tsikl: sinxronizatsiya yiqilsa xato", cycleFailed.status, "error");
+check("tsikl: tarixga yozildi", runner.lastRun("cycle").status, "error");
+check(
+  "tsikl: yiqilganda yuborish bajarilmaydi",
+  runner.recentRuns({ kind: "push", limit: 50 }).length,
+  pushRunsBefore
+);
 
 // Kesh holati interfeysga ham shu yerdan boradi.
 const cacheStatus = runner.stockCacheStatus();

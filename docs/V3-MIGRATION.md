@@ -257,6 +257,33 @@ Tekshiruv `stock/runner.js` da — **skript, interfeys va jadval ham aynan
 shu yo'ldan o'tadi**. Ilgari himoya faqat skriptda bo'lgani uchun
 interfeysdan yoki jadval bo'yicha yuborilganda ishlamay qolardi.
 
+#### Qoldiq tsikli — o'qish va yuborish BITTA runda ✅ (2026-08-08)
+
+Ilgari `sync` va `push` alohida jadval bilan ishlardi va oralarida oyna
+qolardi. Bundan ham yomoni: hisobot **rad etilgan** bo'lsa (qatorlar 5% dan
+ko'p kamayganda `assortment.js` butun javobni qo'llamaydi) `mc_stock` da
+eski qiymatlar qoladi va `push` buni bilmasdan ularni "yangi" deb yuborardi.
+6 soatlik "eskirgan" qorovuli bu oynani yopmasdi.
+
+Endi jadval bo'yicha **yagona** oqim — `cycle`: o'qish → **qo'llandimi?** →
+yuborish.
+
+| Holat | Natija |
+|---|---|
+| Sinxronizatsiya yiqildi (masalan token yo'q) | `error`, yuborish **umuman bajarilmaydi** |
+| Hisobot qo'llanmadi (rad etilgan) | `blocked` + Telegram, yuborish **bajarilmaydi** |
+| Qo'llandi | yuborish bajariladi, `runPush` himoyasi ikkinchi qavat bo'lib qoladi |
+
+`sync` va `push` qo'lda ishga tushirish uchun qoladi (dry-run, bitta do'konda
+sinash), lekin **jadvalda yo'q** — aks holda ular yana alohida ketardi.
+`cycle` ishlayotganda ikkalasining qulfi ham band bo'ladi: jadval bo'yicha
+tsikl ketayotganda qo'lda "yuborish" bosilsa ikkalasi bir vaqtda Uzumga
+yozardi.
+
+> Yon ta'siri: `stockMissingConfirmations` (3) endi 3 ta **qo'shma** tsiklni
+> bildiradi, ya'ni tovar 0 deb belgilanguncha o'tadigan vaqt interval bilan
+> belgilanadi.
+
 To'xtatilgan ishga tushish `error` emas, **`blocked`** deb yoziladi:
 tizim xato qilmadi, ataylab hech narsa yubormadi. Chetlab o'tish faqat
 ataylab — CLI'da `--ignore-safety-checks`, interfeysda esa faqat

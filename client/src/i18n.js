@@ -197,9 +197,14 @@ const uz = {
       error: "xato",
       blocked: "to'xtatildi",
     },
+    manualOnly: "qo'lda",
+    cycle: {
+      title: "Qoldiq tsikli (o'qish + yuborish)",
+      hint: "MoySklad'dan o'qish va Uzumga yuborish BITTA runda. Alohida ishlaganda oralarida oyna qolardi va eskirgan qoldiq yuborilishi mumkin edi. Hisobot qo'llanmasa yuborish umuman bajarilmaydi.",
+    },
     sync: {
       title: "MoySklad → baza",
-      hint: "Assortiment va ombordagi qoldiq. Tashqariga hech narsa yozilmaydi.",
+      hint: "Assortiment va ombordagi qoldiq. Tashqariga hech narsa yozilmaydi. Jadval bo'yicha emas — qo'lda tekshirish uchun.",
     },
     push: {
       title: "Uzumga qoldiq yuborish",
@@ -665,9 +670,14 @@ const ru = {
       error: "ошибка",
       blocked: "остановлено",
     },
+    manualOnly: "вручную",
+    cycle: {
+      title: "Цикл остатков (чтение + отправка)",
+      hint: "Чтение из МойСклад и отправка в Uzum ОДНИМ запуском. При раздельной работе между ними оставалось окно и мог уйти устаревший остаток. Если отчёт не применён — отправка не выполняется вовсе.",
+    },
     sync: {
       title: "МойСклад → база",
-      hint: "Ассортимент и остаток по складу. Наружу ничего не записывается.",
+      hint: "Ассортимент и остаток по складу. Наружу ничего не записывается. Не по расписанию — для ручной проверки.",
     },
     push: {
       title: "Отправка остатков в Uzum",

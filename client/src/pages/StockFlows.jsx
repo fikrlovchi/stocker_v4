@@ -14,7 +14,11 @@ import { api } from "../api";
 // Muhim: "Yuborish" tugmasi ATAYLAB ikki qadamli. Dry-run — bir bosishda,
 // haqiqiy yuborish esa tasdiqlash bilan: bu tashqi natijaga olib keladi
 // (Uzumda tovar sotuvdan chiqishi mumkin).
-const FLOWS = ["sync", "push"];
+// `cycle` — jadval bo'yicha ishlaydigan YAGONA oqim: MoySklad'dan o'qish va
+// Uzumga yuborish bitta runda. Ilgari `sync` va `push` alohida takrorlanardi
+// va oralarida oyna qolardi — eski qoldiq yuborilishi mumkin edi.
+// `sync`/`push` qo'lda ishga tushirish uchun qoladi (sinov, bitta do'kon).
+const FLOWS = ["cycle", "sync", "push"];
 
 export default function StockFlows() {
   const { t } = useTranslation();
@@ -140,10 +144,14 @@ function CacheCard({ cache, log }) {
 
 function FlowCard({ kind, schedule, last, busy, result, onRun, onSchedule }) {
   const { t } = useTranslation();
-  const [interval, setInterval] = useState(String(schedule.intervalMinutes));
+  // Jadval faqat `cycle` da bor — qolganlari qo'lda ishga tushiriladi.
+  const schedulable = Boolean(schedule);
+  const [interval, setInterval] = useState(String(schedule?.intervalMinutes ?? 30));
   const [confirmSend, setConfirmSend] = useState(false);
 
-  useEffect(() => setInterval(String(schedule.intervalMinutes)), [schedule.intervalMinutes]);
+  useEffect(() => {
+    if (schedule) setInterval(String(schedule.intervalMinutes));
+  }, [schedule?.intervalMinutes]);
 
   // `sync` tashqariga yozmaydi (faqat MoySklad'dan o'qiydi), shuning uchun
   // unda tasdiqlash kerak emas.
@@ -153,9 +161,13 @@ function FlowCard({ kind, schedule, last, busy, result, onRun, onSchedule }) {
     <div className="card">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h2 style={{ margin: 0 }}>{t(`flows.${kind}.title`)}</h2>
-        <span className={`badge ${schedule.enabled ? "on" : "off"}`}>
-          {schedule.enabled ? t("flows.scheduleOn", { n: schedule.intervalMinutes }) : t("flows.scheduleOff")}
-        </span>
+        {schedulable ? (
+          <span className={`badge ${schedule.enabled ? "on" : "off"}`}>
+            {schedule.enabled ? t("flows.scheduleOn", { n: schedule.intervalMinutes }) : t("flows.scheduleOff")}
+          </span>
+        ) : (
+          <span className="badge off">{t("flows.manualOnly")}</span>
+        )}
       </div>
       <p className="muted" style={{ marginTop: 4 }}>{t(`flows.${kind}.hint`)}</p>
 
@@ -190,25 +202,27 @@ function FlowCard({ kind, schedule, last, busy, result, onRun, onSchedule }) {
         )}
       </div>
 
-      <div className="row" style={{ marginTop: 12 }}>
-        <label className="row" style={{ gap: 6 }}>
-          <input
-            type="checkbox"
-            checked={schedule.enabled}
-            onChange={(e) => onSchedule(kind, { enabled: e.target.checked })}
-          />
-          {t("flows.autoRun")}
-        </label>
-        <input value={interval} onChange={(e) => setInterval(e.target.value)} style={{ width: 70 }} />
-        <span className="muted">{t("flows.minutes")}</span>
-        <button
-          className="ghost"
-          disabled={interval === String(schedule.intervalMinutes)}
-          onClick={() => onSchedule(kind, { intervalMinutes: Number(interval) })}
-        >
-          {t("flows.saveInterval")}
-        </button>
-      </div>
+      {schedulable && (
+        <div className="row" style={{ marginTop: 12 }}>
+          <label className="row" style={{ gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={schedule.enabled}
+              onChange={(e) => onSchedule(kind, { enabled: e.target.checked })}
+            />
+            {t("flows.autoRun")}
+          </label>
+          <input value={interval} onChange={(e) => setInterval(e.target.value)} style={{ width: 70 }} />
+          <span className="muted">{t("flows.minutes")}</span>
+          <button
+            className="ghost"
+            disabled={interval === String(schedule.intervalMinutes)}
+            onClick={() => onSchedule(kind, { intervalMinutes: Number(interval) })}
+          >
+            {t("flows.saveInterval")}
+          </button>
+        </div>
+      )}
 
       {result && <RunResult run={result} />}
       {last && !result && <RunSummary run={last} prefix={t("flows.lastRun")} />}
