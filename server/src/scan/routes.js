@@ -11,6 +11,8 @@ import { packedHistory } from "../packing/history.js";
 import {
   scan,
   printBig,
+  printShk,
+  reprintSession,
   getActiveSession,
   getLastSession,
   getSession,
@@ -29,14 +31,17 @@ export function scanRouter() {
 
   // Skan. Javob mobil ilova to'g'ridan-to'g'ri ko'rsata oladigan shaklda.
   router.post("/scan", async (req, res) => {
-    const { barcode, stationId } = req.body || {};
+    // `shopId` — operator ekranda tanlagan do'kon. Berilsa skan doirasi
+    // shu do'kon bilan cheklanadi: tanlanmagan do'konning buyurtmasi
+    // ochilib, uning yorlig'i chop etilib ketmasin.
+    const { barcode, stationId, shopId } = req.body || {};
     const operator = who(req, req.body?.operator);
     if (!operator) return res.status(400).json({ error: "operator kerak" });
     if (barcode === undefined || barcode === null) {
       return res.status(400).json({ error: "barcode kerak" });
     }
     try {
-      const result = await scan({ barcode, operator, stationId });
+      const result = await scan({ barcode, operator, stationId, shopId: shopId || null });
       // Xato natijalar ham 200 bilan qaytadi — ilova `result` maydoniga
       // qarab ovoz/vibratsiya beradi, HTTP xatosi emas.
       res.json(result);
@@ -112,6 +117,30 @@ export function scanRouter() {
 
     const result = printBig(String(sessionId), String(operator));
     if (result.error) return res.status(result.code === "not_complete" ? 409 : 400).json(result);
+    res.json(result);
+  });
+
+  // ShK — operator bosganda. Skan paytida avtomatik chiqmaydi
+  // (config.packing.autoShkPrint = false), shuning uchun shu tugma kerak.
+  router.post("/session/print-shk", (req, res) => {
+    const operator = who(req, req.body?.operator);
+    const sessionId = req.body?.sessionId || getActiveSession(String(operator))?.id
+      || getLastSession(String(operator))?.id;
+    if (!sessionId) return res.status(404).json({ error: "Sessiya topilmadi" });
+
+    const result = printShk(String(sessionId), String(operator));
+    if (result.error) return res.status(400).json(result);
+    res.json(result);
+  });
+
+  // Tarixdan qayta chiqarish: ShK, BIG yoki ikkalasi.
+  router.post("/session/reprint", (req, res) => {
+    const operator = who(req, req.body?.operator);
+    const { sessionId, target } = req.body || {};
+    if (!sessionId) return res.status(400).json({ error: "sessionId kerak" });
+
+    const result = reprintSession(String(sessionId), String(operator), String(target || "both"));
+    if (result.error) return res.status(400).json(result);
     res.json(result);
   });
 

@@ -287,7 +287,7 @@ const { config } = await import("../config.js");
 // Testda MoySklad'ga chiqmaymiz (token yo'q) — yakuniy holat tekshiruvini o'chiramiz.
 config.packing.maxMoyskladChecks = 0;
 
-const { scan, printBig, getActiveSession, cancelSession, expireStaleSessions, sessionJobs } =
+const { scan, printBig, printShk, reprintSession, getActiveSession, cancelSession, expireStaleSessions, sessionJobs } =
   await import("../scan/sessions.js");
 
 // Asosiy fixture'larni tiklaymiz (6-bo'lim keshni o'zgartirgan edi).
@@ -303,7 +303,9 @@ resetSessions();
 let r = await scan({ barcode: "1000111953348", operator: "aziz", stationId: "Ombor-1" });
 check("skan: buyurtma ochildi", [r.result, r.session.orderId], ["order_opened", "OK1"]);
 check("skan: progress 1/3", [r.session.progress.scanned, r.session.progress.total], [1, 3]);
-check("skan: ShK niyati 2 nusxa", [r.print[0].target, r.print[0].copies], ["shk", 2]);
+// ShK endi skan paytida AVTOMATIK chiqmaydi — operator tugmani bosadi
+// (config.packing.autoShkPrint = false). Ilgari har skanda job yasalardi.
+check("skan: ShK avtomatik chiqmaydi", r.print.length, 0);
 
 // --- Boshqa buyurtmaning tovari ---
 r = await scan({ barcode: "1000333953348", operator: "aziz" });
@@ -318,7 +320,7 @@ check("skan: oxirgi birlik -> buyurtma yig'ildi", r.result, "order_complete");
 check("skan: progress 3/3", r.session.progress.remaining, 0);
 // BIG endi AVTOMATIK chiqmaydi — operator "Print" tugmasini bosishi kerak
 // (config.packing.autoBigPrint = false).
-check("skan: yakunda faqat ShK", r.print.map((p) => p.target), ["shk"]);
+check("skan: yakunda ham avtomatik yorliq yo'q", r.print.length, 0);
 
 const completedSessionId = r.session.id;
 check(
@@ -333,16 +335,76 @@ const printedAgain = printBig(completedSessionId, "aziz");
 check("print: takror bosilsa yangi yasalmaydi", printedAgain.reused, true);
 check("print: boshqa operator bosa olmaydi", printBig(completedSessionId, "vali").error, "Bu sessiya boshqa operatorniki");
 
+// ShK — operator bosganda. Hisob: har tovarda `skanerlangan − chiqarilgan`,
+// shuning uchun ketma-ket bir necha skandan keyin bosilsa ham hech biri
+// yorliqsiz qolmaydi.
+const shkPrinted = printShk(completedSessionId, "aziz");
+check("ShK: uchala birlik uchun job yasaldi", shkPrinted.printed, 3);
+check("ShK: takror bosilsa yangi yasalmaydi", printShk(completedSessionId, "aziz").printed, 0);
+check("ShK: boshqa operator bosa olmaydi", printShk(completedSessionId, "vali").error, "Bu sessiya boshqa operatorniki");
+
 const jobs = sessionJobs(completedSessionId);
 check("navbat: 3 ta ShK", jobs.filter((i) => i.target === "shk").length, 3);
 check("navbat: BIG bitta", jobs.filter((i) => i.target === "big").length, 1);
 check("navbat: har ShK 2 nusxa", [...new Set(jobs.filter((i) => i.target === "shk").map((i) => i.copies))], [2]);
 check("navbat: hammasi pending", [...new Set(jobs.map((i) => i.status))], ["pending"]);
+
+// --- Tarixdan qayta chiqarish: ShK / BIG / ikkalasi ---
+const reBoth = reprintSession(completedSessionId, "aziz", "both");
+check("qayta: ikkalasi — 3 ShK + 1 BIG", reBoth.printed, 4);
+const reShk = reprintSession(completedSessionId, "aziz", "shk");
+check("qayta: faqat ShK", reShk.printed, 3);
+check("qayta: faqat ShK — turi", [...new Set(reShk.jobs.map((j) => j.target))], ["shk"]);
+const reBig = reprintSession(completedSessionId, "aziz", "big");
+check("qayta: faqat BIG", [reBig.printed, reBig.jobs[0].target], [1, "big"]);
+check("qayta: noma'lum tur rad etiladi", reprintSession(completedSessionId, "aziz", "xyz").error, "Noma'lum yorliq turi");
+check("qayta: boshqa operator", reprintSession(completedSessionId, "vali", "both").error, "Bu sessiya boshqa operatorniki");
+
+// Navbatni tozalab, keyingi testlar toza boshlansin.
+db.exec("DELETE FROM print_jobs");
+
 check("navbat: har jobda fetch token bor", jobs.every((j) => j.fetchToken && j.fetchToken.length >= 32), true);
 
 // --- Yig'ilgan buyurtma qayta ochilmaydi ---
 r = await scan({ barcode: "1000111953348", operator: "aziz" });
 check("skan: yig'ilgan buyurtma qayta ochilmaydi", r.result, "no_available_order");
+
+/* --- Do'kon doirasi: tanlanmagan do'konning buyurtmasi ochilmaydi --- */
+
+// 2026-08-08 dagi xato: operator "Uzon Auto" ni tanlagan, lekin o'sha
+// do'konda bo'lmagan tovar skanerlanganda BOSHQA do'konning buyurtmasi
+// ochilib, uning ShK si printerga ketgan. Sabab: `findCandidates` do'konni
+// umuman hisobga olmasdi.
+resetSessions();
+db.prepare("UPDATE orders SET shop_id = '9002' WHERE order_id = 'OK2'").run();
+
+// OK2 endi 9002 da. 9001 tanlangan holda uning tovari ochilmasligi kerak.
+r = await scan({ barcode: "1000333953348", operator: "aziz", shopId: "9001" });
+check("do'kon: boshqa do'kon tovari ochilmaydi", r.result, "other_shop");
+check("do'kon: qaysi do'konda ekani aytiladi", r.shops.map((x) => x.shopId), ["9002"]);
+check("do'kon: sessiya ochilmadi", getActiveSession("aziz"), null);
+
+// Do'konda bor, lekin barcode umuman yo'q — bu "boshqa do'kon" emas.
+check(
+  "do'kon: noma'lum barcode alohida holat",
+  (await scan({ barcode: "0000000000000", operator: "aziz", shopId: "9001" })).result,
+  "unknown_barcode"
+);
+
+// To'g'ri do'kon tanlansa ochiladi (OK2 da bitta tovar — darhol yakunlanadi).
+r = await scan({ barcode: "1000333953348", operator: "aziz", shopId: "9002" });
+check("do'kon: to'g'ri do'konda ochiladi", [r.result, r.session.orderId], ["order_complete", "OK2"]);
+
+// Do'kon berilmasa eski xatti-harakat saqlanadi (desktop client, diagnostika).
+resetSessions();
+check(
+  "do'kon: ko'rsatilmasa cheklov yo'q",
+  (await scan({ barcode: "1000333953348", operator: "aziz" })).result,
+  "order_complete"
+);
+
+db.prepare("UPDATE orders SET shop_id = '9001' WHERE order_id = 'OK2'").run();
+resetSessions();
 
 // --- Miqdor to'lganda ---
 resetSessions();

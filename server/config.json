@@ -64,6 +64,7 @@
     "sessionTtlMinutes": 15,
     "shkCopies": 2,
     "autoBigPrint": false,
+    "autoShkPrint": false,
     "maxMoyskladChecks": 3,
     "blockOnMoyskladError": false
   },

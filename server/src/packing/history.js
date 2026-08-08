@@ -37,6 +37,8 @@ export function packedHistory(operator, limit = 50) {
   );
 
   return sessions.map((s) => ({
+    // Qayta chiqarish shu ID bo'yicha ishlaydi.
+    sessionId: s.id,
     orderId: s.orderId,
     stationId: s.stationId,
     startedAt: s.startedAt,

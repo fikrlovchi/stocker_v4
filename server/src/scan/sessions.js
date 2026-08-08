@@ -20,6 +20,7 @@ import { normalizeBarcode } from "../util/sheetValues.js";
 import { getOrderStateHref } from "../moysklad/client.js";
 import { createJob, listJobs } from "../print/jobs.js";
 import { hasOpenBatch, isInOpenBatch, markPacked } from "../packing/batches.js";
+import { shopName } from "../packing/shops.js";
 import { dispatchTo } from "../print/hub.js";
 
 const PK = config.packing;
@@ -33,6 +34,7 @@ export const RESULT = {
   ALREADY_COMPLETE: "already_complete",// bu tovar to'liq skanerlangan
   UNKNOWN_BARCODE: "unknown_barcode",  // hech qayerda topilmadi
   NO_AVAILABLE_ORDER: "no_available_order", // topildi, lekin hammasi band/yig'ilgan
+  OTHER_SHOP: "other_shop",            // tovar bor, lekin BOSHQA do'konda
 };
 
 const nowIso = () => new Date().toISOString();
@@ -154,26 +156,56 @@ export function expireStaleSessions() {
 // Ochiq yoki allaqachon yig'ilgan sessiyasi bor buyurtmalar chiqarib tashlanadi
 // (uzum_packing varag'iga yozuv Sheets orqali kechikib boradi, shuning uchun
 // mahalliy baza ham tekshiriladi).
-function findCandidates(barcode) {
+function findCandidates(barcode, shopId = null) {
   // Ochiq partiya bo'lsa — skan doirasi shu ro'yxat bilan cheklanadi.
   // Partiya yo'q bo'lsa eski xatti-harakat: keshdagi barcha mos buyurtmalar.
   const scoped = hasOpenBatch();
+
+  // DO'KON DOIRASI. Operator ekranda do'kon tanlaydi va `2/22` o'sha do'kon
+  // bo'yicha hisoblanadi — demak skan ham shu doirada bo'lishi kerak.
+  // Ilgari bu shart yo'q edi: tanlangan do'konda bo'lmagan tovar skanerlansa
+  // BOSHQA do'konning buyurtmasi ochilib, uning yorlig'i chop etilardi.
+  const where = shopId ? " AND o.shop_id = @shopId" : "";
   const rows = db
     .prepare(
       `SELECT DISTINCT o.order_id, o.moysklad_id, o.item_count, o.unit_count, o.arrived_at_ms
        FROM item_barcodes b
        JOIN items  i ON i.item_id  = b.item_id
        JOIN orders o ON o.order_id = i.order_id
-       WHERE b.barcode = ? AND o.eligible = 1
+       WHERE b.barcode = @barcode AND o.eligible = 1${where}
          AND NOT EXISTS (
            SELECT 1 FROM sessions s
            WHERE s.order_id = o.order_id AND s.status IN ('active', 'done')
          )
        ORDER BY o.item_count ASC, o.arrived_at_ms ASC`
     )
-    .all(barcode);
+    .all(shopId ? { barcode, shopId: String(shopId) } : { barcode });
 
   return scoped ? rows.filter((r) => isInOpenBatch(r.order_id)) : rows;
+}
+
+/**
+ * Shu barcode boshqa do'konning ochiq buyurtmasida bormi?
+ *
+ * Xabar aniq bo'lishi uchun: "topilmadi" bilan "boshqa do'konda" — butunlay
+ * boshqa vaziyat va operator nima qilishini bilishi kerak.
+ */
+function shopsWithBarcode(barcode, exceptShopId) {
+  return db
+    .prepare(
+      `SELECT DISTINCT o.shop_id AS shopId
+       FROM item_barcodes b
+       JOIN items  i ON i.item_id  = b.item_id
+       JOIN orders o ON o.order_id = i.order_id
+       WHERE b.barcode = ? AND o.eligible = 1 AND o.shop_id IS NOT NULL
+         AND o.shop_id <> ?
+         AND NOT EXISTS (
+           SELECT 1 FROM sessions s
+           WHERE s.order_id = o.order_id AND s.status IN ('active', 'done')
+         )`
+    )
+    .all(barcode, String(exceptShopId))
+    .map((r) => r.shopId);
 }
 
 // MoySklad'da bekor qilinmaganini yakuniy tekshirish. Kesh 60 soniyada bir
@@ -252,7 +284,7 @@ function openSession(candidate, operator, stationId) {
 
 /* ==================== asosiy: skan ==================== */
 
-export async function scan({ barcode: rawBarcode, operator, stationId }) {
+export async function scan({ barcode: rawBarcode, operator, stationId, shopId = null }) {
   const barcode = normalizeBarcode(rawBarcode);
   const op = String(operator || "").trim();
   if (!op) throw new Error("operator kerak");
@@ -264,15 +296,29 @@ export async function scan({ barcode: rawBarcode, operator, stationId }) {
   const active = getActiveSession(op);
   return active
     ? scanInSession(active, barcode, op)
-    : await openByBarcode(barcode, op, stationId);
+    : await openByBarcode(barcode, op, stationId, shopId);
 }
 
 /* ---- A. Ochiq sessiya yo'q: buyurtma topamiz ---- */
 
-async function openByBarcode(barcode, operator, stationId) {
-  const candidates = findCandidates(barcode);
+async function openByBarcode(barcode, operator, stationId, shopId = null) {
+  const candidates = findCandidates(barcode, shopId);
 
   if (!candidates.length) {
+    // Do'kon tanlangan bo'lsa: tovar BOSHQA do'konda bormi? Bu eng ko'p
+    // uchraydigan holat va uni "topilmadi" dan ajratish kerak.
+    if (shopId) {
+      const others = shopsWithBarcode(barcode, shopId);
+      if (others.length) {
+        logScan({ operator, barcode, result: RESULT.OTHER_SHOP });
+        return {
+          result: RESULT.OTHER_SHOP,
+          message: `Bu tovar boshqa do'konda: ${others.map(shopName).join(", ")}`,
+          shops: others.map((id) => ({ shopId: id, name: shopName(id) })),
+        };
+      }
+    }
+
     // Barcode umuman mavjudmi yoki band/yig'ilganmi — farqini ko'rsatamiz.
     const anywhere = db
       .prepare("SELECT COUNT(*) AS n FROM item_barcodes WHERE barcode = ?")
@@ -365,16 +411,23 @@ function scanInSession(session, barcode, operator, { justOpened = false } = {}) 
       source: target.source,
       result: RESULT.OK,
     });
-    prints.push(
-      addPrintJob({
-        sessionId: session.id,
-        orderId: session.orderId,
-        itemId: target.item_id,
-        target: "shk",
-        copies: PK.shkCopies,
-        stationId: session.stationId,
-      })
-    );
+    // ShK endi skan paytida AVTOMATIK chiqmaydi: operator "ShK chiqarish"
+    // tugmasini bosganda ketadi (BIG yorlig'i bilan bir xil tartib).
+    // Sabab: skanerlash bilan chop etish bir vaqtda ketsa, xato skanerlangan
+    // tovarning yorlig'i ham printerdan chiqib ketardi.
+    // Eski xatti-harakat kerak bo'lsa — config.packing.autoShkPrint = true.
+    if (PK.autoShkPrint) {
+      prints.push(
+        addPrintJob({
+          sessionId: session.id,
+          orderId: session.orderId,
+          itemId: target.item_id,
+          target: "shk",
+          copies: PK.shkCopies,
+          stationId: session.stationId,
+        })
+      );
+    }
   })();
 
   const updated = getSession(session.id);
@@ -455,6 +508,108 @@ export function printBig(sessionId, operator) {
   dispatchTo(session.stationId);
   logger.info(`BIG yorlig'i so'raldi: ${session.orderId} (${operator})`);
   return { ok: true, reused: false, jobs: [job] };
+}
+
+/**
+ * Skanerlangan, lekin hali yorlig'i chiqarilmagan tovarlar uchun ShK.
+ *
+ * Nega "oxirgi skan" emas: operator bir necha tovarni ketma-ket skanerlab,
+ * so'ng tugmani bosishi mumkin. Oxirgisini chiqarsak qolganlari yorliqsiz
+ * qolardi. Shuning uchun hisob: har tovarda `skanerlangan − chiqarilgan`.
+ *
+ * Shu sababdan takror bosish ham zararsiz: qarz qolmagan bo'lsa 0 job.
+ */
+export function printShk(sessionId, operator) {
+  const session = getSession(sessionId);
+  if (!session) return { error: "Sessiya topilmadi" };
+  if (session.operator !== operator) return { error: "Bu sessiya boshqa operatorniki" };
+
+  // Shu sessiyada har tovar uchun nechta ShK jobi bor.
+  const printed = new Map();
+  for (const job of listJobs({ sessionId }).filter((j) => j.target === "shk" && j.itemId)) {
+    printed.set(job.itemId, (printed.get(job.itemId) || 0) + 1);
+  }
+
+  const rows = db
+    .prepare("SELECT item_id, scanned FROM session_items WHERE session_id = ?")
+    .all(session.id);
+
+  const jobs = [];
+  db.transaction(() => {
+    for (const row of rows) {
+      const owed = (row.scanned || 0) - (printed.get(row.item_id) || 0);
+      for (let i = 0; i < owed; i++) {
+        jobs.push(
+          addPrintJob({
+            sessionId: session.id,
+            orderId: session.orderId,
+            itemId: row.item_id,
+            target: "shk",
+            copies: PK.shkCopies,
+            stationId: session.stationId,
+          })
+        );
+      }
+    }
+  })();
+
+  if (jobs.length) {
+    dispatchTo(session.stationId);
+    logger.info(`ShK so'raldi: ${session.orderId} — ${jobs.length} ta (${operator})`);
+  }
+  return { ok: true, jobs, printed: jobs.length };
+}
+
+/**
+ * Tarixdan qayta chiqarish: ShK, BIG yoki ikkalasi.
+ *
+ * Mavjud joblar QAYTA NAVBATGA qo'yilmaydi — yangi job yasaladi. Sabab:
+ * eski job allaqachon "bajarilgan" holatida va uni qayta ishlatish tarixni
+ * buzardi; qachon, kim va nechanchi marta chiqargani ko'rinib turishi kerak.
+ */
+export function reprintSession(sessionId, operator, target = "both") {
+  const session = getSession(sessionId);
+  if (!session) return { error: "Sessiya topilmadi" };
+  if (session.operator !== operator) return { error: "Bu sessiya boshqa operatorniki" };
+  if (!["shk", "big", "both"].includes(target)) return { error: "Noma'lum yorliq turi" };
+
+  const jobs = [];
+  db.transaction(() => {
+    if (target === "shk" || target === "both") {
+      // Har tovar uchun SKANERLANGAN soncha — asl chiqarish bilan bir xil.
+      for (const row of db
+        .prepare("SELECT item_id, scanned FROM session_items WHERE session_id = ?")
+        .all(session.id)) {
+        for (let i = 0; i < (row.scanned || 0); i++) {
+          jobs.push(
+            addPrintJob({
+              sessionId: session.id,
+              orderId: session.orderId,
+              itemId: row.item_id,
+              target: "shk",
+              copies: PK.shkCopies,
+              stationId: session.stationId,
+            })
+          );
+        }
+      }
+    }
+    if (target === "big" || target === "both") {
+      jobs.push(
+        addPrintJob({
+          sessionId: session.id,
+          orderId: session.orderId,
+          target: "big",
+          copies: 1,
+          stationId: session.stationId,
+        })
+      );
+    }
+  })();
+
+  dispatchTo(session.stationId);
+  logger.info(`Qayta chiqarish (${target}): ${session.orderId} — ${jobs.length} ta (${operator})`);
+  return { ok: true, target, jobs, printed: jobs.length };
 }
 
 /* ==================== bekor qilish ==================== */
