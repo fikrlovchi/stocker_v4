@@ -1676,6 +1676,53 @@ check("formula K: miqdor matn → null", detailRefs({ skuTitle: "UZON-1", amount
 // skuTitle bo'sh — `IF(C="", "", …)`
 check("formula: bo'sh skuTitle", detailRefs({ skuTitle: "", amount: 2 }, fCat).productRef, null);
 
+/* --- Buyurtmalarni serverga ko'chirish (6-bosqich) --- */
+
+// `uzum_orders` KESH EMAS: jadvalning hammasi saqlanadi va o'chirilmaydi.
+// Fixture'dagi o'sha qatorlardan foydalanamiz.
+const { importOrders, importStatus } = await import("../orders/importFromSheet.js");
+
+const impResult = importOrders({ orderRows, detailRows });
+check("import: buyurtmalar", impResult.orders, orderRows.length - 1);
+check("import: qatorlar", impResult.items, detailRows.length - 1);
+
+const impOrder = db.prepare("SELECT * FROM uzum_orders WHERE order_id = 'OK1'").get();
+check("import: do'kon", impOrder.shop_id, "9001");
+check("import: Q bayrog'i", impOrder.sent_to_mc, 1);
+check("import: T bayrog'i", impOrder.uzum_confirmed, 1);
+check("import: U holati", impOrder.mc_state, "done");
+check("import: MoySklad ID", impOrder.moysklad_id, "ms-OK1");
+check("import: tushgan vaqt hisoblandi", Number.isFinite(impOrder.arrived_at_ms), true);
+check("import: jadval qatori", impOrder.sheet_row, 2);
+
+// V=1 bo'lgan qator ham ko'chadi — V "bekor qilingan" degani EMAS.
+check("import: V=1 qator ham ko'chadi", db.prepare("SELECT cancel_handled FROM uzum_orders WHERE order_id = 'VSET'").get().cancel_handled, 1);
+// Saqlash oynasidan eski buyurtma keshda yo'q, lekin bu yerda BOR bo'lishi
+// kerak — aynan shuning uchun alohida jadval.
+check("import: eski buyurtma ham saqlanadi", db.prepare("SELECT COUNT(*) n FROM uzum_orders WHERE order_id = 'OLD'").get().n, 1);
+
+// `I` bo'sh ("#N/A") qator — bog'lanmagan SKU, import uni tashlamaydi.
+const noRef = db.prepare("SELECT * FROM uzum_order_items WHERE item_id = 'i16'").get();
+check("import: bog'lanmagan SKU qatori ko'chadi", noRef.sku_title, "MT7-NOREF,XXL");
+check("import: '#N/A' bo'sh deb yoziladi", noRef.product_ref, null);
+// Barcode MATN bo'lib qolishi kerak — bosh nollar yo'qolmasin.
+check("import: barcode matn", db.prepare("SELECT barcode FROM uzum_order_items WHERE item_id = 'i1'").get().barcode, "1000111953348");
+
+// Takroriy import qator ko'paytirmaydi (upsert).
+const impAgain = importOrders({ orderRows, detailRows });
+check("import: takror import qo'shmaydi", impAgain.orders, orderRows.length - 1);
+check("import: buyurtmalar soni o'zgarmadi", db.prepare("SELECT COUNT(*) n FROM uzum_orders").get().n, orderRows.length - 1);
+
+const impStatus = importStatus();
+check("import: holat — buyurtmalar", impStatus.orders, orderRows.length - 1);
+check("import: holat — keshdagilar", impStatus.inCache > 0, true);
+
+// ID si yo'q qator o'tkazib yuboriladi, lekin jim emas — sanaladi.
+const badRows = [orderRows[0], row({ B: "status-only" })];
+check("import: ID siz qator o'tkazib yuboriladi", importOrders({ orderRows: badRows, detailRows: [] }).skipped.orders, 1);
+
+db.exec("DELETE FROM uzum_order_items; DELETE FROM uzum_orders");
+
 /* --- Do'konning kabinetdan kabinetga ko'chishi --- */
 
 // Amaliyotda do'konlar boshqa kabinetga o'tkaziladi. Kabinet = MoySklad'dagi

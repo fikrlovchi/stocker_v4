@@ -18,6 +18,7 @@ import { variablesRouter } from "./variables.js";
 import { telegramRouter } from "./telegram.js";
 import { moyskladRouter } from "./moysklad.js";
 import { stockRouter, linkProductRouter, skuLogRouter } from "./stock.js";
+import { uzumOrdersRouter } from "./uzumOrders.js";
 import logger from "../logger.js";
 
 function bearer(req) {
@@ -238,6 +239,12 @@ export function webRouter() {
   // Barcode va SKU amallarining jurnali — Integratsiyalar bo'limi ichida
   // ko'rinadi, shuning uchun ruxsati ham o'sha (`orders_to_mc`).
   router.use("/sku-log", requireWeb, requireSection("orders_to_mc"), skuLogRouter());
+
+  /* ---------- Uzum buyurtmalari ---------- */
+
+  // Alohida bo'lim va alohida ruxsat (`uzum_orders`): faqat o'qish, hech
+  // narsa ishga tushirilmaydi.
+  router.use("/uzum-orders", requireWeb, requireSection("uzum_orders"), uzumOrdersRouter());
 
   /* ---------- Konfiguratsiya ---------- */
 

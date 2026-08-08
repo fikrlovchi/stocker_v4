@@ -120,6 +120,16 @@ export const api = {
     for (const [k, v] of Object.entries(params)) if (v !== "" && v !== undefined && v !== null) q.set(k, v);
     return call(`/link-products?${q}`);
   },
+  // Uzum buyurtmalari — serverga ko'chirilgan nusxa (faqat o'qish).
+  uzumOrders: (params = {}) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== "" && v !== undefined && v !== null) q.set(k, v);
+    return call(`/uzum-orders?${q}`);
+  },
+  uzumOrdersStatus: () => call("/uzum-orders/status"),
+  uzumOrdersShops: () => call("/uzum-orders/shops"),
+  uzumOrderItems: (orderId) => call(`/uzum-orders/${encodeURIComponent(orderId)}/items`),
+
   linkProductShops: () => call("/link-products/shops"),
   // Buyurtmada uchragan, lekin MoySklad tovariga ulanmagan SKU'lar.
   unlinkedSkus: () => call("/link-products/unlinked"),

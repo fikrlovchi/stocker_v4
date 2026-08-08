@@ -80,6 +80,7 @@ function Cabinet({ cab, groups, run }) {
   // Do'kon ko'chirilganda Uzum tomonda YANGI API kalit yaratiladi — eski
   // kalit bilan "Do'konlarni yangilash" yangi do'konni ko'rmaydi.
   const [token, setToken] = useState("");
+  const [syncNote, setSyncNote] = useState("");
 
   useEffect(() => setOrg(cab.mc_organization_href || ""), [cab.mc_organization_href]);
 
@@ -88,7 +89,22 @@ function Cabinet({ cab, groups, run }) {
       <div className="row" style={{ justifyContent: "space-between" }}>
         <b>{cab.name}</b>
         <div className="row">
-          <button className="ghost" onClick={() => run(() => api.syncUzumShops(cab.id), t("vars.synced"))}>
+          {/* Natija AYNAN shu tugma yonida: kabinet bir nechta, tepadagi
+              umumiy xabar qaysi biriga tegishli ekani bilinmasdi. */}
+          {syncNote && <span className="muted">{syncNote}</span>}
+          <button
+            className="ghost"
+            onClick={async () => {
+              setSyncNote(t("vars.syncing"));
+              const r = await run(() => api.syncUzumShops(cab.id));
+              if (!r) return setSyncNote("");
+              const moved = r.moved?.length
+                ? ` · ${t("vars.syncMoved", { count: r.moved.length })}`
+                : "";
+              const added = r.added ? ` · ${t("vars.syncAdded", { count: r.added })}` : "";
+              setSyncNote(`${t("vars.synced", { count: r.shops })}${added}${moved}`);
+            }}
+          >
             {t("vars.sync")}
           </button>
           <button

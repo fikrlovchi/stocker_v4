@@ -461,13 +461,40 @@ shu qarorga moslanadi.
 
 #### Ko'chish tartibi (2-savolning javobi)
 
-| # | Qadam |
-|---|---|
-| 1 | **Formulali kataklar to'g'ri ko'chganini tekshirish** ✅ kod tayyor — `orderSync.js` |
-| 2 | Farq 0 bo'lgach — buyurtmalarni Uzum API'dan to'g'ridan-to'g'ri tortish |
-| 3 | So'ng Sheets bilan aloqa **bosqichma-bosqich** uziladi: har bosqichda bitta yozuv oqimi o'chadi va natija eski qiymat bilan solishtiriladi |
-| 4 | `mcCancelServer` → `stocker.uz/canceluzum` |
-| 5 | Migratsiya `uzum_order` ning **hammasini** oladi (~8200 qator) |
+| # | Qadam | Holat |
+|---|---|---|
+| 1 | **Formulali kataklar to'g'ri ko'chganini tekshirish** — `orderSync.js` | ✅ 2026-08-08: hisoblanadigan ustunlar aynan mos |
+| 2 | **Buyurtmalarni serverga ko'chirish** — `importOrders.js`, "Uzum buyurtmalari" bo'limida tekshiriladi | ✅ kod tayyor |
+| 3 | Sheets listlari **birma-bir** belgilanib ko'chiriladi | ⏳ |
+| 4 | Buyurtmalarni Uzum API'dan to'g'ridan-to'g'ri tortish | ⏳ |
+| 5 | `mcCancelServer` → `stocker.uz/canceluzum` + `/mccanceled` | ⏳ |
+
+#### Buyurtmalarni ko'chirish ✅ (2026-08-08)
+
+```bash
+cd /root/stocker/server && node src/scripts/importOrders.js
+```
+
+```bash
+cd /root/stocker/server && node src/scripts/importOrders.js --compare
+```
+
+`uzum_orders` va `uzum_order_items` (`020`) — **kesh emas**. `orders`/`items`
+jadvallari 3 kunlik oyna uchun va har yangilanishda qaytadan quriladi; bu
+yerda esa jadvalning **hammasi** turadi va o'chirilmaydi. Sheets bilan aloqa
+uzilgach yagona manba shu bo'ladi.
+
+Faqat bazaga yozadi (na jadvalga, na Uzumga, na MoySklad'ga), shuning uchun
+`--send` kabi bayroq kerak emas. `--compare` hech narsa yozmay, faqat "faqat
+jadvalda" va "faqat bazada" bo'lgan buyurtmalarni sanaydi.
+
+**Uzum buyurtmalari** bo'limida: qidiruv (ID · MoySklad ID · tracking · SKU ·
+barcode), do'kon filtri, "keshda bor / yo'q" filtri va har qatorda `Q·T·U·V`
+bayroqlari. Qatorni bosib tarkibini ochish mumkin — bog'lanmagan SKU qizil
+bilan ko'rinadi.
+
+`O`/`P` jadvaldagi qiymat bilan yoziladi va **qayta hisoblanmaydi** (yuqoridagi
+"muzlatiladi" qoidasi).
 
 #### Hisoblanadigan kataklar — jadvaldagi formula va serverdagi o'rni
 
@@ -592,8 +619,8 @@ Manba — `items.product_ref`: `uzum_order_detail!I` mos topmasa `null` bo'ladi.
 `uzum-order-to-mc` dagi topic'ga yuborish mantiqi **o'zgarmadi** (o'sha bot,
 guruh va 24 soatlik sovish davri).
 
-selfTest: 406 → **464** (bog'lanmagan SKU, buyurtma formulalari, `.env`
-tahriri, do'kon ko'chishi).
+selfTest: 406 → **483** (bog'lanmagan SKU, buyurtma formulalari, `.env`
+tahriri, do'kon ko'chishi, buyurtmalarni ko'chirish).
 
 ## Buyruqlar
 
