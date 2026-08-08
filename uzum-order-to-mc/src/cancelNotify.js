@@ -2,75 +2,13 @@
 // teglangan Telegram xabari. cancelSync (24h monitoring) va orderStatusSync
 // (tasdiqlashdan oldin bekor bo'lgan holat) shu moduldan foydalanadi.
 const config = require("../config.json");
-const logger = require("./logger");
 const { colLetterToIndex } = require("./sheetsUtil");
-const { getSheetsClient } = require("./oauthSheets");
 const { sendTelegramMessage } = require("./telegram");
+const { loadShopNames, loadProductNames, escapeHtml } = require("./sheetLookups");
 
 const DET = Object.fromEntries(
   Object.entries(config.columns.details).map(([k, v]) => [k, colLetterToIndex(v)])
 );
-const SHOP = {
-  shopId: colLetterToIndex(config.columns.shops.shopId),
-  name: colLetterToIndex(config.columns.shops.name),
-};
-const PROD = {
-  ref: colLetterToIndex(config.columns.products.ref),
-  name: colLetterToIndex(config.columns.products.name),
-};
-
-// uzum_shop (shopId->nom) va mc_product (ref->nom) xaritalari faqat xabar
-// yuborilganda (kamdan-kam) bir marta o'qiladi va process davomida keshlanadi.
-let shopNames = null;
-let productNames = null;
-
-async function readSheet(range) {
-  const sheets = getSheetsClient();
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: config.spreadsheetId,
-    range,
-    valueRenderOption: "UNFORMATTED_VALUE",
-  });
-  return data.values || [];
-}
-
-async function loadShopNames() {
-  if (shopNames) return shopNames;
-  shopNames = new Map();
-  try {
-    const rows = await readSheet(config.sheets.shops);
-    for (let i = 1; i < rows.length; i++) {
-      const id = rows[i][SHOP.shopId];
-      if (id !== undefined && id !== null && id !== "") {
-        shopNames.set(String(id), String(rows[i][SHOP.name] ?? ""));
-      }
-    }
-  } catch (e) {
-    logger.error(`uzum_shop nomlarini o'qishda xato: ${e.message}`);
-  }
-  return shopNames;
-}
-
-async function loadProductNames() {
-  if (productNames) return productNames;
-  productNames = new Map();
-  try {
-    const rows = await readSheet(config.sheets.products);
-    for (let i = 1; i < rows.length; i++) {
-      const ref = rows[i][PROD.ref];
-      if (ref !== undefined && ref !== null && ref !== "") {
-        productNames.set(String(ref).trim(), String(rows[i][PROD.name] ?? ""));
-      }
-    }
-  } catch (e) {
-    logger.error(`mc_product nomlarini o'qishda xato: ${e.message}`);
-  }
-  return productNames;
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
-}
 
 // CANCEL_NOTIFY_CONTACTS="Ismi:chatId,Ismi2:chatId2" — bir nechta odamni belgilash.
 function buildTags() {

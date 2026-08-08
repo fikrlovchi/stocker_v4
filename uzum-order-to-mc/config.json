@@ -28,7 +28,9 @@
       "arrivedAt": "W"
     },
     "details": {
+      "barcode": "B",
       "skuTitle": "C",
+      "title": "D",
       "price": "E",
       "amount": "F",
       "orderId": "H",

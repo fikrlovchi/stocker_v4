@@ -146,6 +146,13 @@ export default function Projects() {
             </div>
           )}
 
+          {data.holdWindow && (
+            <HoldWindow
+              value={data.holdWindow}
+              onSave={(start, end) => act(() => api.projectHoldWindow(slug, start, end))}
+            />
+          )}
+
           {data.envBindings.length > 0 && (
             <div className="card">
               <h2>{t("projects.env")}</h2>
@@ -178,6 +185,47 @@ export default function Projects() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Kutish oynasi — Toshkent vaqti.
+ *
+ * Shu oraliqda tushgan buyurtma "Yangi" bo'lib turadi va Uzum'da darhol
+ * tasdiqlanmaydi; oyna tugagach ishlanadi. Ilgari qiymat faqat `.env` da
+ * edi — o'zgartirish uchun SSH kerak edi.
+ */
+function HoldWindow({ value, onSave }) {
+  const { t } = useTranslation();
+  const [start, setStart] = useState(value.start);
+  const [end, setEnd] = useState(value.end);
+
+  useEffect(() => {
+    setStart(value.start);
+    setEnd(value.end);
+  }, [value.start, value.end]);
+
+  const dirty = start !== value.start || end !== value.end;
+
+  return (
+    <div className="card">
+      <h2>{t("projects.holdWindow")}</h2>
+      <div className="muted" style={{ marginBottom: 8 }}>{t("projects.holdWindowHint")}</div>
+
+      {value.error && <div className="error">{value.error}</div>}
+
+      <div className="row">
+        <input type="time" value={start} onChange={(e) => setStart(e.target.value)} style={{ width: 120 }} />
+        <span className="muted">—</span>
+        <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} style={{ width: 120 }} />
+        <button disabled={!dirty} onClick={() => onSave(start, end)}>{t("projects.saveHoldWindow")}</button>
+        {!dirty && (
+          <span className="muted">
+            {t("projects.holdWindowDefault", { start: value.defaults.start, end: value.defaults.end })}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

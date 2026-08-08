@@ -56,7 +56,18 @@ function buildPositions(details, orderId) {
     if (!isUsableRef(row[DET.product])) {
       const raw = cell(row[DET.product]).toString();
       const err = new Error(`mahsulot ID/link topilmadi (detail qator ${j + 1}): "${raw}"`);
+      // Telegram xabari uchun qatorning o'zidan kontekst: Uzum SKU nomi
+      // ko'pincha ma'nosiz kod bo'ladi, tovar nomi va barcode'siz xabar
+      // o'qigan odamga hech narsa aytmaydi (skuAlerts.js).
       err.sku = extractSku(raw);
+      err.skuContext = {
+        sku: extractSku(raw),
+        skuTitle: cell(row[DET.skuTitle]).toString().trim(),
+        productTitle: cell(row[DET.title]).toString().trim(),
+        barcode: cell(row[DET.barcode]).toString().trim(),
+        quantity: cell(row[DET.amount]).toString().trim(),
+        detailRow: j + 1,
+      };
       throw err;
     }
 
@@ -245,7 +256,13 @@ async function createMoySkladOrders() {
     } catch (e) {
       logger.error(`Order ${orderId} o'tkazib yuborildi: ${e.message}`);
       errorCount++;
-      if (e.sku) await skuAlerts.notifyIfNew(e.sku);
+      if (e.sku) {
+        await skuAlerts.notifyIfNew({
+          ...(e.skuContext || { sku: e.sku }),
+          orderId,
+          shopId: order[ORD.shopId],
+        });
+      }
       continue;
     }
     if (positions.length === 0) {

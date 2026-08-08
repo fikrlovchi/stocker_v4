@@ -1490,6 +1490,35 @@ check("valid_if: qo'shimchali qiymat topilmaydi", (await mcLookup("ext-ok@3")).f
 const dupLookup = await mcLookup("ext-dup");
 check("valid_if: noaniqlik belgilanadi", dupLookup.ambiguous, true);
 
+/* --- Bog'lanmagan SKU'lar (buyurtmada tushgan, MoySklad tovari yo'q) --- */
+
+// Fixture'da `i16` (NOBC2) qatorining `I` ustuni "#N/A" — ya'ni XLOOKUP mos
+// topmagan. Aynan shunday qator buyurtmani MoySklad'ga o'tkazmaydi, shuning
+// uchun u interfeysda ko'rinib turishi kerak.
+const unlinked = async () => (await fetch(`${lpBase}/lp/unlinked`)).json();
+
+const u1 = await unlinked();
+check("bog'lanmagan: ro'yxatda", u1.items.map((i) => i.skuTitle), ["MT7-NOREF,XXL"]);
+check("bog'lanmagan: sabab — qator yo'q", u1.items[0].reason, "no_link_row");
+check("bog'lanmagan: buyurtmalar soni", u1.items[0].orderCount, 1);
+check("bog'lanmagan: do'kon", u1.items[0].shopId, "9001");
+
+// Qator bor, lekin MoySklad tovari ulanmagan — boshqa sabab, boshqa harakat
+// (formani ochish emas, mavjud qatorni to'ldirish).
+db.prepare(
+  "INSERT INTO link_product (sku_title, shop_id, card_quantity) VALUES ('MT7-NOREF,XXL', '9001', 1)"
+).run();
+const u2 = await unlinked();
+check("bog'lanmagan: sabab — tovar ulanmagan", u2.items[0].reason, "no_mc_product");
+check("bog'lanmagan: takrorlanmaydi", u2.total, 1);
+
+// Bog'langan SKU ro'yxatga tushmaydi — aks holda karta shovqinga aylanardi.
+check(
+  "bog'lanmagan: ulangan SKU chiqmaydi",
+  u2.items.some((i) => i.skuTitle === "MT2-ELEGANT,SS"),
+  false
+);
+
 await new Promise((r) => lpServer.close(r));
 db.exec("DELETE FROM mc_product");
 
@@ -1576,7 +1605,96 @@ db.exec("DELETE FROM canceled_orders; DELETE FROM packed_orders; DELETE FROM uzu
 clearP();
 resetSessions();
 
-/* ---------- 24. ShK yorliqlari soni (uzumPDFs) ---------- */
+/* ---------- 24. Buyurtma formulalari (6-bosqich) ---------- */
+
+// v3 jadvalidagi hisoblanadigan kataklar serverga ko'chdi. Solishtirish
+// skripti (`orderSync.js`) Sheets'ni talab qiladi, mantiq esa toza funksiya —
+// shuning uchun aynan u sinaladi.
+const { trackingId, cleanExternalId, orderRefs, detailRefs } = await import("../orders/formulas.js");
+
+// R: "10-" + 10 xonagacha nol + "-1"
+check("formula R: qisqa ID nol bilan to'ldiriladi", trackingId(90887665), "10-0090887665-1");
+check("formula R: 10 xonali ID o'zgarmaydi", trackingId(1234567890), "10-1234567890-1");
+check("formula R: uzunroq ID kesilmaydi", trackingId(123456789012), "10-123456789012-1");
+check("formula R: bo'sh ID", trackingId(""), "");
+
+// K ustunidagi eski qo'shimchalar (v3 dagi REGEXREPLACE)
+check("formula: @N qo'shimchasi kesiladi", cleanExternalId("ABC-1@3"), "ABC-1");
+check("formula: #N qo'shimchasi kesiladi", cleanExternalId("ABC-1#2"), "ABC-1");
+check("formula: yolg'iz $ kesiladi", cleanExternalId("ABC-1$"), "ABC-1");
+check("formula: oddiy qiymat tegilmaydi", cleanExternalId(" ABC-1 "), "ABC-1");
+
+const fShops = new Map([["682", { organizationHref: "org-href", salesChannelHref: "channel-href" }]]);
+check("formula O/P: do'kon topildi", orderRefs("682", { shops: fShops }).organizationHref, "org-href");
+check("formula O/P: sotuv kanali", orderRefs("682", { shops: fShops }).salesChannelHref, "channel-href");
+check("formula O/P: noma'lum do'kon → null", orderRefs("999", { shops: fShops }).organizationHref, null);
+
+const fCat = {
+  links: new Map([
+    ["UZON-1", { mcExternalId: "ext-1", mcUuid: "u-1", cardQuantity: 3 }],
+    ["UZON-2", { mcExternalId: "ext-2@5", mcUuid: "u-2", cardQuantity: 1 }],
+    ["UZON-3", { mcExternalId: "", mcUuid: null, cardQuantity: 1 }],
+  ]),
+  productByExternalId: new Map([["ext-1", "u-1"], ["ext-2", "u-2"]]),
+  entityByUuid: new Map([["u-1", "product"], ["u-2", "variant"]]),
+};
+
+const d1 = detailRefs({ skuTitle: "UZON-1", amount: 2 }, fCat);
+check("formula I: External ID → UUID", d1.productRef, "u-1");
+check("formula J: UUID → tur", d1.entityType, "product");
+// ASOSIY HOLAT: K = Uzum miqdori × kartochkadagi son (HANDOFF 20a).
+check("formula K: miqdor × kartochka soni", d1.quantityForMc, 6);
+check("formula L: F ≠ K bo'lsa TRUE", d1.difference, true);
+
+const d2 = detailRefs({ skuTitle: "UZON-2", amount: 4 }, fCat);
+check("formula I: qo'shimchali External ID ham topiladi", d2.productRef, "u-2");
+check("formula J: variant turi", d2.entityType, "variant");
+check("formula L: kartochkada 1 ta bo'lsa FALSE", d2.difference, false);
+
+// External ID bo'sh: jadvalda XLOOKUP("") tasodifan bo'sh katakka tushishi
+// mumkin edi, server esa null beradi — ataylab qat'iyroq.
+const d3 = detailRefs({ skuTitle: "UZON-3", amount: 1 }, fCat);
+check("formula I: External ID bo'sh → null", d3.productRef, null);
+check("formula K: bog'lama bor, miqdor hisoblanadi", d3.quantityForMc, 1);
+
+// Bog'lanmagan SKU — jadvalda `#N/A`, bu xato emas, ma'noli holat.
+const d4 = detailRefs({ skuTitle: "YO'Q-1", amount: 2 }, fCat);
+check("formula: bog'lanmagan SKU belgilanadi", d4.linked, false);
+check("formula K: bog'lama yo'q → null", d4.quantityForMc, null);
+check("formula L: bog'lama yo'q → null", d4.difference, null);
+
+// Miqdor raqam emas: jadvalda ham bo'sh (`ISNUMBER(F)`).
+check("formula K: miqdor bo'sh → null", detailRefs({ skuTitle: "UZON-1", amount: "" }, fCat).quantityForMc, null);
+check("formula K: miqdor matn → null", detailRefs({ skuTitle: "UZON-1", amount: "ha" }, fCat).quantityForMc, null);
+// skuTitle bo'sh — `IF(C="", "", …)`
+check("formula: bo'sh skuTitle", detailRefs({ skuTitle: "", amount: 2 }, fCat).productRef, null);
+
+/* --- Kutish oynasi: .env tahriri (interfeysdan boshqariladi) --- */
+
+// `.env` ichida TOKENLAR bor — tahrir faqat bitta satrga tegishi kerak.
+const { withEnvValue, readEnvValue } = await import("../web/projects.js");
+
+const ENV_SAMPLE = "MOYSKLAD_TOKEN=maxfiy\nWINDOW_HOLD_START=06:10\nWINDOW_HOLD_END=11:00\nTELEGRAM_CHAT_ID=-100\n";
+
+check("env: qiymat o'qiladi", readEnvValue(ENV_SAMPLE, "WINDOW_HOLD_START"), "06:10");
+check("env: yo'q kalit → null", readEnvValue(ENV_SAMPLE, "YO_Q"), null);
+
+const envEdited = withEnvValue(ENV_SAMPLE, "WINDOW_HOLD_START", "07:00");
+check("env: satr almashadi", readEnvValue(envEdited, "WINDOW_HOLD_START"), "07:00");
+check("env: qo'shni satrlar tegilmaydi", readEnvValue(envEdited, "MOYSKLAD_TOKEN"), "maxfiy");
+check("env: boshqa satrlar tegilmaydi", readEnvValue(envEdited, "TELEGRAM_CHAT_ID"), "-100");
+check("env: satrlar soni o'zgarmaydi", envEdited.trim().split("\n").length, 4);
+
+// Kalit umuman bo'lmasa — oxiriga qo'shiladi (eski o'rnatishlarda .env da
+// WINDOW_* satrlari yo'q, kod standart qiymat bilan ishlaydi).
+const envAdded = withEnvValue("A=1\n", "WINDOW_HOLD_END", "12:00");
+check("env: yo'q kalit qo'shiladi", readEnvValue(envAdded, "WINDOW_HOLD_END"), "12:00");
+check("env: mavjud kalit saqlanadi", readEnvValue(envAdded, "A"), "1");
+// Oxirgi qator yangi satr bilan tugamagan bo'lsa ham qo'shilgan satr yopishmasin.
+check("env: yangi satrsiz fayl", readEnvValue(withEnvValue("A=1", "B", "2"), "A"), "1");
+check("env: yangi satrsiz faylga qo'shish", readEnvValue(withEnvValue("A=1", "B", "2"), "B"), "2");
+
+/* ---------- 25. ShK yorliqlari soni (uzumPDFs) ---------- */
 
 // 2026-08-07 da topilgan xato: YANGI (40×30) formatda yorliq soni
 // `Quantity for mc` (K) ni hisobga olmasdi — har qator uchun faqat `copies`

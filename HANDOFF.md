@@ -40,10 +40,10 @@ cd /root/stocker && git pull && cd server && npm i && sudo systemctl restart sto
 | Yig'ish | ✅ | **Yig'ilishi kerak** ro'yxati o'zi chiqadi + ID solishtirish; partiyalar alohida varaqda |
 | Yorliqlar | ✅ | SPA ichida; Yangi (40×30) / Eski format; umumiy standart o'lchamlar |
 | Integratsiyalar (ex "Uzum order to MC") | ✅ | systemd loyihalari + **Qoldiq oqimlari** (holat, jadval, tarix) |
-| Tovar bog'lamalari (`link_product`) | ✅ | qo'shish formasi (AppSheet kabi), hisoblangan qoldiq, tahrirlash |
+| Tovar bog'lamalari (`link_product`) | ✅ | qo'shish formasi (AppSheet kabi), hisoblangan qoldiq, tahrirlash, **bog'lanmagan SKU'lar** |
 | Barcode va SKU jurnali | ✅ | Integratsiyalar ichida — qator qo'shilganda bajarilgan amallar natijasi |
 | Konfiguratsiya | ✅ | Uzum · MoySklad token · Telegram · Google Sheets · Qoldiq modifikatsiyasi (bo'sh) |
-| Uzum buyurtmalari | ⏳ | karkas bor, ma'lumot 5-bosqichda ([docs/V3-MIGRATION.md](docs/V3-MIGRATION.md)) |
+| Uzum buyurtmalari | ⏳ | karkas bor; Status va `canceluzum` qarorlari kelishilgan — 6-bosqich ([docs/V3-MIGRATION.md](docs/V3-MIGRATION.md)) |
 | Mobil ilova | ✅ | v0.6.3 — do'kon guruhi sarlavhada, ShK+PRINT yonma-yon, tarix mahalliy vaqtda |
 | Desktop client | ✅ | v0.4.0 — navbatni tozalash, uz/ru |
 | **`panel/` ni o'chirish** | ⏳ | **keyingi ish** — hamma bo'lim ko'chdi, sinovdan keyin o'chiriladi |
@@ -233,6 +233,14 @@ v3 bazasini serverga ko'chirish va natijani jadval bilan solishtirish
 
 ```bash
 cd /root/stocker/server && node src/scripts/v3Sync.js
+```
+
+Buyurtmalarning hisoblanadigan ustunlarini (`uzum_order!O·P·R`,
+`uzum_order_detail!I·J·K·L`) jadval bilan solishtirish — 6-bosqichning
+birinchi qadami, hech narsa yozmaydi:
+
+```bash
+cd /root/stocker/server && node src/scripts/orderSync.js
 ```
 
 MoySklad qoldiq hisobotining barqarorligini o'lchash (faqat o'qiydi):

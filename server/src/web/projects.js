@@ -29,6 +29,8 @@ const UNITS = {
     timerUnit: "uzum-order.timer",
     timerUnitPath: "/etc/systemd/system/uzum-order.timer",
     envPath: "/root/stocker/uzum-order-to-mc/.env",
+    // Kutish oynasi (Toshkent vaqti) — interfeysdan tahrirlanadi.
+    holdWindow: true,
   },
   "mc-stock-to-uzum": {
     serviceUnit: "mc-stock.service",
@@ -67,6 +69,49 @@ async function unitStatus(slug) {
     return { service: parseProps(svc.stdout), timer: parseProps(timer.stdout), hasTimer: Boolean(unit.timerUnit) };
   } catch (e) {
     return { error: e.message, hasTimer: Boolean(unit.timerUnit) };
+  }
+}
+
+/* ---------- kutish oynasi (.env: WINDOW_HOLD_START/END) ---------- */
+
+const HOLD_KEYS = { start: "WINDOW_HOLD_START", end: "WINDOW_HOLD_END" };
+// Standart qiymatlar `uzum-order-to-mc/src/orderStatusSync.js` dagi bilan
+// bir xil bo'lishi SHART: .env da satr bo'lmasa aynan shular ishlaydi.
+const HOLD_DEFAULTS = { start: "06:10", end: "11:00" };
+
+const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+const toMinutes = (v) => {
+  const m = HHMM.exec(String(v || "").trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+
+function readEnvValue(text, key) {
+  const m = new RegExp(`^${key}=(.*)$`, "m").exec(text);
+  return m ? m[1].trim() : null;
+}
+
+// Bor satrni almashtiradi, yo'q bo'lsa oxiriga qo'shadi — qolgan satrlarga
+// TEGMAYDI (fayl ichida tokenlar bor).
+function withEnvValue(text, key, value) {
+  const line = `${key}=${value}`;
+  if (new RegExp(`^${key}=`, "m").test(text)) {
+    return text.replace(new RegExp(`^${key}=.*$`, "m"), line);
+  }
+  return `${text}${text.endsWith("\n") || text === "" ? "" : "\n"}${line}\n`;
+}
+
+function holdWindow(slug) {
+  const unit = UNITS[slug];
+  if (!unit?.holdWindow || !unit.envPath) return null;
+  try {
+    const text = fs.readFileSync(unit.envPath, "utf8");
+    return {
+      start: readEnvValue(text, HOLD_KEYS.start) || HOLD_DEFAULTS.start,
+      end: readEnvValue(text, HOLD_KEYS.end) || HOLD_DEFAULTS.end,
+      defaults: HOLD_DEFAULTS,
+    };
+  } catch (e) {
+    return { ...HOLD_DEFAULTS, defaults: HOLD_DEFAULTS, error: e.message };
   }
 }
 
@@ -134,6 +179,7 @@ export function projectsRouter() {
       totalRuns: db.prepare("SELECT COUNT(*) AS n FROM runs WHERE project_id = ?").get(row.id).n,
       status: await unitStatus(row.slug),
       intervalSeconds: intervalSeconds(row.slug),
+      holdWindow: holdWindow(row.slug),
       envBindings: bindings,
     });
   });
@@ -219,7 +265,57 @@ export function projectsRouter() {
     }
   });
 
+  /**
+   * Kutish oynasi — Toshkent vaqti, `HH:mm`.
+   *
+   * Ilgari faqat `.env` da edi, ya'ni o'zgartirish uchun SSH kerak edi.
+   * Buyurtma statusi butunlay shu oraliqqa tayanadi (6:10–11:00 orasida
+   * tushgani "Yangi", 11:01 dan keyin ishlanadi), shuning uchun uni
+   * interfeysdan boshqarish kerak.
+   *
+   * Servis timer bilan ishlaydi va har ishga tushishda `.env` ni qaytadan
+   * o'qiydi — restart shart emas, yangi qiymat keyingi tsikldan amal qiladi.
+   */
+  router.put("/:slug/hold-window", (req, res) => {
+    const unit = unitOr404(req, res);
+    if (!unit) return;
+    if (!unit.holdWindow || !unit.envPath) {
+      return res.status(400).json({ error: "Bu loyihada kutish oynasi yo'q" });
+    }
+
+    const start = String(req.body?.start || "").trim();
+    const end = String(req.body?.end || "").trim();
+    const startMin = toMinutes(start);
+    const endMin = toMinutes(end);
+    if (startMin === null || endMin === null) {
+      return res.status(400).json({ error: "Vaqt HH:mm ko'rinishida bo'lishi kerak (masalan 06:10)" });
+    }
+    // `isInHoldWindow` yarim tunni kesib o'tuvchi oraliqni qo'llamaydi —
+    // shart shu yerda ham tekshiriladi, aks holda servis har tsiklda yiqilardi.
+    if (endMin <= startMin) {
+      return res.status(400).json({ error: "Tugash vaqti boshlanish vaqtidan katta bo'lishi kerak" });
+    }
+
+    try {
+      const text = fs.readFileSync(unit.envPath, "utf8");
+      let next = withEnvValue(text, HOLD_KEYS.start, start);
+      next = withEnvValue(next, HOLD_KEYS.end, end);
+
+      // Vaqtinchalik faylga yozib almashtiramiz: yozish yarmida uzilsa .env
+      // (ichida tokenlar bor) buzilib qolmasin — interval endpoint'i bilan
+      // bir xil tartib.
+      const tmp = `${unit.envPath}.tmp`;
+      fs.writeFileSync(tmp, next, { mode: 0o600 });
+      fs.renameSync(tmp, unit.envPath);
+
+      logger.info(`Kutish oynasi o'zgardi: ${req.params.slug} → ${start}–${end} (${req.user.login})`);
+      res.json({ ok: true, start, end });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   return router;
 }
 
-export { UNITS };
+export { UNITS, withEnvValue, readEnvValue };

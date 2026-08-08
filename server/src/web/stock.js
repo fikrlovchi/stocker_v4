@@ -20,6 +20,7 @@ import { loadMods, loadDefaults, loadStockByExternalId, loadShopTokens } from ".
 import { computeRow } from "../stock/rules.js";
 import { recentStockSyncs, stockSyncSummary } from "../moysklad/stockLog.js";
 import { createLinkProduct, retryLinkProduct, recentEvents } from "../stock/linkProductCreate.js";
+import { shopName } from "../packing/shops.js";
 
 export function stockRouter() {
   const router = express.Router();
@@ -112,6 +113,52 @@ export function linkProductRouter() {
            ORDER BY c.name, s.name`
         )
         .all(),
+    });
+  });
+
+  /**
+   * Buyurtmalarda uchragan, lekin MoySklad tovariga BOG'LANMAGAN SKU'lar.
+   *
+   * Bugun bunday SKU faqat Telegram'ga xabar bo'lib ketadi (uzum-order-to-mc
+   * `skuAlerts.js`) va o'sha xabar o'qilmasa iz qolmaydi: buyurtma MoySklad'ga
+   * o'tmay turaveradi. Shuning uchun ro'yxat shu bo'limda ham turadi — ish
+   * bajariladigan joyda.
+   *
+   * Manba — `items.product_ref`: `uzum_order_detail!I` (XLOOKUP) mos topmasa
+   * `null` bo'ladi, ya'ni "SKU MoySklad tovariga ulanmagan" degani. Ikki xil
+   * sabab bo'lishi mumkin va ular boshqa-boshqa harakat talab qiladi:
+   *   • `link_product` da qator umuman yo'q  → yangi bog'lama qo'shish;
+   *   • qator bor, lekin External ID/UUID bo'sh → qatorni to'ldirish.
+   */
+  router.get("/unlinked", (req, res) => {
+    const rows = db
+      .prepare(
+        `SELECT i.sku_title                     AS skuTitle,
+                COUNT(DISTINCT i.order_id)      AS orderCount,
+                MAX(o.arrived_at_ms)            AS lastSeenMs,
+                MAX(i.uzum_barcode)             AS barcode,
+                MAX(o.shop_id)                  AS shopId,
+                lp.id                           AS linkId,
+                lp.mc_external_id               AS mcExternalId,
+                lp.mc_uuid                      AS mcUuid
+         FROM items i
+         JOIN orders o ON o.order_id = i.order_id
+         LEFT JOIN link_product lp ON lp.sku_title = i.sku_title
+         WHERE i.sku_title IS NOT NULL AND i.sku_title <> ''
+           AND (i.product_ref IS NULL OR i.product_ref = '')
+         GROUP BY i.sku_title, lp.id, lp.mc_external_id, lp.mc_uuid
+         ORDER BY lastSeenMs DESC, i.sku_title`
+      )
+      .all();
+
+    res.json({
+      items: rows.map((r) => ({
+        ...r,
+        shopName: r.shopId ? shopName(r.shopId) : null,
+        // Interfeys qaysi tugmani ko'rsatishini shu belgilaydi.
+        reason: r.linkId ? "no_mc_product" : "no_link_row",
+      })),
+      total: rows.length,
     });
   });
 

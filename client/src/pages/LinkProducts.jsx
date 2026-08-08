@@ -15,12 +15,16 @@ const PAGE = 50;
 export default function LinkProducts() {
   const { t } = useTranslation();
   const [data, setData] = useState(null);
+  const [unlinked, setUnlinked] = useState(null);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
   const [adding, setAdding] = useState(false);
+  // Bog'lanmagan SKU ro'yxatidan "Bog'lash" bosilganda forma shu nom bilan
+  // ochiladi — nomni qo'lda ko'chirib yozish shart bo'lmasin.
+  const [prefill, setPrefill] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -30,9 +34,23 @@ export default function LinkProducts() {
     }
   }, [query, offset]);
 
+  // Bog'lanmagan SKU'lar qidiruvdan/sahifadan mustaqil: ular butun ro'yxat
+  // bo'yicha hisoblanadi va har doim ko'rinib turishi kerak.
+  const loadUnlinked = useCallback(async () => {
+    try {
+      setUnlinked(await api.unlinkedSkus());
+    } catch (e) {
+      setError(e.message);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    loadUnlinked();
+  }, [loadUnlinked]);
 
   const run = async (fn, okNote) => {
     setError("");
@@ -41,6 +59,8 @@ export default function LinkProducts() {
       await fn();
       if (okNote) setNote(okNote);
       await load();
+      // Bog'lama to'ldirilgan bo'lishi mumkin — ro'yxat eskirmasin.
+      await loadUnlinked();
     } catch (e) {
       setError(e.message);
     }
@@ -59,14 +79,31 @@ export default function LinkProducts() {
       {error && <div className="card error">{error}</div>}
       {note && <div className="card muted">{note}</div>}
 
+      <Unlinked
+        data={unlinked}
+        onLink={(skuTitle) => {
+          setPrefill(skuTitle);
+          setAdding(true);
+        }}
+        onSearch={(skuTitle) => {
+          setSearch(skuTitle);
+          setQuery(skuTitle);
+          setOffset(0);
+        }}
+      />
+
       <div className="row" style={{ marginBottom: 12 }}>
-        <button onClick={() => setAdding(true)}>+ {t("lp.add")}</button>
+        <button onClick={() => { setPrefill(""); setAdding(true); }}>+ {t("lp.add")}</button>
       </div>
 
       {adding && (
         <LinkProductForm
-          onClose={() => setAdding(false)}
-          onCreated={load}
+          // Forma ochiq turganda boshqa SKU tanlansa qaytadan yasalsin —
+          // aks holda maydonlar oldingi nom bilan qolib ketardi.
+          key={prefill || "new"}
+          initialSkuTitle={prefill}
+          onClose={() => { setAdding(false); setPrefill(""); }}
+          onCreated={() => { load(); loadUnlinked(); }}
         />
       )}
 
@@ -130,6 +167,67 @@ export default function LinkProducts() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Buyurtmada tushgan, lekin MoySklad tovariga ulanmagan SKU'lar.
+ *
+ * Bunday SKU tufayli buyurtma MoySklad'ga UMUMAN o'tmaydi, ya'ni yig'ishga
+ * ham chiqmaydi. Ilgari bu faqat Telegram'ga xabar bo'lib ketardi — xabar
+ * o'qilmasa iz qolmasdi. Shuning uchun ro'yxat ish bajariladigan joyda,
+ * jadvalning TEPASIDA turadi.
+ *
+ * Hech narsa yo'q bo'lsa karta ham chizilmaydi: "bo'sh ro'yxat" ham joy
+ * egallab, muhim holatni ko'zdan yashiradi.
+ */
+function Unlinked({ data, onLink, onSearch }) {
+  const { t } = useTranslation();
+  if (!data || data.total === 0) return null;
+
+  return (
+    <div className="card error" style={{ marginBottom: 12 }}>
+      <b>{t("lp.unlinkedTitle", { total: data.total })}</b>
+      <div className="muted" style={{ marginTop: 2 }}>{t("lp.unlinkedHint")}</div>
+
+      <table style={{ marginTop: 10 }}>
+        <thead>
+          <tr>
+            <th>{t("lp.skuTitle")}</th>
+            <th>{t("lp.shop")}</th>
+            <th>{t("lp.unlinkedOrders")}</th>
+            <th>{t("lp.unlinkedReason")}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {data.items.map((it) => (
+            <tr key={it.skuTitle}>
+              <td>
+                <code>{it.skuTitle}</code>
+                {it.barcode && <div className="muted">{it.barcode}</div>}
+              </td>
+              <td>{it.shopName || it.shopId || "—"}</td>
+              <td>{it.orderCount}</td>
+              <td>
+                {it.reason === "no_link_row" ? t("lp.unlinkedNoRow") : t("lp.unlinkedNoProduct")}
+              </td>
+              <td>
+                {/* Qator yo'q bo'lsa — qo'shish formasi; bor bo'lsa jadvaldan
+                    External ID ni to'ldirish kerak, shuning uchun qidiruv. */}
+                {it.reason === "no_link_row" ? (
+                  <button onClick={() => onLink(it.skuTitle)}>{t("lp.unlinkedLink")}</button>
+                ) : (
+                  <button className="ghost" onClick={() => onSearch(it.skuTitle)}>
+                    {t("lp.unlinkedOpen")}
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

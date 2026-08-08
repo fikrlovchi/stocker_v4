@@ -121,6 +121,8 @@ export const api = {
     return call(`/link-products?${q}`);
   },
   linkProductShops: () => call("/link-products/shops"),
+  // Buyurtmada uchragan, lekin MoySklad tovariga ulanmagan SKU'lar.
+  unlinkedSkus: () => call("/link-products/unlinked"),
   // "MC External ID" maydonining sharti (v3: valid_if ISNOTBLANK([mc_product])).
   mcProduct: (externalId) => call(`/link-products/mc-product?externalId=${encodeURIComponent(externalId)}`),
   addLinkProduct: (body) => call("/link-products", { method: "POST", body }),
@@ -147,6 +149,9 @@ export const api = {
   projectRunNow: (slug) => call(`/projects/${encodeURIComponent(slug)}/run-now`, { method: "POST" }),
   projectInterval: (slug, seconds) =>
     call(`/projects/${encodeURIComponent(slug)}/interval`, { method: "POST", body: { seconds } }),
+  // Kutish oynasi (Toshkent vaqti) — `.env` dagi WINDOW_HOLD_START/END.
+  projectHoldWindow: (slug, start, end) =>
+    call(`/projects/${encodeURIComponent(slug)}/hold-window`, { method: "PUT", body: { start, end } }),
 
   labelsConfig: () => call("/labels/config"),
   saveLabelsConfig: (config) => call("/labels/config", { method: "PUT", body: config }),

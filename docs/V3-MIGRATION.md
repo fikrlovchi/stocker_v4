@@ -340,6 +340,198 @@ selfTest: 389 → **406**.
 Server Uzum API'dan buyurtmalarni tortadi (hozir `uzum-order-to-mc` va
 `orders` keshi qiladigan ish), Google Sheets zaxira nusxa bo'lib qoladi.
 
+**2026-08-08 da kelishildi.** Quyidagilar qaror, taxmin emas.
+
+#### Status — hisoblanadi, saqlanmaydi
+
+"Holat" o'rniga **Status**. Qiymat hech qayerda saqlanmaydi: har safar mavjud
+ma'lumotdan chiqariladi (hold oynasi · MoySklad holati · Uzum bekor bayrog'i ·
+`canceluzum` belgisi). Ikkinchi haqiqat manbai bo'lmaydi — aks holda "bazada
+bir xil, MoySkladda boshqa" degan holat paydo bo'lardi.
+
+Ilova ikki tilli, shuning uchun status **kalit** sifatida saqlanadi va ekranda
+tarjima qilinadi (`client/src/i18n.js`):
+
+| Kalit | uz | ru | Qachon |
+|---|---|---|---|
+| `new` | Yangi | Новый | buyurtma **kutish oynasida tushgan** va hali 11:01 ishlovidan o'tmagan |
+| `packing` | Yig'ilmoqda | Комплектуется | oynadan tashqarida tushgan yoki oyna tugagach tasdiqlangan |
+| `packed` | Yig'ildi | Собран | dasturda yig'ib bo'lingan (`uzum_packing` / tugagan sessiya) |
+| `auto_canceled` | Avtomatik bekor bo'ldi | Отменён автоматически | oynada tushgan buyurtma 11:01 dagi ishlovda Uzum'da `CANCELED` bo'lib chiqdi → MoySklad'da bekor + bildirishnoma (hozirgi xatti-harakat) |
+| `cancel_pending` | Bekor qilinishi kutilmoqda | Ожидает отмены | tasdiqlangandan keyin Uzum'da bekor bo'lgan — MoySklad'da **qo'lda** bekor qilish kerak |
+| `build_error` | Yig'ish xatosi | Ошибка сборки | MoySklad'da `Ошибка сборки` ga o'tkazilgan → `/canceluzum` → Uzum'da bekor qilinadi |
+| `canceled` | Bekor qilindi | Отменён | MoySklad'da `Отменен` ga o'tkazilgan → `/mccanceled` |
+
+Diqqat: `new` sharti **buyurtma tushgan vaqt** bo'yicha (`uzum_order!W`), joriy
+soat bo'yicha emas. Oynada tushgan buyurtma 11:01 dagi ishlovgacha `Yangi`
+bo'lib turadi.
+
+`Yig'ildi` hozircha **faqat dasturda** — MoySklad holati sinovdan keyin
+o'zgartiriladi (9-faza: "Собран" + Telegram).
+
+Vaqt oynasi hozirgi `uzum-order-to-mc` dagidek: `WINDOW_HOLD_START` (06:10) …
+`WINDOW_HOLD_END` (11:00), Toshkent vaqti, `isInHoldWindow` — yarim ochiq
+oraliq `[start, end)`. **Mantiq o'zgarmaydi** — Uzum javobidan "bekor qilingan
+vaqt" izlanmaydi.
+
+Oraliqni endi **interfeysdan** o'zgartirish mumkin ✅ (2026-08-08):
+Integratsiyalar → `uzum-order-to-mc` → "Kutish oynasi (Toshkent vaqti)".
+`PUT /web/projects/:slug/hold-window` `.env` dagi `WINDOW_HOLD_START` /
+`WINDOW_HOLD_END` satrlarini almashtiradi (qolgan satrlarga tegmaydi, yozish
+`tmp` + `rename` orqali — faylda tokenlar bor). Servis timer bilan ishlagani
+uchun **restart shart emas**: keyingi tsiklda `.env` qaytadan o'qiladi.
+Tugash vaqti boshlanishdan katta bo'lishi tekshiriladi — aks holda
+`isInHoldWindow` har tsiklda yiqilardi.
+
+#### MoySklad → Stocker: IKKITA endpoint
+
+MoySklad webhook'i **qaysi holatga o'tganini yubormaydi** — faqat "shu
+buyurtma o'zgardi" deydi. Bitta endpoint bo'lsa, har chaqiruvda MoySklad'dan
+buyurtma holatini qayta so'rash kerak bo'lardi. Shuning uchun **har holat
+uchun alohida manzil**: MoySklad tomonda ikkita webhook/ssenariy, manzilning
+o'zi ma'noni bildiradi va qo'shimcha so'rov umuman kerak emas.
+
+| Endpoint | MoySklad'dagi holat | Nima qiladi |
+|---|---|---|
+| `stocker.uz/canceluzum` | `Ошибка сборки` | **Uzum'da bekor qiladi** → status `Yig'ish xatosi` → Telegram |
+| `stocker.uz/mccanceled` | `Отменен` | status `Bekor qilindi`. Uzum'ga ham, MoySklad'ga ham **hech qanday so'rov yubormaydi** — buyurtma Uzum'da allaqachon bekor (`Bekor qilinishi kutilmoqda`) |
+
+`/canceluzum` bugungi `uzum-order-to-mc/src/mcCancelServer.js` (pm2, port 4042,
+`/mc-cancel`) ning o'rnini bosadi: farqi — qatorni `uzum_order!S` dan emas,
+server bazasidan (`orders.moysklad_id`) topadi va Uzum tokenini
+`uzum_shops` → `uzum_cabinets` dan oladi. Ikkalasi bir muddat yonma-yon
+ishlaydi, so'ng `mc-cancel` o'chiriladi.
+
+**Status baribir saqlanmaydi.** Bu ikki endpoint faqat *tashqi faktni* yozadi
+(kim, qachon, qaysi UUID) — `order_marks` kabi jadvalga. Status o'sha
+belgidan hisoblanadi, xuddi Uzum bekor bayrog'i va hold oynasi kabi. Aks
+holda ikkinchi haqiqat manbai paydo bo'lardi.
+
+#### Endpoint himoyasi
+
+MoySklad webhook'iga **maxsus sarlavha yoki imzo qo'shib bo'lmaydi** —
+hujjatlangan maydonlar faqat `url` · `action` · `entityType` · `diffType`
+(`dev.moysklad.ru`, `POST /notification/webhook`). Chiquvchi so'rovlar uchun
+sobit IP diapazoni ham e'lon qilinmagan.
+
+Amaliy yechim — **maxfiy qism manzilning o'zida**:
+
+```
+https://stocker.uz/canceluzum/<uzun-tasodifiy-token>
+https://stocker.uz/mccanceled/<uzun-tasodifiy-token>
+```
+
+HTTPS'da manzil yo'li tarmoqda ko'rinmaydi. Yagona nozik joyi — nginx
+`access_log`: shu ikki `location` uchun log o'chiriladi yoki token
+niqoblanadi.
+
+Bundan tashqari, ikkalasi ham:
+
+* faqat **bazada mavjud** `moysklad_id` ni qabul qiladi — noma'lum UUID hech
+  narsa qilmaydi;
+* allaqachon bekor qilingan buyurtmani qayta ishlamaydi (idempotent);
+* har chaqiruv `stock_runs` uslubida yoziladi va Telegram'ga xabar ketadi —
+  suiiste'mol jim o'tmaydi.
+
+`/canceluzum` xavfliroq (Uzum'da haqiqiy bekor qilish), `/mccanceled` esa faqat
+belgi qo'yadi.
+
+#### Uzum'da bekor bo'lganini kim aniqlaydi
+
+`cancelUzumOrder` sweep'i **qaytarilmaydi**. Bu ma'lumot allaqachon
+`uzum-order-to-mc` da bor va u shartlar asosida bildirishnoma yuborib,
+MoySklad'da bekor qiladi:
+
+* [`orderStatusSync.promoteHeldOrders`](../uzum-order-to-mc/src/orderStatusSync.js) —
+  oyna tugagach Uzum holatini so'raydi, `CANCELED` bo'lsa tasdiqlamaydi;
+* `handleConfirmFailure` — tasdiqlashdan oldin bekor bo'lgan holat;
+* [`cancelSync`](../uzum-order-to-mc/src/cancelSync.js) — 24 soatlik monitoring.
+
+Status shu manbadan oziqlanadi. **Diqqat:** `uzum_order!V` "bekor qilingan"
+degani emas (`cancelSync.js:148` bekor qilinmaganga ham 24 soatdan keyin `V=1`
+qo'yadi) — bekor qilinganlik MoySklad holatidan aniqlanadi.
+
+#### Mobil ilova
+
+Status ro'yxati **kerak emas**. Ilova faqat **ochiq** buyurtmalar bilan
+ishlaydi: skanerlangan tovar ochiq buyurtmalar tarkibida bo'lmasa —
+"Buyurtma topilmadi". Bugungi `scan/sessions.js` shu tartibda ishlaydi
+(`unknown_barcode` · `no_available_order` · `other_shop`), sarlavha matni
+shu qarorga moslanadi.
+
+#### Ko'chish tartibi (2-savolning javobi)
+
+| # | Qadam |
+|---|---|
+| 1 | **Formulali kataklar to'g'ri ko'chganini tekshirish** ✅ kod tayyor — `orderSync.js` |
+| 2 | Farq 0 bo'lgach — buyurtmalarni Uzum API'dan to'g'ridan-to'g'ri tortish |
+| 3 | So'ng Sheets bilan aloqa **bosqichma-bosqich** uziladi: har bosqichda bitta yozuv oqimi o'chadi va natija eski qiymat bilan solishtiriladi |
+| 4 | `mcCancelServer` → `stocker.uz/canceluzum` |
+| 5 | Migratsiya `uzum_order` ning **hammasini** oladi (~8200 qator) |
+
+#### Hisoblanadigan kataklar — jadvaldagi formula va serverdagi o'rni
+
+Formulalar `dumpSheet.js` bilan olindi (2026-08-08) va
+[`orders/formulas.js`](../server/src/orders/formulas.js) ga **toza funksiya**
+sifatida ko'chirildi:
+
+| Katak | Jadvaldagi mantiq | Serverdagi manba |
+|---|---|---|
+| `uzum_order!O` | `XLOOKUP(XLOOKUP(G, uzum_shop!A, uzum_shop!D), uzum_token!C, uzum_token!D)` | `uzum_cabinets.mc_organization_href` |
+| `uzum_order!P` | `XLOOKUP(G, uzum_shop!A, uzum_shop!G)` | `uzum_shops.mc_saleschannel_href` |
+| `uzum_order!R` | `"10-" & TEXT(A, "0000000000") & "-1"` | spravochnik kerak emas — faqat buyurtma ID sidan |
+| `uzum_order_detail!I` | `skuTitle → link_product!K` (qo'shimcha kesiladi) `→ mc_product!F → mc_product!B` | `link_product.mc_external_id → mc_product.external_id → uuid` |
+| `uzum_order_detail!J` | `XLOOKUP(I, mc_product!B, mc_product!C)` | `mc_product.entity_type` |
+| `uzum_order_detail!K` | `F × XLOOKUP(C, link_product!B, link_product!N)` | `amount × link_product.card_quantity` |
+| `uzum_order_detail!L` | `IF(F=K, FALSE, TRUE)` | `uzumOrderToMC` buni `priceIsTotal` deb o'qiydi (`index.js:66`) |
+
+`R` ning shakli muhim: **hech qanday tashqi manbaga bog'liq emas**, ya'ni
+buyurtma Uzum API'dan kelishi bilan tracking raqami ma'lum bo'ladi.
+
+Solishtirish (hech narsa yozmaydi, farq bo'lsa exit kodi 1):
+
+```bash
+cd /root/stocker/server && node src/scripts/orderSync.js
+```
+
+```bash
+cd /root/stocker/server && node src/scripts/orderSync.js --limit=500 --samples=20
+```
+
+Hisobotda uch xil natija **ataylab** ajratilgan: `mos` · `bog'lanmagan`
+(ikkala tomonda ham qiymat yo'q — SKU yoki do'kon bog'lanmagan, bu xato emas) ·
+`farq` (ko'chishga to'sqinlik qiladi). Aralashtirilsa bog'lanmagan SKU'lar
+"8000 ta farq" bo'lib ko'rinardi va haqiqiy farq ko'zdan qochardi.
+
+Jadval tuzilmasini qayta o'qish (natija `docs/v3-sheet-structure.json`):
+
+```bash
+cd /root/stocker/server && node src/scripts/dumpSheet.js
+```
+
+#### Bog'lanmagan SKU'lar ✅ (2026-08-08)
+
+Buyurtma tarkibidagi SKU `link_product` da MoySklad tovariga ulanmagan bo'lsa,
+buyurtma MoySklad'ga **umuman** o'tmaydi. Ilgari bu faqat Telegram'ga xabar
+bo'lib ketardi (`uzum-order-to-mc/src/skuAlerts.js`) va xabar o'qilmasa iz
+qolmasdi. Endi:
+
+* xabarda SKU kodi bilan birga **tovar nomi, barcode, miqdor, buyurtma va
+  do'kon** ham boradi — Uzum SKU nomi ko'pincha ma'nosiz kod
+  (`mNZBQ66Qg7N3I6V-dDeim0`), yalang'och yuborilganda xabar hech narsa
+  aytmasdi;
+* xuddi shu ro'yxat **Tovar bog'lamalari** bo'limining tepasida, qizil kartada
+  turadi (`GET /web/link-products/unlinked`). Sabab bo'yicha ikkiga bo'linadi:
+  `link_product` da qator yo'q (→ qo'shish formasi ochiladi) yoki qator bor,
+  lekin External ID bo'sh (→ jadvaldan topib to'ldiriladi).
+
+Manba — `items.product_ref`: `uzum_order_detail!I` mos topmasa `null` bo'ladi.
+`uzum-order-to-mc` dagi topic'ga yuborish mantiqi **o'zgarmadi** (o'sha bot,
+guruh va 24 soatlik sovish davri).
+
+selfTest: 406 → **449** (bog'lanmagan SKU, buyurtma formulalari, `.env`
+tahriri).
+
 ## Buyruqlar
 
 Jadval tuzilmasini qayta o'qish (natija `docs/v3-sheet-structure.json`,

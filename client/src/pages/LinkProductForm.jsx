@@ -13,10 +13,12 @@ import { useMcProduct, McProductHint } from "../useMcProduct";
 // muhim xabar ko'rinmay qolardi.
 const EMPTY = { skuTitle: "", mcExternalId: "", shopId: "", cardQuantity: "1", stockUpdate: true, orderImport: true };
 
-export default function LinkProductForm({ onClose, onCreated }) {
+// `initialSkuTitle` — "Bog'lanmagan SKU'lar" ro'yxatidan ochilganda nom
+// oldindan to'ldiriladi (do'kon esa prefiks bo'yicha o'zi tanlanadi).
+export default function LinkProductForm({ onClose, onCreated, initialSkuTitle = "" }) {
   const { t } = useTranslation();
   const [shops, setShops] = useState([]);
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState({ ...EMPTY, skuTitle: initialSkuTitle });
   // Do'konni foydalanuvchi o'zi tanlagan bo'lsa prefiks uni bosib
   // o'tmasligi kerak.
   const [shopTouched, setShopTouched] = useState(false);

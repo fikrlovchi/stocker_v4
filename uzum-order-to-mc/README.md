@@ -148,6 +148,17 @@ yuborilsa, shu SKU haqida Telegram guruhning belgilangan mavzusiga (topic)
 xabar boradi. Bir xil SKU 24 soat ichida qayta yuborilmaydi (`data/notified-skus.json`
 orqali kuzatiladi, git'ga tushmaydi).
 
+Xabarda **faqat SKU emas**, qatorning butun konteksti boradi: tovar nomi
+(`uzum_order_detail!D`), barcode (`B`), miqdor (`F`), buyurtma ID si va do'kon
+nomi. Sababi: Uzum SKU nomi ko'pincha ma'nosiz kod bo'ladi
+(`mNZBQ66Qg7N3I6V-dDeim0` kabi) — yalang'och yuborilsa xabarni o'qigan odam
+qaysi tovar haqida ekanini bilmaydi.
+
+Shu ro'yxat **`stocker.uz` → Tovar bog'lamalari** bo'limining tepasida ham
+turadi (`GET /web/link-products/unlinked`): Telegram xabari o'qilmay qolsa
+ham bog'lanmagan SKU ko'rinib turishi kerak, chunki u tufayli buyurtma
+MoySklad'ga umuman o'tmaydi.
+
 `.env` ga qo'shing:
 ```
 TELEGRAM_BOT_TOKEN=...
@@ -155,6 +166,8 @@ TELEGRAM_CHAT_ID=...
 TELEGRAM_TOPIC_ID=...
 ```
 Sozlanmagan bo'lsa (bo'sh qoldirilsa), bu funksiya jim o'tkazib yuboriladi.
+SKU ogohlantirishlari alohida bot/guruhga borsa — `SKU_ALERT_BOT_TOKEN`,
+`SKU_ALERT_CHAT_ID`, `SKU_ALERT_TOPIC_ID`.
 
 Panel bilan bog'liq muammo (masalan, u vaqtincha ishlamasa) buyurtma
 sinxronizatsiyasiga ta'sir qilmaydi — hisobot yuborish "fire-and-forget"
